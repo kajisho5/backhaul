@@ -69,6 +69,8 @@ class SlotModel : public QAbstractListModel {
   }
 
   void insertRow(int at, SlotRow row);
+  // Meter only: tells the views about the level and nothing else.
+  void setLevel(int row, double level);
 
   // Row in the right column just below the last slide (where the return tile goes).
   int shareCount() const;

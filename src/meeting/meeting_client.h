@@ -2,6 +2,7 @@
 // The Zoom implementation lives in src/zoom; nothing outside that folder sees SDK types.
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -67,6 +68,9 @@ class MeetingEvents {
   virtual void onMeetingTopic(const std::string& topic) = 0;
   // Called on a thread of the meeting library, many times per second.
   virtual void onVideoFrame(std::uint32_t userId, const VideoFrame& frame) = 0;
+  // One person's voice: 16-bit samples, `frames` per channel, channel-interleaved.
+  virtual void onAudio(std::uint32_t userId, const std::int16_t* samples, std::size_t frames, int sampleRate,
+                       int channels) = 0;
 };
 
 class MeetingClient {

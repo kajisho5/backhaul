@@ -1,5 +1,6 @@
 add_library(backhaul_core STATIC
   aspect_fit.cpp
+  audio_mixer.cpp
   delay_line.cpp
   quality_policy.cpp
   resampler.cpp

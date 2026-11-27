@@ -367,7 +367,7 @@ void AppState::loadDefaults() {
   slotByScreen_.clear();
   gridScreen_.clear();
   refreshDisplays();
-  audioAsio_ = true;
+  audioAsio_ = false;
   audioDeviceName_.clear();
   selected_ = 0;
   emit selectedChanged();
@@ -487,6 +487,14 @@ void AppState::setJoinName(const QString& text) {
 void AppState::setQualityAuto(bool on) {
   if (on == qualityAuto_) return;
   qualityAuto_ = on;
+  emit changed();
+  emit settingsEdited();
+}
+
+void AppState::setAudioDeviceName(const QString& name) {
+  const QString value = name.left(kMaxZoomNameLength);
+  if (value == audioDeviceName_) return;
+  audioDeviceName_ = value;
   emit changed();
   emit settingsEdited();
 }

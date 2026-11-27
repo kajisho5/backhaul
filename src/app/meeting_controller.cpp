@@ -6,6 +6,7 @@
 #include <QMutexLocker>
 
 #include "app_state.h"
+#include "core/audio_mixer.h"
 #include "core/quality_policy.h"
 #include "core/yuv.h"
 #include "frame_store.h"
@@ -191,6 +192,9 @@ void MeetingController::resetSlots() {
     });
   }
   frames_.clearAll();
+  if (mixer_ != nullptr) {
+    for (int i = 0; i < mixer_->sources(); ++i) mixer_->flush(i);
+  }
   app_.participants()->setRows({}, app_.slotNumbers());
   {
     const QMutexLocker lock(&routeMutex_);
@@ -261,6 +265,7 @@ void MeetingController::applyParticipants() {
         r.fps = 0;
         r.level = 0.0;
       });
+      if (mixer_ != nullptr) mixer_->flush(i);
     }
   }
   app_.participants()->setRows(people, app_.slotNumbers());
@@ -334,4 +339,15 @@ void MeetingController::everySecond() {
       });
     }
   }
+}
+
+void MeetingController::onAudio(std::uint32_t userId, const std::int16_t* samples, std::size_t frames, int sampleRate,
+                                int channels) {
+  if (mixer_ == nullptr) return;
+  int slot = -1;
+  {
+    const QMutexLocker lock(&routeMutex_);
+    slot = slotByUser_.value(userId, -1);
+  }
+  if (slot >= 0) mixer_->push(slot, samples, frames, sampleRate, channels);
 }

@@ -2,6 +2,7 @@ add_executable(core_tests
   check.h
   main.cpp
   test_aspect_fit.cpp
+  test_audio_mixer.cpp
   test_delay_line.cpp
   test_quality_policy.cpp
   test_resampler.cpp

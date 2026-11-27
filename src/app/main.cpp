@@ -11,6 +11,7 @@
 #include <memory>
 
 #include "app_state.h"
+#include "audio_controller.h"
 #include "demo_source.h"
 #include "frame_item.h"
 #include "frame_store.h"
@@ -66,8 +67,13 @@ int main(int argc, char* argv[]) {
   MeetingController meeting(state, frames, demo ? nullptr : backhaul::makeMeetingClient(),
                             demo ? nullptr : makeCredentialStore());
 
+  AudioController audio(state, demo ? nullptr : backhaul::makeAudioOutput());
+  if (!demo) audio.startSaved();
+  meeting.setMixer(audio.mixer());
+
   QQmlApplicationEngine engine;
   engine.rootContext()->setContextProperty(QStringLiteral("meeting"), &meeting);
+  engine.rootContext()->setContextProperty(QStringLiteral("audio"), &audio);
   engine.rootContext()->setContextProperty(QStringLiteral("app"), &state);
   QObject::connect(&engine, &QQmlApplicationEngine::objectCreationFailed, &qtApp,
                    [] { QCoreApplication::exit(2); }, Qt::QueuedConnection);

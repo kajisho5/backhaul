@@ -12,6 +12,7 @@
 #include "meeting_service_components/meeting_participants_ctrl_interface.h"
 #include "meeting_service_components/meeting_recording_interface.h"
 #include "meeting_service_interface.h"
+#include "rawdata/rawdata_audio_helper_interface.h"
 #include "rawdata/rawdata_renderer_interface.h"
 #include "rawdata/zoom_rawdata_api.h"
 #include "zoom_sdk.h"
@@ -82,6 +83,28 @@ class VideoTap final : public sdk::IZoomSDKRendererDelegate {
  private:
   std::uint32_t userId_;
   MeetingEvents* events_;
+};
+
+// Receives everyone's voices, one person per call.
+class AudioTap final : public sdk::IZoomSDKAudioRawDataDelegate {
+ public:
+  void setEvents(MeetingEvents* events) { events_ = events; }
+
+  void onMixedAudioRawDataReceived(AudioRawData*) override {}
+  void onOneWayAudioRawDataReceived(AudioRawData* data, uint32_t userId) override {
+    if (data == nullptr || events_ == nullptr) return;
+    const unsigned int channels = data->GetChannelNum();
+    const char* buffer = data->GetBuffer();
+    if (buffer == nullptr || channels < 1 || channels > 2) return;
+    const std::size_t frames = data->GetBufferLen() / (2u * channels);
+    events_->onAudio(userId, reinterpret_cast<const std::int16_t*>(buffer), frames,
+                     static_cast<int>(data->GetSampleRate()), static_cast<int>(channels));
+  }
+  void onShareAudioRawDataReceived(AudioRawData*, uint32_t) override {}
+  void onOneWayInterpreterAudioRawDataReceived(AudioRawData*, const zchar_t*) override {}
+
+ private:
+  MeetingEvents* events_ = nullptr;
 };
 
 struct Subscription {
@@ -329,7 +352,10 @@ class ZoomClient final : public MeetingClient,
     }
     if (recording_->StartRawRecording() != sdk::SDKERR_SUCCESS) return;
     rawStarted_ = true;
-    state(MeetingState::Receiving, {});
+    audioTap_.setEvents(events_);
+    sdk::IZoomSDKAudioRawDataHelper* audio = sdk::GetAudioRawdataHelper();
+    audioSubscribed_ = audio != nullptr && audio->subscribe(&audioTap_) == sdk::SDKERR_SUCCESS;
+    state(MeetingState::Receiving, audioSubscribed_ ? std::string() : std::string("音声を受け取れませんでした（映像のみ）"));
     applyWants();
   }
 
@@ -377,6 +403,12 @@ class ZoomClient final : public MeetingClient,
       sdk::destroyRenderer(entry.second.renderer);
     }
     video_.clear();
+    if (audioSubscribed_) {
+      sdk::IZoomSDKAudioRawDataHelper* audio = sdk::GetAudioRawdataHelper();
+      if (audio != nullptr) audio->unSubscribe();
+      audioSubscribed_ = false;
+    }
+    audioTap_.setEvents(nullptr);
     if (rawStarted_ && recording_ != nullptr) recording_->StopRawRecording();
     rawStarted_ = false;
   }
@@ -394,8 +426,8 @@ class ZoomClient final : public MeetingClient,
   }
 
   void shutDown() {
-    events_ = nullptr;
     stopRaw();
+    events_ = nullptr;
     if (meeting_ != nullptr) {
       if (meeting_->GetMeetingStatus() == sdk::MEETING_STATUS_INMEETING) meeting_->Leave(sdk::LEAVE_MEETING);
       sdk::DestroyMeetingService(meeting_);
@@ -426,6 +458,8 @@ class ZoomClient final : public MeetingClient,
   bool inMeeting_ = false;
   bool rawStarted_ = false;
   bool askedPermission_ = false;
+  bool audioSubscribed_ = false;
+  AudioTap audioTap_;
 };
 
 }  // namespace

@@ -12,6 +12,9 @@
 #include "credential_store.h"
 #include "meeting/meeting_client.h"
 
+namespace backhaul {
+class AudioMixer;
+}
 class AppState;
 class FrameStore;
 
@@ -58,6 +61,11 @@ class MeetingController : public QObject, public backhaul::MeetingEvents {
   void onParticipants(const std::vector<backhaul::Participant>& everyone) override;
   void onMeetingTopic(const std::string& topic) override;
   void onVideoFrame(std::uint32_t userId, const backhaul::VideoFrame& frame) override;
+  void onAudio(std::uint32_t userId, const std::int16_t* samples, std::size_t frames, int sampleRate,
+               int channels) override;
+
+  // Where the voices go. May be null; must outlive the meeting.
+  void setMixer(backhaul::AudioMixer* mixer) { mixer_ = mixer; }
 
   // Digits of a meeting ID as typed ("123 4567 8901", "123-4567-8901"); 0 when it is not one.
   static quint64 parseMeetingNumber(const QString& text);
@@ -86,4 +94,5 @@ class MeetingController : public QObject, public backhaul::MeetingEvents {
   // Read on the video thread.
   QMutex routeMutex_;
   QHash<quint32, int> slotByUser_;
+  backhaul::AudioMixer* mixer_ = nullptr;
 };

@@ -16,20 +16,25 @@ ColumnLayout {
         Layout.fillWidth: true
         Layout.bottomMargin: 28
         spacing: 24
+        z: 50
 
         ColumnLayout {
             spacing: 6
             Layout.alignment: Qt.AlignBottom
             Text { text: "方式"; color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 12 }
-            Segmented {
+            Item {
+                implicitWidth: methodText.implicitWidth
                 implicitHeight: 40
-                firstText: "ASIO"
-                secondText: "WASAPI"
-                first: app.audioAsio
-                onChosen: (first) => app.audioAsio = first
+                Text {
+                    id: methodText
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "WASAPI"
+                    color: Theme.ink; font.family: app.monoFamily; font.pixelSize: 14; font.bold: true
+                }
             }
         }
         LabeledInput {
+            visible: !audio.available
             Layout.fillWidth: true
             Layout.minimumWidth: 160
             Layout.maximumWidth: 320
@@ -38,6 +43,33 @@ ColumnLayout {
             value: app.audioDeviceName
             placeholder: "未選択"
             readOnly: true
+        }
+        ColumnLayout {
+            visible: audio.available
+            Layout.fillWidth: true
+            Layout.minimumWidth: 160
+            Layout.maximumWidth: 320
+            Layout.alignment: Qt.AlignBottom
+            spacing: 6
+            z: deviceChoice.open ? 100 : 0
+            Text { text: "機器"; color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 12 }
+            Dropdown {
+                id: deviceChoice
+                Layout.fillWidth: true
+                name: "音声の機器"
+                options: audio.deviceNames
+                current: audio.deviceIndex
+                dimmed: audio.deviceIndex === 0
+                onPicked: (index) => audio.chooseDevice(index)
+            }
+        }
+        PlainButton {
+            visible: audio.available
+            Layout.alignment: Qt.AlignBottom
+            text: "探し直す"
+            textSize: 13
+            implicitHeight: 40
+            onClicked: audio.refreshDevices()
         }
         Row {
             Layout.alignment: Qt.AlignBottom
@@ -54,6 +86,16 @@ ColumnLayout {
             }
         }
         Item { Layout.fillWidth: true; Layout.preferredWidth: 0 }
+    }
+
+    Text {
+        Layout.fillWidth: true
+        Layout.topMargin: -16
+        Layout.bottomMargin: 20
+        wrapMode: Text.WordWrap
+        text: audio.problem.length > 0 ? audio.problem : "ASIOはまだ使えません。Windowsの音声（WASAPI）で出します。"
+        color: audio.problem.length > 0 ? Theme.lost : Theme.mute
+        font.family: app.sansFamily; font.pixelSize: 13
     }
 
     Text { text: "割り当て表"; color: Theme.ink; font.family: app.sansFamily; font.pixelSize: 15; font.bold: true; Layout.bottomMargin: 6 }
