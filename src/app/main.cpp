@@ -21,8 +21,12 @@ int main(int argc, char* argv[]) {
   const QCommandLineOption shotOpt(QStringLiteral("screenshot"),
                                    QStringLiteral("Save a picture of the operator screen to <file> and quit."),
                                    QStringLiteral("file"));
+  const QCommandLineOption sizeOpt(QStringLiteral("window-size"),
+                                   QStringLiteral("Open the window at <width>x<height>, for example 1280x720."),
+                                   QStringLiteral("size"));
   args.addOption(demoOpt);
   args.addOption(shotOpt);
+  args.addOption(sizeOpt);
   args.process(qtApp);
 
   AppState state;
@@ -35,12 +39,24 @@ int main(int argc, char* argv[]) {
   engine.load(QUrl(QStringLiteral("qrc:/qt/qml/Backhaul/qml/Main.qml")));
   if (engine.rootObjects().isEmpty()) return 2;
 
-  if (args.isSet(shotOpt)) {
-    auto* window = qobject_cast<QQuickWindow*>(engine.rootObjects().constFirst());
-    if (window == nullptr) {
-      std::fprintf(stderr, "screenshot: the main window was not created\n");
-      return 3;
+  auto* window = qobject_cast<QQuickWindow*>(engine.rootObjects().constFirst());
+  if (window == nullptr) {
+    std::fprintf(stderr, "the main window was not created\n");
+    return 3;
+  }
+  if (args.isSet(sizeOpt)) {
+    const QStringList parts = args.value(sizeOpt).split(QLatin1Char('x'));
+    bool okW = false, okH = false;
+    const int w = parts.size() == 2 ? parts[0].toInt(&okW) : 0;
+    const int h = parts.size() == 2 ? parts[1].toInt(&okH) : 0;
+    if (!okW || !okH || w < 320 || h < 240 || w > 16384 || h > 16384) {
+      std::fprintf(stderr, "--window-size wants <width>x<height>, for example 1280x720\n");
+      return 5;
     }
+    window->resize(w, h);
+  }
+
+  if (args.isSet(shotOpt)) {
     const QString path = args.value(shotOpt);
     // Give the scene a moment to lay out and paint before grabbing it.
     QTimer::singleShot(800, window, [window, path] {

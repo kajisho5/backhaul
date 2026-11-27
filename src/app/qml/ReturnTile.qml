@@ -28,10 +28,10 @@ Rectangle {
             Layout.rightMargin: 12
             spacing: 10
             Text { text: "返"; color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 13 }
-            Text { Layout.fillWidth: true; text: "Zoomへの返し"; color: Theme.ink; font.family: app.sansFamily; font.pixelSize: 15; font.bold: true }
+            Text { Layout.fillWidth: true; text: "Zoomへの返し"; elide: Text.ElideRight; color: Theme.ink; font.family: app.sansFamily; font.pixelSize: 15; font.bold: true }
             Text {
                 readonly property bool allOk: app.returnVideoOk && app.returnAudioOk
-                text: allOk ? "映像・音声 入力あり"
+                text: allOk ? "入力あり"
                             : (!app.returnVideoOk && !app.returnAudioOk ? "入力なし"
                                : (app.returnVideoOk ? "音声の入力なし" : "映像の入力なし"))
                 color: allOk ? Theme.ok : Theme.lost

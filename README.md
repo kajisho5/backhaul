@@ -46,13 +46,15 @@ ctest --test-dir build -C Release --output-on-failure
 
 ## Build and run the operator screen
 
-Requires Qt 6.4 or newer (Quick). The release target is Qt 6.12 LTS on Windows.
+Requires Qt 6.4 or newer (Quick). CI builds it with Qt 6.8.3 on Windows and Qt 6.4 on Linux;
+the release target is Qt 6.12 LTS once CI can install it.
 
 ```
 cmake -S . -B build -DBACKHAUL_BUILD_APP=ON
 cmake --build build --config Release
 backhaul --demo                         # made-up people, no Zoom
 backhaul --demo --screenshot out.png    # save a picture of the screen and quit
+backhaul --demo --window-size 1280x720  # open at a given size
 ```
 
 ## Documentation
