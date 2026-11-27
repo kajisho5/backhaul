@@ -256,8 +256,8 @@ RowLayout {
                     spacing: 6
                     Text { text: "並べ方"; color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 12 }
                     Segmented {
-                        firstText: "顔を大きく（左右を切る）"
-                        secondText: "全体を見せる"
+                        firstText: "縦長に切って大きく"
+                        secondText: "16:9のまま並べる"
                         first: app.twoShotFill
                         onChosen: (first) => app.twoShotFill = first
                     }
