@@ -1,8 +1,13 @@
 #include <QCoreApplication>
 #include <QGuiApplication>
+#include <cmath>
 #include <vector>
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 #include "app_state.h"
+#include "audio_controller.h"
 #include "check.h"
 #include "frame_store.h"
 #include "meeting_controller.h"
@@ -183,6 +188,17 @@ int main(int argc, char* argv[]) {
   CHECK(frames.latest(1).isNull());
   CHECK(frames.takeCount(0) == 2 && frames.takeCount(0) == 0);
 
+  // Voices go to the mixer under the slot of the person speaking.
+  backhaul::AudioMixer mixer(4);
+  m.setMixer(&mixer);
+  {
+    const std::vector<std::int16_t> loud(480, 16384);
+    client->events->onAudio(11, loud.data(), loud.size(), 48000, 1);  // Mihon Hanako is in slot 2
+    client->events->onAudio(2, loud.data(), loud.size(), 48000, 1);   // the host is in no slot
+    CHECK_NEAR(mixer.takePeak(1), 0.5, 0.001);
+    CHECK_NEAR(mixer.takePeak(0), 0.0, 1e-9);
+  }
+
   // Someone drops out: the slot shows "lost" and frees its stream; the others get larger pictures.
   client->events->onParticipants({self, host, person(10, "Kakuu Ichiro"), person(12, "Shiken Goro")});
   CHECK(slotData(app, 1, SlotModel::StateRole).toString() == QStringLiteral("lost"));
@@ -219,7 +235,116 @@ int main(int argc, char* argv[]) {
   m.clearCredentials();
   CHECK(!m.credentialsSaved() && saved.clientId.isEmpty() && !m.canJoin());
 
+  {  // sound devices
+    struct FakeOutput final : backhaul::AudioOutput {
+      std::vector<backhaul::AudioDevice> list{{"id-a", "サンプル音声機器A"}, {"id-b", "サンプル音声機器B"}};
+      std::string started;
+      bool alive = false;
+      bool refuse = false;
+      std::vector<backhaul::AudioDevice> devices() override { return list; }
+      bool start(const std::string& id, backhaul::AudioMixer*, std::string* error) override {
+        if (refuse) {
+          *error = "busy";
+          alive = false;
+          return false;
+        }
+        started = id;
+        alive = true;
+        return true;
+      }
+      void stop() override { alive = false; }
+      bool running() const override { return alive; }
+      int channels() const override { return alive ? 16 : 0; }
+    };
+
+    AppState a;
+    a.loadDefaults();
+    auto* out = new FakeOutput;
+    AudioController audio(a, std::unique_ptr<backhaul::AudioOutput>(out));
+    CHECK(audio.available());
+    CHECK(audio.deviceNames().size() == 3 && audio.deviceIndex() == 0);
+    audio.startSaved();  // nothing saved: stays silent
+    CHECK(!out->alive);
+
+    audio.chooseDevice(2);
+    CHECK(out->started == "id-b" && audio.deviceIndex() == 2);
+    CHECK(a.property("audioOk").toBool());
+    CHECK(a.property("audioChannels").toInt() == 16);
+    CHECK(a.property("audioDeviceName").toString() == QStringLiteral("サンプル音声機器B"));
+
+    // The mixer follows the slots: slot 1 on channel 1 by default, then moved to channel 3 at -6 dB.
+    const std::vector<std::int16_t> half(4800, 16384);
+    std::vector<float> block(480 * 4);
+    audio.mixer()->push(0, half.data(), half.size(), 48000);
+    audio.mixer()->render(block.data(), 480, 4);
+    CHECK_NEAR(block[100 * 4 + 0], 0.5, 1e-3);
+    CHECK_NEAR(block[100 * 4 + 2], 0.0, 1e-9);
+    a.toggleRoute(0, 1);
+    a.toggleRoute(0, 3);
+    a.nudgeGain(0, -12);
+    audio.mixer()->render(block.data(), 480, 4);
+    CHECK_NEAR(block[100 * 4 + 0], 0.0, 1e-9);
+    CHECK_NEAR(block[100 * 4 + 2], 0.5 * std::pow(10.0, -6.0 / 20.0), 1e-3);
+
+    // The saved device is started again next time; a missing one is reported.
+    {
+      AppState b;
+      CHECK(b.applySettings(a.settingsJson()));
+      auto* out2 = new FakeOutput;
+      AudioController again(b, std::unique_ptr<backhaul::AudioOutput>(out2));
+      again.startSaved();
+      CHECK(out2->started == "id-b" && again.deviceIndex() == 2 && again.problem().isEmpty());
+    }
+    {
+      AppState b;
+      CHECK(b.applySettings(a.settingsJson()));
+      auto* out2 = new FakeOutput;
+      out2->list.pop_back();
+      AudioController again(b, std::unique_ptr<backhaul::AudioOutput>(out2));
+      again.startSaved();
+      CHECK(!out2->alive && again.deviceIndex() == 0 && !again.problem().isEmpty());
+      CHECK(b.property("audioDeviceName").toString() == QStringLiteral("サンプル音声機器B"));  // the wish is kept
+    }
+
+    // A device that refuses, and one that is switched off.
+    out->refuse = true;
+    audio.chooseDevice(1);
+    CHECK(audio.deviceIndex() == 0 && !a.property("audioOk").toBool() && audio.problem().contains(QStringLiteral("busy")));
+    out->refuse = false;
+    audio.chooseDevice(1);
+    CHECK(audio.deviceIndex() == 1 && audio.problem().isEmpty());
+    audio.chooseDevice(0);
+    CHECK(!out->alive && a.property("audioDeviceName").toString().isEmpty());
+    audio.chooseDevice(9);  // not in the list
+    CHECK(audio.deviceIndex() == 0);
+  }
+
 #ifdef _WIN32
+  {  // the real Windows sound devices can at least be listed without trouble
+    auto real = backhaul::makeAudioOutput();
+    CHECK(real != nullptr);
+    if (real != nullptr) {
+      const auto found = real->devices();
+      std::printf("sound devices on this PC: %d\n", static_cast<int>(found.size()));
+      for (const auto& d : found) CHECK(!d.id.empty() && !d.name.empty());
+      CHECK(!real->running() && real->channels() == 0);
+      backhaul::AudioMixer silent(1);
+      std::string error;
+      CHECK(!real->start("no-such-device", &silent, &error));
+      CHECK(!error.empty() && !real->running());
+      if (!found.empty()) {  // play 200 ms of silence on the first device
+        if (real->start(found[0].id, &silent, &error)) {
+          CHECK(real->running() && real->channels() >= 1);
+          Sleep(200);
+          real->stop();
+          CHECK(!real->running());
+        } else {
+          std::printf("could not start the first device: %s\n", error.c_str());
+        }
+      }
+    }
+  }
+
   {  // the real Windows store, under a name of its own so saved credentials are not touched
     auto store = makeCredentialStore(QStringLiteral("backhaul/self-test"));
     CHECK(store != nullptr);

@@ -114,6 +114,13 @@ void SlotModel::insertRow(int at, SlotRow row) {
   if (at + 1 < rows_.size()) emit dataChanged(index(at + 1), index(static_cast<int>(rows_.size()) - 1));
 }
 
+void SlotModel::setLevel(int row, double level) {
+  if (row < 0 || row >= rows_.size()) return;
+  rows_[row].level = level;
+  const QModelIndex i = index(row);
+  emit dataChanged(i, i, {LevelRole});
+}
+
 QString SlotModel::channelText(quint32 channels) {
   QString text;
   for (int ch = 1; ch <= 32; ++ch) {

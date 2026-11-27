@@ -1,0 +1,11 @@
+# Sound devices. Windows: WASAPI. Elsewhere there is no output (the mixer is still tested).
+if(WIN32)
+  add_library(backhaul_audio STATIC wasapi_output.cpp audio_output.h)
+  target_link_libraries(backhaul_audio PRIVATE ole32)
+  target_compile_definitions(backhaul_audio PRIVATE UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN)
+else()
+  add_library(backhaul_audio STATIC audio_output_none.cpp audio_output.h)
+endif()
+target_include_directories(backhaul_audio PUBLIC ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(backhaul_audio PUBLIC backhaul_core)
+backhaul_warnings(backhaul_audio strict)

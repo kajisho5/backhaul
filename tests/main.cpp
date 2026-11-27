@@ -3,6 +3,7 @@
 #include "check.h"
 
 void testAspectFit();
+void testAudioMixer();
 void testDelayLine();
 void testQualityPolicy();
 void testResampler();
@@ -13,6 +14,7 @@ void testYuv();
 
 int main() {
   testAspectFit();
+  testAudioMixer();
   testDelayLine();
   testQualityPolicy();
   testResampler();

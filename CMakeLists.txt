@@ -31,6 +31,7 @@ if(BACKHAUL_ZOOM_SDK_DIR)
 endif()
 
 if(BACKHAUL_BUILD_APP)
+  add_subdirectory(src/audio)
   add_subdirectory(src/app)
 endif()
 

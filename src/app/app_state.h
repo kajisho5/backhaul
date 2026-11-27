@@ -63,6 +63,7 @@ class AppState : public QObject {
   QString audioDevice() const;
   bool audioAsio() const { return audioAsio_; }
   void setAudioAsio(bool asio);
+  void setAudioDeviceName(const QString& name);
   // Slides that are not 16:9: true cuts them to 16:9, false shows all with black bars.
   bool cropSlides() const;
   void setCropSlides(bool crop);
@@ -118,7 +119,7 @@ class AppState : public QObject {
 
   // Filled by whoever supplies the data (Zoom later, the demo for now).
   QString meetingName_, elapsed_, audioDeviceName_, notice_;
-  bool audioAsio_ = true;
+  bool audioAsio_ = false;  // ASIO is not built yet; everything goes out through WASAPI
   // Shown until a device reports its real numbers.
   int audioChannels_ = 8;
   int audioSampleRate_ = 48000;
