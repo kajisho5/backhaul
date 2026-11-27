@@ -6,6 +6,7 @@
 #include <windows.h>
 #endif
 
+#include <QImage>
 #include <QJsonObject>
 
 #include "app_state.h"
@@ -37,6 +38,8 @@ class ScriptedClient final : public backhaul::MeetingClient {
   }
   void setVideoWants(const std::vector<backhaul::VideoWant>& w) override { wants = w; }
   void poll() override { ++polls; }
+  void setShareWant(std::uint32_t sourceId) override { shareWant = sourceId; }
+  std::uint32_t shareWant = 0;
   bool sendAudio(const std::int16_t* samples, std::size_t frames, int channels) override {
     if (!taking) return false;
     sent.insert(sent.end(), samples, samples + frames * static_cast<std::size_t>(channels));
@@ -362,6 +365,87 @@ static void testAudioRole() {
     old[QStringLiteral("audio")] = oldAudio;
     CHECK(!b.applySettings(old));
   }
+}
+
+// the shared screen: shown in the slide slot, held or blacked when sharing stops
+static void testSlides() {
+  AppState a;
+  a.loadDefaults();
+  a.setRole(QStringLiteral("slide"));
+  a.setMeetingId(QStringLiteral("123 4567 8901"));
+  const int row = a.shareRow();
+  FrameStore frames;
+  ZoomCredentials saved{QStringLiteral("SampleClientId_01"), QStringLiteral("sample-secret")};
+  auto* client = new ScriptedClient;
+  MeetingController m(a, frames, std::unique_ptr<backhaul::MeetingClient>(client),
+                      std::make_unique<MemoryCredentials>(&saved));
+  m.join();
+  CHECK(!client->lastRequest.audio);
+  client->events->onMeetingState(MeetingState::Receiving, {});
+  client->events->onParticipants({person(10, "Kakuu Ichiro"), person(11, "Mihon Hanako")});
+  CHECK(client->wants.empty());  // nobody's camera on a slide PC
+  CHECK(slotData(a, 0, SlotModel::StateRole).toString() == QStringLiteral("unassigned"));
+  CHECK(slotData(a, row, SlotModel::VideoOutRole).toString() == QStringLiteral("black"));
+  CHECK(client->shareWant == 0);
+
+  // Someone starts sharing: that screen is asked for and shown.
+  client->events->onShares({{501, 10}});
+  CHECK(client->shareWant == 501);
+  CHECK(slotData(a, row, SlotModel::VideoOutRole).toString() == QStringLiteral("live"));
+  CHECK(slotData(a, row, SlotModel::ZoomNameRole).toString() == QStringLiteral("共有：Kakuu Ichiro"));
+  sendFrame(client->events, 10, 640, 360);       // a camera picture: not for this PC
+  CHECK(frames.latest(row).isNull());
+  client->events->onShareFrame(777, backhaul::VideoFrame{});  // another screen: ignored
+  {
+    const std::vector<std::uint8_t> y(1920 * 1200, 126), c(960 * 600, 128);
+    backhaul::VideoFrame f;
+    f.y = y.data();
+    f.u = c.data();
+    f.v = c.data();
+    f.width = 1920;
+    f.height = 1200;
+    client->events->onShareFrame(777, f);
+    CHECK(frames.latest(row).isNull());
+    client->events->onShareFrame(501, f);
+  }
+  CHECK(frames.latest(row).width() == 1920 && frames.latest(row).height() == 1200);
+
+  // A second person shares as well: the screen already showing stays.
+  client->events->onShares({{502, 11}, {501, 10}});
+  CHECK(client->shareWant == 501);
+  // The first one stops: the other screen takes over by itself.
+  client->events->onShares({{502, 11}});
+  CHECK(client->shareWant == 502);
+  CHECK(slotData(a, row, SlotModel::ZoomNameRole).toString() == QStringLiteral("共有：Mihon Hanako"));
+
+  // Sharing stops altogether: hold the last picture, or black, as chosen.
+  frames.put(row, QImage(16, 9, QImage::Format_RGB32));
+  a.slotList()->update(row, [](SlotRow& r) { r.situation.hasLastFrame = true; });
+  a.setFreezeOnLoss(row, true);
+  client->events->onShares({});
+  CHECK(client->shareWant == 0);
+  CHECK(slotData(a, row, SlotModel::VideoOutRole).toString() == QStringLiteral("freeze"));
+  a.setFreezeOnLoss(row, false);
+  CHECK(slotData(a, row, SlotModel::VideoOutRole).toString() == QStringLiteral("black"));
+  client->events->onShares({{503, 10}});
+  CHECK(client->shareWant == 503 && slotData(a, row, SlotModel::VideoOutRole).toString() == QStringLiteral("live"));
+
+  // A PC that shows one person takes no shared screen; the do-everything PC does.
+  m.leave();
+  a.setRole(QStringLiteral("camera"));
+  m.join();
+  client->events->onMeetingState(MeetingState::Receiving, {});
+  client->events->onShares({{601, 10}});
+  CHECK(client->shareWant == 0);
+  CHECK(slotData(a, row, SlotModel::VideoOutRole).toString() == QStringLiteral("black"));
+  m.leave();
+  a.setRole(QStringLiteral("all"));
+  m.join();
+  client->events->onMeetingState(MeetingState::Receiving, {});
+  client->events->onShares({{601, 10}});
+  CHECK(client->shareWant == 601);
+  m.leave();
+  CHECK(slotData(a, row, SlotModel::VideoOutRole).toString() == QStringLiteral("black"));
 }
 
 int main(int argc, char* argv[]) {
@@ -732,6 +816,7 @@ int main(int argc, char* argv[]) {
   testCameraRole();
   testTwoShotRole();
   testAudioRole();
+  testSlides();
 
   if (testing::failures() == 0) {
     std::printf("all meeting controller tests passed\n");

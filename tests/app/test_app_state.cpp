@@ -337,7 +337,7 @@ int main(int argc, char* argv[]) {
     a.loadDefaults();
     CHECK(a.role().isEmpty());          // a fresh PC has to be told
     CHECK(!a.handlesAudio());           // and stays silent until then
-    a.setRole(QStringLiteral("slide")); // unknown names change nothing
+    a.setRole(QStringLiteral("return")); // unknown names change nothing
     CHECK(a.role().isEmpty());
     a.setRole(QStringLiteral("all"));
     CHECK(a.role() == QStringLiteral("all") && a.handlesAudio());
@@ -348,6 +348,14 @@ int main(int argc, char* argv[]) {
     CHECK(a.slotActive(0) && !a.slotActive(1) && !a.slotActive(4));
     a.setRole(QStringLiteral("twoshot"));
     CHECK(a.slotActive(0) && a.slotActive(1) && !a.slotActive(2) && !a.slotActive(4));
+
+    // The slide PC uses the slide slot and nobody else.
+    a.setRole(QStringLiteral("slide"));
+    CHECK(a.shareRow() == 4 && a.roleRow() == 4);
+    CHECK(a.slotActive(4) && !a.slotActive(0) && !a.slotActive(3));
+    CHECK(!a.handlesAudio() && a.receivesVideo());
+    a.setRole(QStringLiteral("twoshot"));
+    CHECK(a.roleRow() == 0);
 
     // The role's one picture goes to one monitor; the operator's own monitor is never offered.
     a.setScreens({{QStringLiteral("op"), QStringLiteral("サンプルモニターA"), QString()},
@@ -371,6 +379,10 @@ int main(int argc, char* argv[]) {
     CHECK(b.role() == QStringLiteral("twoshot") && !b.twoShotFill() && b.twoShotSolo() && b.twoShotLeft() == 1);
     b.setScreens({{QStringLiteral("out-b"), QStringLiteral("HDMI 3"), QString()}}, QString());
     CHECK(b.roleOutputChoice() == 1);
+
+    // The slide PC sends the slide slot to that same monitor.
+    a.setRole(QStringLiteral("slide"));
+    CHECK(a.displays()->rows()[2].slot == 4 && a.displays()->rows()[1].slot == -1);
 
     // The slot-by-monitor table of the do-everything role is untouched by all this.
     a.setRole(QStringLiteral("all"));
@@ -403,6 +415,10 @@ int main(int argc, char* argv[]) {
     CHECK(c.applySettings(bad));
     c.setRole(QStringLiteral("twoshot"));  // chosen by hand: the second slot is added
     CHECK(c.slotList()->rowCount() == 2 && c.slotActive(1));
+    CHECK(c.shareRow() == -1);
+    c.setRole(QStringLiteral("slide"));    // no slide slot in that file: one is added
+    CHECK(c.slotList()->rowCount() == 3 && c.shareRow() == 2 && c.slotActive(2));
+    CHECK(slotData(c, 2, SlotModel::IsShareRole).toBool());
   }
 
   {  // two-shot: which halves are drawn, and who is where

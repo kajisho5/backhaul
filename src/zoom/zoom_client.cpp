@@ -13,6 +13,9 @@
 #include "meeting_service_components/meeting_participants_ctrl_interface.h"
 #include "meeting_service_components/meeting_recording_interface.h"
 #include "meeting_service_interface.h"
+
+// Needs types from meeting_service_interface.h, so it comes after it.
+#include "meeting_service_components/meeting_sharing_interface.h"
 #include "rawdata/rawdata_audio_helper_interface.h"
 #include "rawdata/rawdata_renderer_interface.h"
 #include "rawdata/zoom_rawdata_api.h"
@@ -84,6 +87,31 @@ class VideoTap final : public sdk::IZoomSDKRendererDelegate {
 
  private:
   std::uint32_t userId_;
+  MeetingEvents* events_;
+};
+
+// Receives the pictures of one shared screen.
+class ShareTap final : public sdk::IZoomSDKRendererDelegate {
+ public:
+  ShareTap(std::uint32_t sourceId, MeetingEvents* events) : sourceId_(sourceId), events_(events) {}
+  void onRendererBeDestroyed() override {}
+  void onRawDataFrameReceived(YUVRawDataI420* data) override {
+    if (data == nullptr) return;
+    VideoFrame frame;
+    frame.y = reinterpret_cast<const std::uint8_t*>(data->GetYBuffer());
+    frame.u = reinterpret_cast<const std::uint8_t*>(data->GetUBuffer());
+    frame.v = reinterpret_cast<const std::uint8_t*>(data->GetVBuffer());
+    frame.width = static_cast<int>(data->GetStreamWidth());
+    frame.height = static_cast<int>(data->GetStreamHeight());
+    frame.limitedRange = data->IsLimitedI420();
+    if (frame.y == nullptr || frame.u == nullptr || frame.v == nullptr || frame.width <= 0 || frame.height <= 0) return;
+    events_->onShareFrame(sourceId_, frame);
+  }
+  void onRawDataStatusChanged(RawDataStatus) override {}
+  void onShareCursorDataReceived(ZoomSDKShareCursorData) override {}
+
+ private:
+  std::uint32_t sourceId_;
   MeetingEvents* events_;
 };
 
@@ -217,6 +245,11 @@ class ZoomClient final : public MeetingClient,
     applyWants();
   }
 
+  void setShareWant(std::uint32_t sourceId) override {
+    shareWant_ = sourceId;
+    applyShareWant();
+  }
+
   bool sendAudio(const std::int16_t* samples, std::size_t frames, int channels) override {
     return mic_.send(samples, frames, channels);
   }
@@ -251,6 +284,7 @@ class ZoomClient final : public MeetingClient,
       events_->onParticipants(everyone);
       applyWants();  // someone who was wanted may have just arrived
     }
+    pollShares();
     // Permission can arrive without a notice (for example when made co-host).
     if (inMeeting_ && !rawStarted_) tryStartRaw();
   }
@@ -373,6 +407,7 @@ class ZoomClient final : public MeetingClient,
     inMeeting_ = true;
     participants_ = meeting_->GetMeetingParticipantsController();
     recording_ = meeting_->GetMeetingRecordingController();
+    sharing_ = meeting_->GetMeetingShareController();
     if (recording_ != nullptr) recording_->SetEvent(this);
     sdk::IMeetingInfo* info = meeting_->GetMeetingInfo();
     if (info != nullptr && events_ != nullptr) events_->onMeetingTopic(toUtf8(info->GetMeetingTopic()));
@@ -385,6 +420,60 @@ class ZoomClient final : public MeetingClient,
     state(MeetingState::WaitingForPermission, {});
     tryStartRaw();
     poll();
+  }
+
+  // Who is sharing a screen right now (not this PC itself).
+  void pollShares() {
+    if (sharing_ == nullptr || events_ == nullptr) return;
+    std::vector<ShareSource> shares;
+    sdk::IList<unsigned int>* users = sharing_->GetViewableSharingUserList();
+    if (users != nullptr) {
+      for (int i = 0; i < users->GetCount(); ++i) {
+        const unsigned int userId = users->GetItem(i);
+        sdk::IList<sdk::ZoomSDKSharingSourceInfo>* sources = sharing_->GetSharingSourceInfoList(userId);
+        if (sources == nullptr) continue;
+        for (int k = 0; k < sources->GetCount(); ++k) {
+          const sdk::ZoomSDKSharingSourceInfo info = sources->GetItem(k);
+          if (info.shareSourceID != 0) shares.push_back({info.shareSourceID, info.userid});
+        }
+      }
+    }
+    if (shares != lastShares_) {
+      lastShares_ = shares;
+      events_->onShares(shares);
+      applyShareWant();  // the wanted screen may have just started or ended
+    }
+  }
+
+  void dropShare() {
+    if (share_.renderer != nullptr) {
+      share_.renderer->unSubscribe();
+      sdk::destroyRenderer(share_.renderer);
+    }
+    share_.renderer = nullptr;
+    share_.tap.reset();
+    shareGot_ = 0;
+  }
+
+  void applyShareWant() {
+    bool present = false;
+    for (const ShareSource& source : lastShares_) present = present || source.sourceId == shareWant_;
+    const std::uint32_t want = rawStarted_ && present ? shareWant_ : 0;
+    if (want == shareGot_) return;
+    dropShare();
+    if (want == 0) return;
+    share_.tap = std::make_unique<ShareTap>(want, events_);
+    if (sdk::createRenderer(&share_.renderer, share_.tap.get()) != sdk::SDKERR_SUCCESS || share_.renderer == nullptr) {
+      share_.renderer = nullptr;
+      share_.tap.reset();
+      return;  // tried again at the next change or poll
+    }
+    share_.renderer->setRawDataResolution(sdk::ZoomSDKResolution_1080P);
+    if (share_.renderer->subscribe(want, sdk::RAW_DATA_TYPE_SHARE) != sdk::SDKERR_SUCCESS) {
+      dropShare();
+      return;
+    }
+    shareGot_ = want;
   }
 
   void setSendNote(const std::string& note) {
@@ -477,6 +566,7 @@ class ZoomClient final : public MeetingClient,
     state(MeetingState::Receiving,
           audioSubscribed_ || !request_.audio ? std::string() : std::string("音声を受け取れませんでした（映像のみ）"));
     applyWants();
+    applyShareWant();
   }
 
   bool present(std::uint32_t userId) const {
@@ -523,6 +613,7 @@ class ZoomClient final : public MeetingClient,
       sdk::destroyRenderer(entry.second.renderer);
     }
     video_.clear();
+    dropShare();
     if (audioSubscribed_) {
       sdk::IZoomSDKAudioRawDataHelper* audio = sdk::GetAudioRawdataHelper();
       if (audio != nullptr) audio->unSubscribe();
@@ -540,6 +631,11 @@ class ZoomClient final : public MeetingClient,
     askedPermission_ = false;
     participants_ = nullptr;
     recording_ = nullptr;
+    sharing_ = nullptr;
+    if (!lastShares_.empty()) {
+      lastShares_.clear();
+      if (events_ != nullptr) events_->onShares({});
+    }
     if (!lastParticipants_.empty()) {
       lastParticipants_.clear();
       if (events_ != nullptr) events_->onParticipants({});
@@ -585,6 +681,14 @@ class ZoomClient final : public MeetingClient,
   bool askedPermission_ = false;
   bool audioSubscribed_ = false;
   AudioTap audioTap_;
+  sdk::IMeetingShareController* sharing_ = nullptr;
+  std::vector<ShareSource> lastShares_;
+  struct {
+    std::unique_ptr<ShareTap> tap;
+    sdk::IZoomSDKRenderer* renderer = nullptr;
+  } share_;
+  std::uint32_t shareWant_ = 0;
+  std::uint32_t shareGot_ = 0;
   MicSource mic_;
   sdk::ISettingService* settings_ = nullptr;
   bool micSet_ = false;

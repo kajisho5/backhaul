@@ -6,7 +6,7 @@ Rectangle {
     id: bar
     signal settingsRequested()
     signal roleRequested()
-    readonly property var roleNames: ({ all: "1台でぜんぶ", camera: "カメラ（1人）", twoshot: "2ショット", audio: "音声" })
+    readonly property var roleNames: ({ all: "1台でぜんぶ", camera: "カメラ（1人）", twoshot: "2ショット", slide: "スライド", audio: "音声" })
     color: Theme.bg
     implicitHeight: 48
 

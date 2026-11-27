@@ -11,11 +11,19 @@ enum class Role {
   All,      // every slot, picture and sound, on this one PC
   Camera,   // one person, full screen
   TwoShot,  // two people side by side in one picture
+  Slide,    // the shared screen, full screen
   Audio,    // the meeting's voices to the sound desk, and the venue's sound to the meeting
 };
 
-// How many person slots the role uses, counted from the first; 0 means all of them.
+// How many person slots the role uses, counted from the first; 0 means all of them
+// (see usesPeople for roles that use none).
 int personSlotsOf(Role role);
+// False for roles that show no person at all.
+bool usesPeople(Role role);
+// Whether the role shows the shared screen.
+bool usesShare(Role role);
+// Roles whose whole job is one picture on one monitor.
+bool singleOutput(Role role);
 
 // Whether this PC takes the meeting's sound. Only one PC per meeting should.
 bool handlesAudio(Role role);

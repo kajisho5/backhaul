@@ -89,7 +89,7 @@ Window {
         TopBar { Layout.fillWidth: true; onSettingsRequested: settingsOpen = true; onRoleRequested: roleOpen = true }
 
         RoleScreen {
-            visible: app.role === "camera" || app.role === "twoshot"
+            visible: app.role === "camera" || app.role === "twoshot" || app.role === "slide"
             Layout.fillWidth: true
             Layout.fillHeight: true
         }

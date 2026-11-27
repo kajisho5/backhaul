@@ -41,15 +41,15 @@ int main(int argc, char* argv[]) {
                                    QStringLiteral("Start on a settings page: zoom, slots, audio or video."), QStringLiteral("page"));
   args.addOption(pageOpt);
   const QCommandLineOption roleOpt(QStringLiteral("role"),
-                                   QStringLiteral("Start in a role: all, camera, twoshot or audio; \"ask\" shows the role question."),
+                                   QStringLiteral("Start in a role: all, camera, twoshot, slide or audio; \"ask\" shows the role question."),
                                    QStringLiteral("role"));
   args.addOption(roleOpt);
   args.process(qtApp);
   if (args.isSet(roleOpt)) {
     const QString role = args.value(roleOpt);
     if (role != QStringLiteral("all") && role != QStringLiteral("camera") && role != QStringLiteral("twoshot") &&
-        role != QStringLiteral("audio") && role != QStringLiteral("ask")) {
-      std::fprintf(stderr, "--role wants all, camera, twoshot, audio or ask\n");
+        role != QStringLiteral("slide") && role != QStringLiteral("audio") && role != QStringLiteral("ask")) {
+      std::fprintf(stderr, "--role wants all, camera, twoshot, slide, audio or ask\n");
       return 5;
     }
   }
