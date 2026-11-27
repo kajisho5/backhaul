@@ -14,6 +14,11 @@ set_target_properties(zoom_sdk PROPERTIES
   IMPORTED_LOCATION "${BACKHAUL_ZOOM_SDK_DIR}/bin/sdk.dll")
 # SYSTEM: the SDK's own headers are not held to our warning level.
 target_include_directories(zoom_sdk SYSTEM INTERFACE "${BACKHAUL_ZOOM_SDK_DIR}/h")
+# sdk.dll (checked with 7.2.5) ends the process abnormally (0xC0000409) at exit when it
+# was loaded but InitSDK was never called. Loading it on first use keeps early exits,
+# such as a usage error, clean. After InitSDK + CleanUPSDK the exit is normal.
+target_link_options(zoom_sdk INTERFACE /DELAYLOAD:sdk.dll)
+target_link_libraries(zoom_sdk INTERFACE delayimp)
 
 add_executable(backhaul_probe_receive probe/receive_probe.cpp)
 target_link_libraries(backhaul_probe_receive PRIVATE backhaul_core zoom_sdk)
