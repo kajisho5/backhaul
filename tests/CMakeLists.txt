@@ -6,6 +6,7 @@ add_executable(core_tests
   test_quality_policy.cpp
   test_resampler.cpp
   test_route_matrix.cpp
+  test_sdk_token.cpp
   test_slot_output.cpp
 )
 target_link_libraries(core_tests PRIVATE backhaul_core)

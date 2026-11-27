@@ -4,6 +4,8 @@ add_library(backhaul_core STATIC
   quality_policy.cpp
   resampler.cpp
   route_matrix.cpp
+  sdk_token.cpp
+  sha256.cpp
   slot_output.cpp
 )
 target_include_directories(backhaul_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)

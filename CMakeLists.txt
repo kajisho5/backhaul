@@ -6,6 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(BACKHAUL_BUILD_APP "Build the Qt operator application (needs Qt 6.4 or newer)" OFF)
+set(BACKHAUL_ZOOM_SDK_DIR "" CACHE PATH "x64 folder of the unpacked Zoom Meeting SDK for Windows; empty builds without Zoom")
 
 # Our own code is built with warnings as errors. The strictest set is used for the
 # core and its tests; the Qt application uses a slightly smaller set because Qt's
@@ -26,6 +27,10 @@ add_subdirectory(src/core)
 
 if(BACKHAUL_BUILD_APP)
   add_subdirectory(src/app)
+endif()
+
+if(BACKHAUL_ZOOM_SDK_DIR)
+  add_subdirectory(src/zoom)
 endif()
 
 if(BUILD_TESTING)
