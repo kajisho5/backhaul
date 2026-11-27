@@ -9,4 +9,5 @@ add_executable(core_tests
   test_slot_output.cpp
 )
 target_link_libraries(core_tests PRIVATE backhaul_core)
+backhaul_warnings(core_tests strict)
 add_test(NAME core_tests COMMAND core_tests)
