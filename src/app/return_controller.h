@@ -1,5 +1,5 @@
 // The picture this PC sends into the meeting (the return role): which capture device,
-// a small preview, and handing the pictures on at a steady 30 per second.
+// a small preview, and handing the pictures on at the pace the meeting takes them.
 #pragma once
 
 #include <QObject>
@@ -34,7 +34,9 @@ class ReturnController : public QObject, public backhaul::VideoSink {
 
  public:
   static constexpr int kPreviewSlot = 1000;  // where the preview lives in the frame store
-  static constexpr double kSendFps = 30.0;
+  // A camera picture in a meeting runs at up to 30 per second; a shared screen may run at 60.
+  static constexpr double kCameraFps = 30.0;
+  static constexpr double kShareFps = 60.0;
 
   ReturnController(AppState& app, FrameStore& frames, std::unique_ptr<backhaul::VideoInput> input,
                    QObject* parent = nullptr);
@@ -81,9 +83,11 @@ class ReturnController : public QObject, public backhaul::VideoSink {
   Sender sender_;
   std::atomic<bool> paused_{false};
   std::atomic<int> sentCount_{0};
+  std::atomic<bool> asShare_{false};
 
   // Device thread only.
-  backhaul::FramePacer sendPacer_{kSendFps};
+  backhaul::FramePacer cameraPacer_{kCameraFps};
+  backhaul::FramePacer sharePacer_{kShareFps};
   backhaul::FramePacer previewPacer_{10.0};
   std::vector<std::uint8_t> i420_;
 };

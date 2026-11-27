@@ -556,6 +556,15 @@ static void testReturnRole() {
   a.setReturnAsShare(true);
   m.join();
   CHECK(client->lastRequest.sendVideo == backhaul::SendVideo::Share && !client->lastRequest.receive);
+  // A shared screen is not thinned out: 59.94 pictures per second in, the same out.
+  client->events->onMeetingState(MeetingState::Receiving, {});
+  const int shareStart = client->pictures;
+  for (int i = 0; i < 120; ++i) capture->sink->onFrame(y.data(), stride, uv.data(), stride, w, h, 200000000LL + i * 16683LL);
+  CHECK(client->pictures - shareStart >= 118);
+  // A faster source is held to 60.
+  const int fastStart = client->pictures;
+  for (int i = 0; i < 240; ++i) capture->sink->onFrame(y.data(), stride, uv.data(), stride, w, h, 300000000LL + i * 8333LL);
+  CHECK(client->pictures - fastStart >= 118 && client->pictures - fastStart <= 124);
   m.leave();
 
   // Another job: the capture device is let go, and comes back with the role.

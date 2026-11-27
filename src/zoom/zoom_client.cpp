@@ -629,7 +629,7 @@ class ZoomClient final : public MeetingClient,
   // Called from poll() until it has worked.
   void keepSendingVideo() {
     if (videoSet_) {
-      setVideoNote(sendingVideo() ? std::string() : std::string("Zoomがまだ映像を受け取っていません"));
+      setVideoNote(sendingVideo() ? shareRateNote_ : std::string("Zoomがまだ映像を受け取っていません"));
       return;
     }
     if (request_.sendVideo == SendVideo::Camera) {
@@ -648,6 +648,21 @@ class ZoomClient final : public MeetingClient,
         return;  // the source stays registered; only the unmute is tried again
       }
     } else {
+      // A shared screen may run at 60 pictures per second when "optimise for video" is on
+      // and the quality is asked for; without both the meeting keeps its lower default.
+      sdk::IMeetingShareController* sharing = meeting_->GetMeetingShareController();
+      shareRateNote_.clear();
+      if (sharing == nullptr || sharing->EnableOptimizeForFullScreenVideoClip(true) != sdk::SDKERR_SUCCESS) {
+        shareRateNote_ = "動画向けの共有にできませんでした（毎秒60コマにならない場合があります）";
+      } else {
+        sdk::SDKError quality = sharing->SetVideoSharingQuality(sdk::ZoomSDKVideoSharingQuality_1080p_60fps);
+        if (quality != sdk::SDKERR_SUCCESS) {
+          quality = sharing->SetVideoSharingQuality(sdk::ZoomSDKVideoSharingQuality_720p_60fps);
+          shareRateNote_ = quality == sdk::SDKERR_SUCCESS
+                               ? std::string("1080p・60コマにできなかったため、720p・60コマで共有しています")
+                               : code("毎秒60コマの共有にできませんでした", static_cast<int>(quality));
+        }
+      }
       sdk::IZoomSDKShareSourceHelper* helper = sdk::GetRawdataShareSourceHelper();
       const sdk::SDKError result =
           helper != nullptr ? helper->setExternalShareSource(&screen_) : sdk::SDKERR_UNINITIALIZE;
@@ -658,7 +673,7 @@ class ZoomClient final : public MeetingClient,
       }
     }
     videoSet_ = true;
-    setVideoNote({});
+    setVideoNote(shareRateNote_);
   }
 
   void stopSendingVideo() {
@@ -672,6 +687,7 @@ class ZoomClient final : public MeetingClient,
       }
     }
     videoSet_ = false;
+    shareRateNote_.clear();
     setVideoNote({});
   }
 
@@ -835,6 +851,7 @@ class ZoomClient final : public MeetingClient,
   ScreenSource screen_;
   bool videoSet_ = false;
   std::string videoNote_;
+  std::string shareRateNote_;
   sdk::ISettingService* settings_ = nullptr;
   bool micSet_ = false;
   bool unmuted_ = false;

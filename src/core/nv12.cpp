@@ -40,7 +40,10 @@ bool FramePacer::accept(std::int64_t timeUs) {
   if (intervalUs_ <= 0) return true;
   // A little early still counts: capture times jitter around the exact rhythm.
   const std::int64_t slack = intervalUs_ / 8;
-  if (!started_ || timeUs - nextUs_ > 4 * intervalUs_) {  // first picture, or back after a gap
+  // First picture, back after a gap, or a clock that started over (the device was restarted).
+  const bool wentBack = started_ && timeUs < lastUs_;
+  lastUs_ = timeUs;
+  if (!started_ || wentBack || timeUs - nextUs_ > 4 * intervalUs_) {
     started_ = true;
     nextUs_ = timeUs + intervalUs_;
     return true;
