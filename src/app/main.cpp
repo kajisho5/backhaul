@@ -40,7 +40,19 @@ int main(int argc, char* argv[]) {
   const QCommandLineOption pageOpt(QStringLiteral("settings"),
                                    QStringLiteral("Start on a settings page: zoom, slots, audio or video."), QStringLiteral("page"));
   args.addOption(pageOpt);
+  const QCommandLineOption roleOpt(QStringLiteral("role"),
+                                   QStringLiteral("Start in a role: all, camera or twoshot; \"ask\" shows the role question."),
+                                   QStringLiteral("role"));
+  args.addOption(roleOpt);
   args.process(qtApp);
+  if (args.isSet(roleOpt)) {
+    const QString role = args.value(roleOpt);
+    if (role != QStringLiteral("all") && role != QStringLiteral("camera") && role != QStringLiteral("twoshot") &&
+        role != QStringLiteral("ask")) {
+      std::fprintf(stderr, "--role wants all, camera, twoshot or ask\n");
+      return 5;
+    }
+  }
 
   AppState state;
   std::unique_ptr<SettingsSaver> saver;
@@ -57,6 +69,12 @@ int main(int argc, char* argv[]) {
     }
     state.notifyChanged();
     QObject::connect(&qtApp, &QCoreApplication::aboutToQuit, saver.get(), [&saver] { saver->flush(); });
+  }
+
+  if (args.isSet(roleOpt)) {
+    if (args.value(roleOpt) != QStringLiteral("ask")) state.setRole(args.value(roleOpt));
+  } else if (args.isSet(demoOpt)) {
+    state.setRole(QStringLiteral("all"));  // the demo shows the full operator screen unless told otherwise
   }
 
   // Demo mode never joins a meeting and never touches saved credentials.

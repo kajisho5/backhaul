@@ -6,6 +6,7 @@ add_executable(core_tests
   test_delay_line.cpp
   test_quality_policy.cpp
   test_resampler.cpp
+  test_role.cpp
   test_route_matrix.cpp
   test_sdk_token.cpp
   test_slot_output.cpp

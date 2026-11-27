@@ -7,6 +7,7 @@
 #include <QObject>
 #include <QString>
 #include <QTimer>
+#include <atomic>
 #include <memory>
 
 #include "credential_store.h"
@@ -95,4 +96,5 @@ class MeetingController : public QObject, public backhaul::MeetingEvents {
   QMutex routeMutex_;
   QHash<quint32, int> slotByUser_;
   backhaul::AudioMixer* mixer_ = nullptr;
+  std::atomic<bool> audio_{true};  // false: this PC's role leaves the sound to another PC
 };

@@ -7,6 +7,7 @@ void testAudioMixer();
 void testDelayLine();
 void testQualityPolicy();
 void testResampler();
+void testRole();
 void testRouteMatrix();
 void testSdkToken();
 void testSlotOutput();
@@ -18,6 +19,7 @@ int main() {
   testDelayLine();
   testQualityPolicy();
   testResampler();
+  testRole();
   testRouteMatrix();
   testSdkToken();
   testSlotOutput();

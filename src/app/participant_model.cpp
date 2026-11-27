@@ -15,12 +15,14 @@ QVariant ParticipantModel::data(const QModelIndex& index, int role) const {
       if (r.slot >= 0 && r.slot < slotNumbers_.size()) return QStringLiteral("枠%1").arg(slotNumbers_[r.slot]);
       return r.role;
     case CanAssignRole: return r.slot < 0 && r.role.isEmpty() && !r.isSelf;
+    case InSlotRole: return r.slot >= 0;
+    case IsSelfRole: return r.isSelf;
   }
   return {};
 }
 
 QHash<int, QByteArray> ParticipantModel::roleNames() const {
-  return {{NameRole, "name"}, {TagRole, "tag"}, {CanAssignRole, "canAssign"}};
+  return {{NameRole, "name"}, {TagRole, "tag"}, {CanAssignRole, "canAssign"}, {InSlotRole, "inSlot"}, {IsSelfRole, "isSelf"}};
 }
 
 void ParticipantModel::setRows(QVector<ParticipantRow> rows, QStringList slotNumbers) {

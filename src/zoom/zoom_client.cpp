@@ -308,7 +308,7 @@ class ZoomClient final : public MeetingClient,
     p.psw = passcode_.empty() ? nullptr : passcode_.c_str();
     p.userZAK = zak_.empty() ? nullptr : zak_.c_str();
     p.isVideoOff = true;
-    p.isAudioOff = false;
+    p.isAudioOff = !request_.audio;
     p.eAudioRawdataSamplingRate = sdk::AudioRawdataSamplingRate_48K;
     p.eVideoRawdataColorspace = sdk::VideoRawdataColorspace_BT709_L;
     const sdk::SDKError result = meeting_->Join(param);
@@ -332,8 +332,10 @@ class ZoomClient final : public MeetingClient,
     sdk::IMeetingInfo* info = meeting_->GetMeetingInfo();
     if (info != nullptr && events_ != nullptr) events_->onMeetingTopic(toUtf8(info->GetMeetingTopic()));
     // Without the Zoom window nobody presses "join audio", so do it here.
+    // A PC that only shows pictures stays out of the sound, so that it can never
+    // play or send any.
     sdk::IMeetingAudioController* audio = meeting_->GetMeetingAudioController();
-    if (audio != nullptr) audio->JoinVoip();
+    if (request_.audio && audio != nullptr) audio->JoinVoip();
     state(MeetingState::WaitingForPermission, {});
     tryStartRaw();
     poll();
@@ -353,9 +355,12 @@ class ZoomClient final : public MeetingClient,
     if (recording_->StartRawRecording() != sdk::SDKERR_SUCCESS) return;
     rawStarted_ = true;
     audioTap_.setEvents(events_);
-    sdk::IZoomSDKAudioRawDataHelper* audio = sdk::GetAudioRawdataHelper();
-    audioSubscribed_ = audio != nullptr && audio->subscribe(&audioTap_) == sdk::SDKERR_SUCCESS;
-    state(MeetingState::Receiving, audioSubscribed_ ? std::string() : std::string("音声を受け取れませんでした（映像のみ）"));
+    if (request_.audio) {
+      sdk::IZoomSDKAudioRawDataHelper* audio = sdk::GetAudioRawdataHelper();
+      audioSubscribed_ = audio != nullptr && audio->subscribe(&audioTap_) == sdk::SDKERR_SUCCESS;
+    }
+    state(MeetingState::Receiving,
+          audioSubscribed_ || !request_.audio ? std::string() : std::string("音声を受け取れませんでした（映像のみ）"));
     applyWants();
   }
 
