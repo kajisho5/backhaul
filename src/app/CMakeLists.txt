@@ -1,0 +1,51 @@
+find_package(Qt6 6.4 REQUIRED COMPONENTS Gui Qml Quick)
+qt_standard_project_setup()
+
+# State and models, separate from the executable so they can be tested.
+add_library(backhaul_app_state STATIC
+  app_state.cpp app_state.h
+  demo_source.cpp demo_source.h
+  participant_model.cpp participant_model.h
+  slot_model.cpp slot_model.h
+)
+target_include_directories(backhaul_app_state PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(backhaul_app_state PUBLIC backhaul_core Qt6::Gui)
+backhaul_warnings(backhaul_app_state app)
+
+qt_add_executable(backhaul main.cpp)
+
+set_source_files_properties(qml/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
+
+qt_add_qml_module(backhaul
+  URI Backhaul
+  VERSION 1.0
+  RESOURCE_PREFIX /qt/qml
+  QML_FILES
+    qml/Main.qml
+    qml/Theme.qml
+    qml/TopBar.qml
+    qml/SlotTile.qml
+    qml/ReturnTile.qml
+    qml/RouteStrip.qml
+    qml/DetailPanel.qml
+    qml/ParticipantList.qml
+    qml/Segmented.qml
+    qml/Stepper.qml
+    qml/PlainButton.qml
+)
+
+target_link_libraries(backhaul PRIVATE backhaul_app_state Qt6::Qml Qt6::Quick)
+backhaul_warnings(backhaul app)
+
+if(WIN32)
+  set_target_properties(backhaul PROPERTIES WIN32_EXECUTABLE TRUE)
+endif()
+
+if(BUILD_TESTING)
+  add_executable(app_state_tests ${CMAKE_SOURCE_DIR}/tests/app/test_app_state.cpp)
+  target_include_directories(app_state_tests PRIVATE ${CMAKE_SOURCE_DIR}/tests)
+  target_link_libraries(app_state_tests PRIVATE backhaul_app_state)
+  backhaul_warnings(app_state_tests app)
+  add_test(NAME app_state_tests COMMAND app_state_tests)
+  set_tests_properties(app_state_tests PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+endif()

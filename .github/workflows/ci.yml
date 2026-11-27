@@ -24,3 +24,65 @@ jobs:
         run: cmake --build build --config Release
       - name: Test
         run: ctest --test-dir build -C Release --output-on-failure
+
+  app-windows:
+    name: app (windows, Qt ${{ matrix.qt }})
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Qt 6.11 and 6.12 could not be installed by this action on 2026-11-27
+        # ("Failed to locate XML data"). Move to 6.12 LTS once that works.
+        qt: ['6.8.3']
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ matrix.qt }}
+          arch: win64_msvc2022_64
+          cache: true
+      - name: Configure
+        run: cmake -S . -B build -DBACKHAUL_BUILD_APP=ON
+      - name: Build
+        run: cmake --build build --config Release
+      - name: Test
+        run: ctest --test-dir build -C Release --output-on-failure
+      - name: Picture of the operator screen (demo data)
+        shell: pwsh
+        env:
+          QT_QUICK_BACKEND: software
+        run: |
+          $exe = Get-ChildItem -Recurse build -Filter backhaul.exe | Select-Object -First 1
+          $p = Start-Process -FilePath $exe.FullName -ArgumentList '--demo','--screenshot',"$PWD\operator-windows.png" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "backhaul exited with $($p.ExitCode)" }
+          if (-not (Test-Path operator-windows.png)) { throw "no picture was written" }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: operator-screen-windows-qt${{ matrix.qt }}
+          path: operator-windows.png
+
+  app-linux:
+    name: app (ubuntu 24.04, Qt 6.4)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Qt
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq qt6-base-dev qt6-declarative-dev qml6-module-qtquick qml6-module-qtquick-layouts qml6-module-qtquick-window qml6-module-qtqml-workerscript fonts-noto-cjk
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBACKHAUL_BUILD_APP=ON
+      - name: Build
+        run: cmake --build build
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+      - name: Picture of the operator screen (demo data)
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+        run: ./build/src/app/backhaul --demo --screenshot operator-linux.png
+      - uses: actions/upload-artifact@v4
+        with:
+          name: operator-screen-linux
+          path: operator-linux.png

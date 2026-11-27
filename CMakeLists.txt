@@ -5,15 +5,29 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-if(MSVC)
-  add_compile_options(/W4 /WX /utf-8 /permissive-)
-else()
-  add_compile_options(-Wall -Wextra -Wpedantic -Wconversion -Werror)
-endif()
+option(BACKHAUL_BUILD_APP "Build the Qt operator application (needs Qt 6.4 or newer)" OFF)
+
+# Our own code is built with warnings as errors. The strictest set is used for the
+# core and its tests; the Qt application uses a slightly smaller set because Qt's
+# generated code does not pass -Wconversion / -Wpedantic.
+function(backhaul_warnings target level)
+  if(MSVC)
+    target_compile_options(${target} PRIVATE /W4 /WX /utf-8 /permissive-)
+  elseif(level STREQUAL "strict")
+    target_compile_options(${target} PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Werror)
+  else()
+    target_compile_options(${target} PRIVATE -Wall -Wextra -Werror)
+  endif()
+endfunction()
+
+include(CTest)
 
 add_subdirectory(src/core)
 
-include(CTest)
+if(BACKHAUL_BUILD_APP)
+  add_subdirectory(src/app)
+endif()
+
 if(BUILD_TESTING)
   add_subdirectory(tests)
 endif()

@@ -7,3 +7,4 @@ add_library(backhaul_core STATIC
   slot_output.cpp
 )
 target_include_directories(backhaul_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)
+backhaul_warnings(backhaul_core strict)
