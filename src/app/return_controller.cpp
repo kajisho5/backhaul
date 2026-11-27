@@ -9,6 +9,8 @@
 ReturnController::ReturnController(AppState& app, FrameStore& frames, std::unique_ptr<backhaul::VideoInput> input,
                                    QObject* parent)
     : QObject(parent), app_(app), frames_(frames), input_(std::move(input)) {
+  asShare_ = app_.returnAsShare();
+  connect(&app_, &AppState::changed, this, [this] { asShare_ = app_.returnAsShare(); });
   refreshDevices();
   timer_.setInterval(1000);
   connect(&timer_, &QTimer::timeout, this, [this] { tick(); });
@@ -128,7 +130,10 @@ void ReturnController::tick() {
 
 void ReturnController::onFrame(const std::uint8_t* y, int yStride, const std::uint8_t* uv, int uvStride, int width,
                                int height, std::int64_t timeUs) {
-  const bool send = sendPacer_.accept(timeUs);
+  // Both pacers see every picture so that switching between the two ways keeps a steady rhythm.
+  const bool forCamera = cameraPacer_.accept(timeUs);
+  const bool forShare = sharePacer_.accept(timeUs);
+  const bool send = asShare_.load(std::memory_order_relaxed) ? forShare : forCamera;
   const bool preview = previewPacer_.accept(timeUs);
   if (!send && !preview) return;
   i420_.resize(backhaul::i420Size(width, height));

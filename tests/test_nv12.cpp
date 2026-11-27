@@ -63,6 +63,9 @@ void testNv12() {
     CHECK(pacer.accept(5000000));
     CHECK(!pacer.accept(5010000));
     CHECK(pacer.accept(5033400));
+    CHECK(pacer.accept(1000));      // the device's clock started over: carry on from there
+    CHECK(!pacer.accept(11000));
+    CHECK(pacer.accept(34400));
     FramePacer all(0.0);  // no limit
     CHECK(all.accept(0) && all.accept(1) && all.accept(2));
   }

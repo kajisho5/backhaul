@@ -157,8 +157,8 @@ RowLayout {
                 Text {
                     Layout.fillWidth: true
                     wrapMode: Text.WordWrap
-                    text: app.returnAsShare ? "共有画面として大きく見えます。ほかの人が共有している間は送れません。"
-                                            : "参加者の1人の映像として見えます。"
+                    text: app.returnAsShare ? "共有画面として大きく見えます。入力のコマ数のまま、毎秒60コマまで送ります。ほかの人が共有している間は送れません。"
+                                            : "参加者の1人の映像として見えます。毎秒30コマまでです（Zoomのカメラ映像の上限）。"
                     color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 12
                 }
                 Text { Layout.topMargin: 6; text: "映像の入力（USBキャプチャー）"; color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 12 }
