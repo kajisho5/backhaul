@@ -6,6 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(BACKHAUL_BUILD_APP "Build the Qt operator application (needs Qt 6.4 or newer)" OFF)
+option(BACKHAUL_PLUGINS "Host VST 3 plug-ins (downloads the VST 3 SDK when configuring)" ON)
 set(BACKHAUL_ASIO_SDK_DIR "" CACHE PATH "The unpacked Steinberg ASIOSDK folder; empty builds without ASIO")
 set(BACKHAUL_ZOOM_SDK_DIR "" CACHE PATH "x64 folder of the unpacked Zoom Meeting SDK for Windows; empty builds without Zoom")
 
@@ -25,6 +26,7 @@ endfunction()
 include(CTest)
 
 add_subdirectory(src/core)
+add_subdirectory(src/plugins)
 
 # Before the app, which links the Zoom part when it exists.
 if(BACKHAUL_ZOOM_SDK_DIR)

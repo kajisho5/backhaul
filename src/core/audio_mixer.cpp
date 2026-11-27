@@ -24,6 +24,7 @@ struct AudioMixer::Source {
   std::atomic<int> delaySamples{0};
   std::atomic<std::uint32_t> channels{0};
   std::atomic<float> peak{0.0f};
+  EffectChain effects;
 
   // Delivery thread only.
   Resampler from32k{3, 2};
@@ -98,6 +99,11 @@ void AudioMixer::setChannels(int source, std::uint32_t mask) {
   sources_[static_cast<std::size_t>(source)]->channels.store(mask, std::memory_order_relaxed);
 }
 
+EffectChain* AudioMixer::effects(int source) {
+  if (source < 0 || source >= sources()) return nullptr;
+  return &sources_[static_cast<std::size_t>(source)]->effects;
+}
+
 float AudioMixer::takePeak(int source) {
   if (source < 0 || source >= sources()) return 0.0f;
   return sources_[static_cast<std::size_t>(source)]->peak.exchange(0.0f, std::memory_order_relaxed);
@@ -140,6 +146,8 @@ void AudioMixer::render(float* out, std::size_t frames, int channels) {
       s.appliedDelay = wanted;
     }
     s.delay.process(scratch_.data(), scratch_.data(), frames);
+    float* const one = scratch_.data();
+    s.effects.process(&one, 1, frames);
 
     const std::uint32_t mask = s.channels.load(std::memory_order_relaxed);
     const float gain = s.gain.load(std::memory_order_relaxed);
