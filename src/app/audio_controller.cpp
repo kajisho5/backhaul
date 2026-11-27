@@ -26,9 +26,12 @@ AudioController::AudioController(AppState& app, std::unique_ptr<backhaul::AudioO
   timer_.setInterval(100);
   connect(&timer_, &QTimer::timeout, this, [this] { tick(); });
   timer_.start();
+  sweepTimer_.setInterval(2000);
+  connect(&sweepTimer_, &QTimer::timeout, this, [this] { sweepStep(); });
   refreshDevices();
   refreshMics();
   connect(&app_, &AppState::roleChanged, this, [this] {
+    stopTest();  // a test signal never outlives the screen it was started from
     if (!app_.sendsAudio()) stopMic();
     if (wantsOutput()) {
       if (deviceIndex_ == 0) startSaved();
@@ -70,6 +73,7 @@ backhaul::AudioOutput* AudioController::active() const {
 
 void AudioController::setAsio(bool asio) {
   if (asio == app_.audioAsio() || (asio && asio_ == nullptr)) return;
+  stopTest();
   stopMic();
   app_.setMicDeviceName(QString());  // the two methods name their inputs differently
   if (active() != nullptr) active()->stop();
@@ -112,6 +116,7 @@ bool AudioController::startDevice(int index) {
     emit changed();
     return false;
   }
+  stopTest();  // another device, other speakers: the operator starts the check again
   const backhaul::AudioDevice& device = devices_[static_cast<std::size_t>(index - 1)];
   std::string error;
   if (!active()->start(device.id, &mixer_, &error)) {
@@ -139,6 +144,7 @@ bool AudioController::startDevice(int index) {
 void AudioController::chooseDevice(int index) {
   if (active() == nullptr || index < 0 || index > static_cast<int>(devices_.size())) return;
   if (index == 0) {
+    stopTest();
     if (app_.audioAsio()) stopMic();
     active()->stop();
     deviceIndex_ = 0;
@@ -299,6 +305,84 @@ void AudioController::pump() {
   }
 }
 
+// ---- sound check ----
+
+int AudioController::testChannels() const {
+  if (app_.demo_) return static_cast<int>(outputLevels_.size());  // the demo picture has no device
+  return deviceIndex_ > 0 ? std::min(app_.audioChannels_, backhaul::AudioMixer::kMaxChannels) : 0;
+}
+
+QVariantList AudioController::testOn() const {
+  QVariantList on;
+  for (int c = 0; c < testChannels(); ++c) on.push_back((testMask_ & (std::uint32_t{1} << c)) != 0);
+  return on;
+}
+
+QString AudioController::testChannelsText() const {
+  QStringList numbers;
+  for (int c = 0; c < backhaul::AudioMixer::kMaxChannels; ++c) {
+    if ((testMask_ & (std::uint32_t{1} << c)) != 0) numbers.push_back(QString::number(c + 1));
+  }
+  return numbers.join(QStringLiteral(", "));
+}
+
+void AudioController::applyTest(std::uint32_t mask) {
+  testMask_ = mask;
+  mixer_.tone().setChannels(mask);
+  emit testChanged();
+}
+
+void AudioController::toggleTest(int channel) {
+  if (channel < 0 || channel >= testChannels()) return;
+  const std::uint32_t bit = std::uint32_t{1} << channel;
+  if (sweepChannel_ >= 0) {  // taking over by hand: the sweep ends, this channel is what was asked for
+    sweepTimer_.stop();
+    sweepChannel_ = -1;
+    applyTest(bit);
+    return;
+  }
+  applyTest(testMask_ ^ bit);
+}
+
+void AudioController::stopTest() {
+  if (testMask_ == 0 && sweepChannel_ < 0) return;
+  sweepTimer_.stop();
+  sweepChannel_ = -1;
+  applyTest(0);
+}
+
+void AudioController::sweepTest() {
+  if (testChannels() < 1) return;
+  sweepChannel_ = 0;
+  sweepTimer_.start();
+  applyTest(1);
+}
+
+void AudioController::sweepStep() {
+  if (sweepChannel_ < 0) return;
+  if (sweepChannel_ + 1 >= testChannels()) {
+    stopTest();
+    return;
+  }
+  ++sweepChannel_;
+  applyTest(std::uint32_t{1} << sweepChannel_);
+}
+
+void AudioController::setTestKind(int kind) {
+  if (kind < 0 || kind > 1 || kind == testKind_) return;
+  testKind_ = kind;
+  mixer_.tone().setKind(kind == 1 ? backhaul::TestTone::Kind::Pink : backhaul::TestTone::Kind::Sine);
+  emit testChanged();
+}
+
+void AudioController::nudgeTestLevel(int direction) {
+  const int next = std::clamp(testLevelDb_ + (direction > 0 ? 2 : -2), testLevelMin(), testLevelMax());
+  if (next == testLevelDb_) return;
+  testLevelDb_ = next;
+  mixer_.tone().setLevelDb(static_cast<float>(next));
+  emit testChanged();
+}
+
 void AudioController::syncSlots() {
   const auto& rows = app_.slotList()->rows();
   for (int i = 0; i < kSources; ++i) {
@@ -356,6 +440,7 @@ void AudioController::tick() {
   }
   // The device can disappear on its own (unplugged, driver restarted).
   if (active() != nullptr && deviceIndex_ > 0 && !active()->running()) {
+    stopTest();
     deviceIndex_ = 0;
     problem_ = QStringLiteral("音声の機器が止まりました。機器を選び直してください");
     app_.audioOk_ = false;

@@ -13,6 +13,7 @@ void testRole();
 void testRouteMatrix();
 void testSdkToken();
 void testSlotOutput();
+void testTestTone();
 void testYuv();
 
 int main() {
@@ -27,6 +28,7 @@ int main() {
   testRouteMatrix();
   testSdkToken();
   testSlotOutput();
+  testTestTone();
   testYuv();
   if (testing::failures() == 0) {
     std::printf("all tests passed\n");

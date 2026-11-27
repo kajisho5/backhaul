@@ -12,6 +12,7 @@
 
 #include "core/delay_line.h"
 #include "core/resampler.h"
+#include "core/test_tone.h"
 
 namespace backhaul {
 
@@ -41,6 +42,10 @@ class AudioMixer {
   // Loudest sample sent to one output channel (0-based) since the last call, 0..1.
   float takeOutputPeak(int channel);
 
+  // The sound-check signal, added to the output channels after the slots (so the output
+  // meters show it). Its own comments say which thread may call what.
+  TestTone& tone() { return tone_; }
+
   // Device thread. Writes frames * channels samples, channel-interleaved.
   void render(float* out, std::size_t frames, int channels);
 
@@ -48,6 +53,7 @@ class AudioMixer {
   struct Source;
   std::vector<std::unique_ptr<Source>> sources_;
   std::vector<float> scratch_;
+  TestTone tone_;
   std::atomic<float> outputPeak_[kMaxChannels];
 };
 
