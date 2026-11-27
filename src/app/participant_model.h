@@ -27,6 +27,9 @@ class ParticipantModel : public QAbstractListModel {
   const QVector<ParticipantRow>& rows() const { return rows_; }
   void setSlotOf(int row, int slot);
   void clearSlot(int slot);
+  // A slot was inserted at index `at`: people in later slots keep their slot.
+  void slotInserted(int at, QStringList slotNumbers);
+  void setSlotNumbers(QStringList slotNumbers);
 
  private:
   QVector<ParticipantRow> rows_;

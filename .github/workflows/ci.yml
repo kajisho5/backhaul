@@ -57,10 +57,18 @@ jobs:
           $p = Start-Process -FilePath $exe.FullName -ArgumentList '--demo','--screenshot',"$PWD\operator-windows.png" -Wait -PassThru
           if ($p.ExitCode -ne 0) { throw "backhaul exited with $($p.ExitCode)" }
           if (-not (Test-Path operator-windows.png)) { throw "no picture was written" }
+          foreach ($page in 'slots','audio') {
+            $p = Start-Process -FilePath $exe.FullName -ArgumentList '--demo','--settings',$page,'--screenshot',"$PWD\settings-$page-windows.png" -Wait -PassThru
+            if ($p.ExitCode -ne 0) { throw "backhaul --settings $page exited with $($p.ExitCode)" }
+            if (-not (Test-Path "settings-$page-windows.png")) { throw "no picture of the $page settings was written" }
+          }
       - uses: actions/upload-artifact@v4
         with:
           name: operator-screen-windows-qt${{ matrix.qt }}
-          path: operator-windows.png
+          path: |
+            operator-windows.png
+            settings-slots-windows.png
+            settings-audio-windows.png
 
   app-linux:
     name: app (ubuntu 24.04, Qt 6.4)
@@ -81,8 +89,14 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
           QT_QUICK_BACKEND: software
-        run: ./build/src/app/backhaul --demo --screenshot operator-linux.png
+        run: |
+          ./build/src/app/backhaul --demo --screenshot operator-linux.png
+          ./build/src/app/backhaul --demo --settings slots --screenshot settings-slots-linux.png
+          ./build/src/app/backhaul --demo --settings audio --screenshot settings-audio-linux.png
       - uses: actions/upload-artifact@v4
         with:
           name: operator-screen-linux
-          path: operator-linux.png
+          path: |
+            operator-linux.png
+            settings-slots-linux.png
+            settings-audio-linux.png

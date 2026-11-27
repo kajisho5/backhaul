@@ -23,7 +23,7 @@ Rectangle {
                 delegate: ColumnLayout {
                     required property string number
                     required property string label
-                    required property int channel
+                    required property string channelText
                     required property double level
                     required property double gainDb
                     required property int delayMs
@@ -33,7 +33,7 @@ Rectangle {
                     RowLayout {
                         Layout.fillWidth: true
                         Text { Layout.fillWidth: true; text: number + "　" + label; elide: Text.ElideRight; color: Theme.ink; font.family: app.sansFamily; font.pixelSize: 12 }
-                        Text { text: channel > 0 ? "ch " + channel : "—"; color: Theme.mute; font.family: app.monoFamily; font.pixelSize: 12 }
+                        Text { text: channelText.length > 0 ? channelText : "—"; color: Theme.mute; font.family: app.monoFamily; font.pixelSize: 12 }
                     }
                     Rectangle {
                         Layout.fillWidth: true

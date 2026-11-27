@@ -20,7 +20,7 @@ struct SlotRow {
   double gainDb = 0.0;
   int delayMs = 0;
   QString display;       // e.g. "HDMI 2"
-  int channel = 0;       // audio output channel, 1-based (0 = none)
+  quint32 channels = 0;  // audio output channels: bit 0 = ch 1, bit 1 = ch 2, ...
 };
 
 class SlotModel : public QAbstractListModel {
@@ -41,7 +41,8 @@ class SlotModel : public QAbstractListModel {
     GainRole,
     DelayRole,
     DisplayRole,
-    ChannelRole,
+    ChannelTextRole,  // "ch 1", "ch 1・3", or empty when the slot goes nowhere
+    ChannelsRole,     // the same as a bit mask (bit 0 = ch 1)
     FreezeOnLossRole,
     GridRowRole,     // where the tile sits: people fill the two left columns,
     GridColumnRole,  // slides stack in the right column
@@ -65,11 +66,14 @@ class SlotModel : public QAbstractListModel {
     return true;
   }
 
+  void insertRow(int at, SlotRow row);
+
   // Row in the right column just below the last slide (where the return tile goes).
   int shareCount() const;
 
   static QString stateKey(backhaul::UiState s);
   static QString stateText(backhaul::UiState s);
+  static QString channelText(quint32 channels);
 
  private:
   QVector<SlotRow> rows_;

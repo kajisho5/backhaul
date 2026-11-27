@@ -3,6 +3,8 @@ import QtQuick.Layouts
 import Backhaul
 
 Rectangle {
+    id: bar
+    signal settingsRequested()
     color: Theme.bg
     implicitHeight: 48
 
@@ -43,7 +45,13 @@ Rectangle {
             Text { id: demoText; anchors.centerIn: parent; text: "デモ表示（Zoom未接続）"; color: Theme.muted; font.family: app.sansFamily; font.pixelSize: 12; font.bold: true }
         }
 
-        Item { Layout.fillWidth: true }
+        Text {
+            Layout.fillWidth: true
+            elide: Text.ElideRight
+            text: app.notice
+            color: Theme.lost
+            font.family: app.sansFamily; font.pixelSize: 13; font.bold: true
+        }
 
         Segmented {
             firstText: "1人1出力"
@@ -51,5 +59,6 @@ Rectangle {
             first: !app.gridMode
             onChosen: (first) => app.gridMode = !first
         }
+        PlainButton { text: "設定"; onClicked: bar.settingsRequested() }
     }
 }

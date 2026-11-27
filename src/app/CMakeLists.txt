@@ -6,6 +6,7 @@ add_library(backhaul_app_state STATIC
   app_state.cpp app_state.h
   demo_source.cpp demo_source.h
   participant_model.cpp participant_model.h
+  settings_saver.cpp settings_saver.h
   slot_model.cpp slot_model.h
 )
 target_include_directories(backhaul_app_state PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
@@ -32,6 +33,10 @@ qt_add_qml_module(backhaul
     qml/Segmented.qml
     qml/Stepper.qml
     qml/PlainButton.qml
+    qml/SettingsScreen.qml
+    qml/SettingsAudio.qml
+    qml/SettingsSlots.qml
+    qml/LabeledInput.qml
 )
 
 target_link_libraries(backhaul PRIVATE backhaul_app_state Qt6::Qml Qt6::Quick)
