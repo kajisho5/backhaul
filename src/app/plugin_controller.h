@@ -43,8 +43,10 @@ class PluginController : public QObject {
 
   // `host` may be null. `guardFolder` is where the notes for the crash guard are kept
   // (empty: no guard, as in tests that do not need it).
-  PluginController(AppState& app, backhaul::AudioMixer* mixer, std::unique_ptr<backhaul::PluginHost> host,
-                   QString guardFolder = QString(), QObject* parent = nullptr);
+  // `mixer` holds the rows of the slots, `micChain` is the row towards the meeting; both
+  // belong to the sound side and must outlive this object.
+  PluginController(AppState& app, backhaul::AudioMixer* mixer, backhaul::EffectChain* micChain,
+                   std::unique_ptr<backhaul::PluginHost> host, QString guardFolder = QString(), QObject* parent = nullptr);
   ~PluginController() override;
 
   bool available() const { return host_ != nullptr; }
@@ -57,9 +59,6 @@ class PluginController : public QObject {
   QString problem() const { return problem_; }
   QStringList choices() const;
   int choiceTarget() const { return choiceTarget_; }
-
-  // The row the microphone sound goes through (two channels), for the sending thread.
-  backhaul::EffectChain* micChain() { return &micChain_; }
 
   Q_INVOKABLE void refreshModules();
   // Adds the plug-in file with this index in moduleNames to a row. A file with several
@@ -115,12 +114,12 @@ class PluginController : public QObject {
 
   AppState& app_;
   backhaul::AudioMixer* mixer_;
+  backhaul::EffectChain* micChain_;
   std::unique_ptr<backhaul::PluginHost> host_;
   QString guardFolder_;
   std::vector<std::string> modules_;
   std::vector<Rack> slotRacks_;
   Rack micRack_;
-  backhaul::EffectChain micChain_;
   QString problem_;
   std::string choicePath_;
   std::vector<backhaul::PluginClass> choiceClasses_;

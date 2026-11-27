@@ -89,9 +89,9 @@ class AudioController : public QObject {
   // that is waiting. Returns the number of blocks handed over.
   int pumpOnce();
   backhaul::MicFeed* micFeed() { return &feed_; }
-  // Effects the recorded sound goes through before it is sent (two channels). May be null.
-  // Set once, before a recording device is chosen; must stay valid until this object is gone.
-  void setMicEffects(backhaul::EffectChain* effects) { micEffects_ = effects; }
+  // The effects the recorded sound goes through before it is sent (two channels).
+  // It lives here so that it outlasts whoever fills it, for as long as the sending thread runs.
+  backhaul::EffectChain* micEffects() { return &micEffects_; }
 
   Q_INVOKABLE void refreshDevices();
   Q_INVOKABLE void chooseDevice(int index);
@@ -112,6 +112,9 @@ class AudioController : public QObject {
 
   // Starts the device named in the settings, if it is present. Call once after loading settings.
   void startSaved();
+  // After the settings were replaced as a whole (a project was opened): everything stops
+  // and what the new settings name starts.
+  void reloadSaved();
 
  signals:
   void changed();
@@ -164,7 +167,7 @@ class AudioController : public QObject {
   backhaul::MicFeed feed_;
   Sink sink_;
   Sender sender_;
-  backhaul::EffectChain* micEffects_ = nullptr;
+  backhaul::EffectChain micEffects_;
   std::atomic<bool> stereo_{false};
   std::atomic<bool> pumpStop_{false};
   std::thread pumpThread_;

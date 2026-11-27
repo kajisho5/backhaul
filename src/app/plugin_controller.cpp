@@ -26,9 +26,14 @@ std::vector<std::uint8_t> fromBytes(const QByteArray& data) {
 
 }  // namespace
 
-PluginController::PluginController(AppState& app, backhaul::AudioMixer* mixer, std::unique_ptr<backhaul::PluginHost> host,
-                                   QString guardFolder, QObject* parent)
-    : QObject(parent), app_(app), mixer_(mixer), host_(std::move(host)), guardFolder_(std::move(guardFolder)) {
+PluginController::PluginController(AppState& app, backhaul::AudioMixer* mixer, backhaul::EffectChain* micChain,
+                                   std::unique_ptr<backhaul::PluginHost> host, QString guardFolder, QObject* parent)
+    : QObject(parent),
+      app_(app),
+      mixer_(mixer),
+      micChain_(micChain),
+      host_(std::move(host)),
+      guardFolder_(std::move(guardFolder)) {
   slotRacks_.resize(static_cast<std::size_t>(app_.slotList()->rows().size()));
   // A person slot added in the settings pushes the slide slots (and their rows here) down.
   connect(app_.slotList(), &QAbstractItemModel::rowsInserted, this, [this](const QModelIndex&, int first, int last) {
@@ -55,7 +60,7 @@ PluginController::PluginController(AppState& app, backhaul::AudioMixer* mixer, s
 
 PluginController::~PluginController() {
   // The sound threads must let go of every plug-in before it is closed.
-  micChain_.set({});
+  if (micChain_ != nullptr) micChain_->set({});
   for (int row = 0; row < static_cast<int>(slotRacks_.size()); ++row) {
     if (backhaul::EffectChain* c = chain(row)) c->set({});
   }
@@ -136,7 +141,7 @@ const PluginController::Rack* PluginController::rack(int target) const {
 }
 
 backhaul::EffectChain* PluginController::chain(int target) {
-  if (target == kMic) return &micChain_;
+  if (target == kMic) return micChain_;
   return mixer_ != nullptr ? mixer_->effects(target) : nullptr;
 }
 
@@ -348,7 +353,7 @@ void PluginController::capture() {
 
 void PluginController::restore() {
   // Let go of everything first.
-  micChain_.set({});
+  if (micChain_ != nullptr) micChain_->set({});
   for (int row = 0; row < static_cast<int>(slotRacks_.size()); ++row) {
     if (backhaul::EffectChain* c = chain(row)) c->set({});
   }
