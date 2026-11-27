@@ -89,7 +89,9 @@ int main(int argc, char* argv[]) {
     CHECK_NEAR(peakBack, 0.5, 1e-6);
 
     // The operator turns the knob in the plug-in's window: the sound follows.
+    CHECK(!gain->takeEdited());
     CHECK(gain->setState(savedWith(1.0, 1000)));
+    CHECK(gain->takeEdited() && !gain->takeEdited());
     std::fill(ones.begin(), ones.end(), 0.25f);
     gain->process(&one, 1, ones.size());
     CHECK_NEAR(ones[4000], 0.125, 1e-6);  // 0.25 on the knob halves the level

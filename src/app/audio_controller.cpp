@@ -287,11 +287,17 @@ void AudioController::setSender(Sender sender) { sender_ = std::move(sender); }
 
 int AudioController::pumpOnce() {
   constexpr std::size_t kBlock = 480;  // 10 ms
+  float left[kBlock], right[kBlock];
   std::int16_t block[kBlock * 2];
   int blocks = 0;
   while (feed_.available() >= kBlock) {
     const bool stereo = stereo_.load(std::memory_order_relaxed);
-    const std::size_t frames = feed_.read(block, kBlock, stereo);
+    const std::size_t frames = feed_.readFloat(left, right, kBlock);
+    if (frames > 0 && micEffects_ != nullptr) {
+      float* const both[2] = {left, right};
+      micEffects_->process(both, 2, frames);
+    }
+    backhaul::MicFeed::toPcm(left, right, frames, stereo, block);
     // When the meeting is not taking sound the block is simply let go, so nothing piles up.
     if (frames > 0 && sender_) sender_(block, frames, stereo ? 2 : 1);
     ++blocks;

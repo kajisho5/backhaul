@@ -212,6 +212,8 @@ class Vst3Instance final : public PluginInstance, public IComponentHandler, publ
     if (restartWanted_.exchange(false)) reactivate();
   }
 
+  bool takeEdited() override { return edited_.exchange(false); }
+
   // ---- sound thread ----
   void process(float* const* channels, int channelCount, std::size_t frames) override {
     if (channels == nullptr || channelCount != hostChannels_) return;
@@ -394,6 +396,7 @@ class Vst3Instance final : public PluginInstance, public IComponentHandler, publ
   tresult PLUGIN_API beginEdit(ParamID) override { return kResultOk; }
   tresult PLUGIN_API performEdit(ParamID id, ParamValue value) override {
     toSound_.push({id, value});
+    edited_.store(true);
     return kResultOk;
   }
   tresult PLUGIN_API endEdit(ParamID) override { return kResultOk; }
@@ -405,13 +408,13 @@ class Vst3Instance final : public PluginInstance, public IComponentHandler, publ
   }
 
   // ---- FUnknown: this object is owned by the program, not counted by the plug-in ----
-  tresult PLUGIN_API queryInterface(const TUID iid, void** obj) override {
+  tresult PLUGIN_API queryInterface(const TUID wanted, void** obj) override {
     if (obj == nullptr) return kInvalidArgument;
-    if (sameId(iid, IComponentHandler::iid) || sameId(iid, FUnknown::iid)) {
+    if (sameId(wanted, IComponentHandler::iid) || sameId(wanted, FUnknown::iid)) {
       *obj = static_cast<IComponentHandler*>(this);
       return kResultOk;
     }
-    if (sameId(iid, IPlugFrame::iid)) {
+    if (sameId(wanted, IPlugFrame::iid)) {
       *obj = static_cast<IPlugFrame*>(this);
       return kResultOk;
     }
@@ -481,7 +484,7 @@ class Vst3Instance final : public PluginInstance, public IComponentHandler, publ
 
   bool active_ = false, started_ = false;
   std::atomic<int> latency_{0};
-  std::atomic<bool> paused_{true}, inSound_{false}, restartWanted_{false};
+  std::atomic<bool> paused_{true}, inSound_{false}, restartWanted_{false}, edited_{false};
   ValueQueue toSound_, toWindow_;
 };
 

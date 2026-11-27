@@ -12,11 +12,12 @@ add_library(backhaul_app_state STATIC
   demo_source.cpp demo_source.h
   display_model.cpp display_model.h
   participant_model.cpp participant_model.h
+  plugin_controller.cpp plugin_controller.h
   settings_saver.cpp settings_saver.h
   slot_model.cpp slot_model.h
 )
 target_include_directories(backhaul_app_state PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(backhaul_app_state PUBLIC backhaul_core backhaul_audio backhaul_video Qt6::Gui)
+target_link_libraries(backhaul_app_state PUBLIC backhaul_core backhaul_audio backhaul_video backhaul_plugins Qt6::Gui)
 target_include_directories(backhaul_app_state PUBLIC ${CMAKE_SOURCE_DIR}/src)
 if(WIN32)
   target_link_libraries(backhaul_app_state PRIVATE advapi32)

@@ -35,6 +35,8 @@ class PluginInstance : public AudioEffect {
   // Call regularly (about 30 times a second): hands meter values and the like from the
   // sound thread to the plug-in's window, and picks up a changed delay.
   virtual void idle() = 0;
+  // True once after the operator changed something in the plug-in's window.
+  virtual bool takeEdited() = 0;
 };
 
 class PluginHost {
