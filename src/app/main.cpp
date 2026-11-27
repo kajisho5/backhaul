@@ -67,7 +67,8 @@ int main(int argc, char* argv[]) {
   MeetingController meeting(state, frames, demo ? nullptr : backhaul::makeMeetingClient(),
                             demo ? nullptr : makeCredentialStore());
 
-  AudioController audio(state, demo ? nullptr : backhaul::makeAudioOutput());
+  AudioController audio(state, demo ? nullptr : backhaul::makeAudioOutput(),
+                        demo ? nullptr : backhaul::makeAsioOutput());
   if (!demo) audio.startSaved();
   meeting.setMixer(audio.mixer());
 
