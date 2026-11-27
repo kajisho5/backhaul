@@ -60,6 +60,13 @@ struct VideoWant {
   bool operator==(const VideoWant&) const = default;
 };
 
+// A screen someone is sharing. One person can share more than one.
+struct ShareSource {
+  std::uint32_t sourceId = 0;
+  std::uint32_t userId = 0;
+  bool operator==(const ShareSource&) const = default;
+};
+
 // One picture. The planes are only valid during the call.
 struct VideoFrame {
   const std::uint8_t* y = nullptr;
@@ -77,8 +84,11 @@ class MeetingEvents {
   virtual void onMeetingState(MeetingState state, const std::string& detail) = 0;
   virtual void onParticipants(const std::vector<Participant>& everyone) = 0;
   virtual void onMeetingTopic(const std::string& topic) = 0;
+  // The screens being shared right now by others (empty when nobody shares).
+  virtual void onShares(const std::vector<ShareSource>& shares) = 0;
   // Called on a thread of the meeting library, many times per second.
   virtual void onVideoFrame(std::uint32_t userId, const VideoFrame& frame) = 0;
+  virtual void onShareFrame(std::uint32_t sourceId, const VideoFrame& frame) = 0;
   // One person's voice: 16-bit samples, `frames` per channel, channel-interleaved.
   virtual void onAudio(std::uint32_t userId, const std::int16_t* samples, std::size_t frames, int sampleRate,
                        int channels) = 0;
@@ -92,6 +102,8 @@ class MeetingClient {
   virtual void leave() = 0;
   // Whose picture to receive, and how large. Replaces the previous list.
   virtual void setVideoWants(const std::vector<VideoWant>& wants) = 0;
+  // Which shared screen to receive (a sourceId from onShares); 0 for none.
+  virtual void setShareWant(std::uint32_t sourceId) = 0;
   // Sound for the meeting: 16-bit, 48 kHz, `frames` per channel (1 or 2 channels,
   // interleaved), at most 100 ms per call. May be called from any one thread.
   // False when it cannot be sent right now (not in a meeting, muted, not asked for).

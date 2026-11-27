@@ -53,6 +53,8 @@ class AppState : public QObject {
   // What this PC is used for: "" (not chosen yet), "all", "camera" or "twoshot".
   Q_PROPERTY(QString role READ role WRITE setRole NOTIFY roleChanged)
   Q_PROPERTY(bool handlesAudio READ handlesAudio NOTIFY roleChanged)
+  // Single-output roles: the slot row whose picture goes out (the first person, or the slide).
+  Q_PROPERTY(int roleRow READ roleRow NOTIFY changed)
   // Single-output roles: the monitor the role's picture goes to (0 = none).
   Q_PROPERTY(QStringList roleOutputChoices READ gridChoices NOTIFY changed)
   Q_PROPERTY(int roleOutputChoice READ roleOutputChoice NOTIFY changed)
@@ -119,6 +121,9 @@ class AppState : public QObject {
   bool handlesAudio() const { return backhaul::handlesAudio(role_); }
   // Whether the current role uses this slot row.
   bool slotActive(int row) const;
+  int roleRow() const;
+  // Row of the slide slot, -1 when there is none.
+  int shareRow() const;
   int roleOutputChoice() const;
   int twoShotLeft() const { return twoShotSwapped_ ? 1 : 0; }
   int twoShotRight() const { return twoShotSwapped_ ? 0 : 1; }

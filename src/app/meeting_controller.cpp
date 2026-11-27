@@ -51,6 +51,7 @@ MeetingController::MeetingController(AppState& app, FrameStore& frames, std::uni
   connect(&app_, &AppState::roleChanged, this, [this] {
     audio_ = app_.handlesAudio();
     applyParticipants();  // the role decides which slots are in use
+    applyShares();
   });
   connect(&app_, &AppState::changed, this, [this] {
     emit changed();  // canJoin depends on what is typed
@@ -175,6 +176,9 @@ void MeetingController::onMeetingState(MeetingState state, const std::string& de
     pollTimer_.stop();
     secondTimer_.stop();
     everyone_.clear();
+    shares_.clear();
+    shareSource_ = 0;
+    shareSlot_ = -1;
     resetSlots();
     app_.meetingName_.clear();
     app_.elapsed_.clear();
@@ -196,6 +200,64 @@ void MeetingController::onMeetingTopic(const std::string& topic) {
 void MeetingController::onParticipants(const std::vector<backhaul::Participant>& everyone) {
   everyone_ = everyone;
   applyParticipants();
+}
+
+void MeetingController::onShares(const std::vector<backhaul::ShareSource>& shares) {
+  shares_ = shares;
+  applyShares();
+}
+
+// Shows one shared screen in the slide slot: the one already showing while it lasts,
+// otherwise the first one there is. When sharing stops the slot keeps the last picture
+// or goes black, as set for the slot.
+void MeetingController::applyShares() {
+  if (!busy()) return;
+  const int row = app_.shareRow();
+  const bool used = row >= 0 && app_.slotActive(row);
+  std::uint32_t source = 0, sharer = 0;
+  if (used) {
+    for (const backhaul::ShareSource& share : shares_) {
+      if (share.sourceId == shareSource_.load() || source == 0) {
+        source = share.sourceId;
+        sharer = share.userId;
+      }
+      if (share.sourceId == shareSource_.load()) break;
+    }
+  }
+  if (row >= 0) {
+    const SlotRow& now = app_.slotList()->rows()[row];
+    if (source != 0) {
+      QString name;
+      for (const backhaul::Participant& p : everyone_) {
+        if (p.id == sharer) name = QString::fromStdString(p.name);
+      }
+      const QString text = name.isEmpty() ? QStringLiteral("共有中") : QStringLiteral("共有：%1").arg(name);
+      if (!now.situation.assigned || !now.situation.connected || !now.situation.videoOn || now.zoomName != text) {
+        app_.slotList()->update(row, [&text](SlotRow& r) {
+          r.zoomName = text;
+          r.situation.assigned = r.situation.connected = r.situation.videoOn = true;
+        });
+      }
+    } else if (!used) {
+      if (now.situation.assigned) {
+        app_.slotList()->update(row, [](SlotRow& r) {
+          r.zoomName.clear();
+          r.situation.assigned = r.situation.connected = r.situation.videoOn = r.situation.hasLastFrame = false;
+          r.width = r.height = r.fps = 0;
+        });
+        frames_.clear(row);
+      }
+    } else if (now.situation.assigned && now.situation.connected) {
+      app_.slotList()->update(row, [](SlotRow& r) {  // sharing stopped
+        r.situation.connected = r.situation.videoOn = false;
+        r.fps = 0;
+      });
+    }
+  }
+  shareSlot_ = source != 0 ? row : -1;
+  shareSource_ = source;
+  if (client_ != nullptr) client_->setShareWant(source);
+  app_.notifyChanged();
 }
 
 void MeetingController::resetSlots() {
@@ -337,6 +399,14 @@ void MeetingController::onVideoFrame(std::uint32_t userId, const backhaul::Video
     const QMutexLocker lock(&routeMutex_);
     slot = slotByUser_.value(userId, -1);
   }
+  putFrame(slot, frame);
+}
+
+void MeetingController::onShareFrame(std::uint32_t sourceId, const backhaul::VideoFrame& frame) {
+  if (sourceId != 0 && sourceId == shareSource_.load()) putFrame(shareSlot_.load(), frame);
+}
+
+void MeetingController::putFrame(int slot, const backhaul::VideoFrame& frame) {
   if (slot < 0 || frame.width <= 0 || frame.height <= 0 || frame.width > 8192 || frame.height > 8192) return;
   QImage image(frame.width, frame.height, QImage::Format_RGB32);
   if (image.isNull()) return;
@@ -368,12 +438,15 @@ void MeetingController::everySecond() {
   }
   const auto& slotRows = app_.slotList()->rows();
   for (int i = 0; i < slotRows.size(); ++i) {
-    if (!isPerson(slotRows[i]) || !app_.slotActive(i)) continue;
+    if (!app_.slotActive(i)) continue;  // people and the slide alike
     const int fps = frames_.takeCount(i);
     const QImage image = frames_.latest(i);
     const bool has = !image.isNull();
-    const int w = has && fps > 0 ? image.width() : 0;
-    const int h = has && fps > 0 ? image.height() : 0;
+    // A shared screen sends pictures only when something changes, so its size stays known
+    // between them; a camera that sends nothing has no size to show.
+    const bool sized = has && (fps > 0 || !isPerson(slotRows[i]));
+    const int w = sized ? image.width() : 0;
+    const int h = sized ? image.height() : 0;
     const SlotRow& now = slotRows[i];
     if (now.fps != fps || now.width != w || now.height != h || now.situation.hasLastFrame != has) {
       app_.slotList()->update(i, [fps, w, h, has](SlotRow& r) {

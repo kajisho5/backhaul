@@ -7,6 +7,7 @@ import Backhaul
 RowLayout {
     id: root
     readonly property bool twoShot: app.role === "twoshot"
+    readonly property bool slide: app.role === "slide"
     spacing: 0
 
     ColumnLayout {
@@ -51,7 +52,7 @@ RowLayout {
                     spacing: 8
                     Text { text: "受け取り"; color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 13 }
                     Text {
-                        text: root.twoShot ? "2人・各720pまで" : (app.qualityAuto ? "1人・1080pまで" : "1人・720pまで")
+                        text: root.slide ? "共有画面" : root.twoShot ? "2人・各720pまで" : (app.qualityAuto ? "1人・1080pまで" : "1人・720pまで")
                         color: Theme.ink; font.family: app.sansFamily; font.pixelSize: 13
                     }
                 }
@@ -78,9 +79,23 @@ RowLayout {
             width: parent.width - 40
             spacing: 18
 
+            // ---- slide: whose screen ----
+            ColumnLayout {
+                visible: root.slide
+                Layout.fillWidth: true
+                spacing: 8
+                Text { text: "スライド"; color: Theme.ink; font.family: app.sansFamily; font.pixelSize: 14; font.bold: true }
+                Text {
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
+                    text: "だれかが画面共有を始めると、その画面を出します。共有する人が替わると、自動で新しい共有に切り替わります。"
+                    color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 12
+                }
+            }
+
             // ---- one person: who ----
             ColumnLayout {
-                visible: !root.twoShot
+                visible: !root.twoShot && !root.slide
                 Layout.fillWidth: true
                 spacing: 0
                 RowLayout {
@@ -227,10 +242,11 @@ RowLayout {
                         required property string label
                         required property bool freezeOnLoss
                         readonly property string side: !root.twoShot ? "" : (index === app.twoShotLeft ? "左：" : "右：")
-                        visible: root.twoShot ? index < 2 : index === 0
+                        visible: root.twoShot ? index < 2 : index === app.roleRow
                         Layout.fillWidth: true
                         spacing: 10
                         LabeledInput {
+                            visible: !root.slide
                             Layout.fillWidth: true
                             label: one.side + "名前カードに出す名前"
                             value: one.label
@@ -239,10 +255,10 @@ RowLayout {
                         }
                         RowLayout {
                             Layout.fillWidth: true
-                            Text { Layout.fillWidth: true; text: one.side + "回線切れ時"; color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 12 }
+                            Text { Layout.fillWidth: true; text: root.slide ? "共有が止まったとき" : one.side + "回線切れ時"; color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 12 }
                             Segmented {
-                                firstText: "静止"
-                                secondText: "名前カード"
+                                firstText: root.slide ? "最後の画面で静止" : "静止"
+                                secondText: root.slide ? "黒" : "名前カード"
                                 first: one.freezeOnLoss
                                 onChosen: (first) => app.setFreezeOnLoss(one.index, first)
                             }
@@ -250,6 +266,18 @@ RowLayout {
                     }
                 }
 
+                ColumnLayout {
+                    visible: root.slide
+                    Layout.fillWidth: true
+                    spacing: 6
+                    Text { text: "画面の形が16:9でないとき"; color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 12 }
+                    Segmented {
+                        firstText: "全体を見せる（黒帯）"
+                        secondText: "16:9に切る"
+                        first: !app.cropSlides
+                        onChosen: (first) => app.cropSlides = !first
+                    }
+                }
                 ColumnLayout {
                     visible: root.twoShot
                     Layout.fillWidth: true

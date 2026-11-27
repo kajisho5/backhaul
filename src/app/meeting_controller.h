@@ -68,7 +68,9 @@ class MeetingController : public QObject, public backhaul::MeetingEvents {
   void onMeetingState(backhaul::MeetingState state, const std::string& detail) override;
   void onParticipants(const std::vector<backhaul::Participant>& everyone) override;
   void onMeetingTopic(const std::string& topic) override;
+  void onShares(const std::vector<backhaul::ShareSource>& shares) override;
   void onVideoFrame(std::uint32_t userId, const backhaul::VideoFrame& frame) override;
+  void onShareFrame(std::uint32_t sourceId, const backhaul::VideoFrame& frame) override;
   void onAudio(std::uint32_t userId, const std::int16_t* samples, std::size_t frames, int sampleRate,
                int channels) override;
 
@@ -83,6 +85,8 @@ class MeetingController : public QObject, public backhaul::MeetingEvents {
 
  private:
   void applyParticipants();
+  void applyShares();
+  void putFrame(int slot, const backhaul::VideoFrame& frame);
   void updateWants();
   void everySecond();
   void resetSlots();
@@ -96,6 +100,10 @@ class MeetingController : public QObject, public backhaul::MeetingEvents {
   bool authenticated_ = false;
   std::vector<backhaul::Participant> everyone_;
   std::vector<backhaul::VideoWant> wants_;
+  std::vector<backhaul::ShareSource> shares_;
+  // The shared screen being shown and the slot it goes to; read on the video thread.
+  std::atomic<std::uint32_t> shareSource_{0};
+  std::atomic<int> shareSlot_{-1};
   QTimer pollTimer_, secondTimer_;
   qint64 joinedAtMs_ = 0;
   bool sendingAudio_ = false;

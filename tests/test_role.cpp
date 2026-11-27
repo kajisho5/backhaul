@@ -25,17 +25,25 @@ void testRole() {
   CHECK(!sendsAudio(Role::All) && !sendsAudio(Role::Camera) && !sendsAudio(Role::TwoShot) && !sendsAudio(Role::Unset));
 
   // Settings names go both ways; unknown names are refused and leave the value alone.
-  for (const Role r : {Role::Unset, Role::All, Role::Camera, Role::TwoShot, Role::Audio}) {
+  for (const Role r : {Role::Unset, Role::All, Role::Camera, Role::TwoShot, Role::Slide, Role::Audio}) {
     Role back = r == Role::All ? Role::Camera : Role::All;
     CHECK(roleFromKey(keyOf(r), &back));
     CHECK(back == r);
   }
   Role kept = Role::TwoShot;
   CHECK(!roleFromKey("Camera", &kept));
-  CHECK(!roleFromKey("slide", &kept));
+  CHECK(!roleFromKey("return", &kept));
   CHECK(roleFromKey("audio", &kept) && kept == Role::Audio);
   kept = Role::TwoShot;
   CHECK(kept == Role::TwoShot);
+
+  // The slide PC shows the shared screen and nobody; it has one picture on one monitor and no sound.
+  CHECK(!usesPeople(Role::Slide) && usesShare(Role::Slide) && singleOutput(Role::Slide));
+  CHECK(receivesVideo(Role::Slide) && !handlesAudio(Role::Slide) && !sendsAudio(Role::Slide));
+  CHECK(usesPeople(Role::All) && usesShare(Role::All) && !singleOutput(Role::All));
+  CHECK(usesPeople(Role::Camera) && !usesShare(Role::Camera) && singleOutput(Role::Camera));
+  CHECK(usesPeople(Role::TwoShot) && !usesShare(Role::TwoShot) && singleOutput(Role::TwoShot));
+  CHECK(usesPeople(Role::Audio) && !usesShare(Role::Audio) && !singleOutput(Role::Audio));
 
   // Two-shot halves.
   CHECK(twoShotSplit(true, true, false) == TwoShotSplit::Both);

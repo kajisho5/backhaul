@@ -43,6 +43,15 @@ void AppState::setRole(const QString& key) {
   if (!backhaul::roleFromKey(key.toStdString(), &role) || role == role_) return;
   role_ = role;
   if (role_ == backhaul::Role::TwoShot && slots_.rows().size() - slots_.shareCount() < 2) addPersonSlot();
+  if (role_ == backhaul::Role::Slide && shareRow() < 0) {  // a slide PC needs a slide slot
+    SlotRow slide;
+    slide.number = QStringLiteral("S");
+    slide.label = QStringLiteral("スライド");
+    slide.situation.kind = backhaul::SlotKind::Share;
+    slide.cropTo169 = true;
+    slots_.insertRow(static_cast<int>(slots_.rows().size()), slide);
+    participants_.setSlotNumbers(slotNumbers());
+  }
   if (!slotActive(selected_)) setSelected(0);
   // Slots the new role does not use hold nobody. Their Zoom names stay, so the people
   // come back by name when the role uses those slots again.
@@ -67,11 +76,21 @@ void AppState::setRole(const QString& key) {
 
 bool AppState::slotActive(int row) const {
   if (row < 0 || row >= slots_.rows().size()) return false;
+  if (isShare(slots_.rows()[row])) return backhaul::usesShare(role_) && row == shareRow();
+  if (!backhaul::usesPeople(role_)) return false;
   const int people = backhaul::personSlotsOf(role_);
-  if (people == 0) return true;
   // People come first in the list, so the role's slots are simply the first rows.
-  return row < people && !isShare(slots_.rows()[row]);
+  return people == 0 || row < people;
 }
+
+int AppState::shareRow() const {
+  for (int i = 0; i < slots_.rows().size(); ++i) {
+    if (isShare(slots_.rows()[i])) return i;
+  }
+  return -1;
+}
+
+int AppState::roleRow() const { return role_ == backhaul::Role::Slide ? shareRow() : 0; }
 
 void AppState::setTwoShotFill(bool fill) {
   if (fill == twoShotFill_) return;
@@ -623,8 +642,9 @@ void AppState::refreshDisplays() {
     r.isOperator = s.key == operatorKey_;
     // Single-output roles send their one picture to one monitor; the slot-by-monitor
     // table belongs to the "everything" role and is left alone meanwhile.
-    const bool single = backhaul::personSlotsOf(role_) > 0;
-    const int slot = single ? (s.key == roleScreen_ && !slotRows.isEmpty() ? 0 : -1) : slotByScreen_.value(s.key, -1);
+    const bool single = backhaul::singleOutput(role_);
+    const int slot = single ? (s.key == roleScreen_ && roleRow() < slotRows.size() ? roleRow() : -1)
+                            : slotByScreen_.value(s.key, -1);
     if (r.isOperator) {
       r.slotText = QStringLiteral("操作画面（このPCの画面）");
     } else if (slot >= 0 && slot < slotRows.size()) {
