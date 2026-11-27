@@ -23,7 +23,7 @@ Item {
                 required property string sizeText
                 required property string detailText
                 required property string display
-                required property int channel
+                required property string channelText
                 required property double gainDb
                 required property int delayMs
                 required property bool freezeOnLoss
@@ -46,7 +46,7 @@ Item {
                     model: [
                         { k: "参加者", v: one.zoomName.length > 0 ? one.zoomName : "未割り当て", mono: false },
                         { k: "映像", v: one.sizeText + (one.detailText.length > 0 ? "・" + one.detailText : ""), mono: true },
-                        { k: "出力先", v: one.display + (one.channel > 0 ? " ／ ch " + one.channel : ""), mono: true }
+                        { k: "出力先", v: [one.display, one.channelText].filter(t => t.length > 0).join(" ／ ") || "未設定", mono: true }
                     ]
                     delegate: Item {
                         required property var modelData

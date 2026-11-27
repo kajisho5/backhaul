@@ -69,7 +69,8 @@ QVariant SlotModel::data(const QModelIndex& index, int role) const {
     case GainRole: return r.gainDb;
     case DelayRole: return r.delayMs;
     case DisplayRole: return r.display;
-    case ChannelRole: return r.channel;
+    case ChannelTextRole: return channelText(r.channels);
+    case ChannelsRole: return static_cast<int>(r.channels);
     case FreezeOnLossRole: return r.situation.onDisconnect == backhaul::DisconnectPolicy::Freeze;
     case GridRowRole:
     case GridColumnRole: {
@@ -90,7 +91,8 @@ QHash<int, QByteArray> SlotModel::roleNames() const {
       {StateRole, "state"},         {StateTextRole, "stateText"}, {AlsoMutedRole, "alsoMuted"},
       {VideoOutRole, "videoOut"},   {IsShareRole, "isShare"},     {SizeTextRole, "sizeText"},
       {DetailTextRole, "detailText"}, {LevelRole, "level"},       {GainRole, "gainDb"},
-      {DelayRole, "delayMs"},       {DisplayRole, "display"},     {ChannelRole, "channel"},
+      {DelayRole, "delayMs"},       {DisplayRole, "display"},     {ChannelTextRole, "channelText"},
+      {ChannelsRole, "channels"},
       {FreezeOnLossRole, "freezeOnLoss"}, {GridRowRole, "gridRow"}, {GridColumnRole, "gridColumn"},
   };
 }
@@ -99,6 +101,24 @@ void SlotModel::setRows(QVector<SlotRow> rows) {
   beginResetModel();
   rows_ = std::move(rows);
   endResetModel();
+}
+
+void SlotModel::insertRow(int at, SlotRow row) {
+  if (at < 0 || at > rows_.size()) return;
+  beginInsertRows(QModelIndex(), at, at);
+  rows_.insert(at, std::move(row));
+  endInsertRows();
+  // Tiles after the new one move, so their grid position changes too.
+  if (at + 1 < rows_.size()) emit dataChanged(index(at + 1), index(static_cast<int>(rows_.size()) - 1));
+}
+
+QString SlotModel::channelText(quint32 channels) {
+  QString text;
+  for (int ch = 1; ch <= 32; ++ch) {
+    if ((channels & (quint32{1} << (ch - 1))) == 0) continue;
+    text += text.isEmpty() ? QStringLiteral("ch %1").arg(ch) : QStringLiteral("・%1").arg(ch);
+  }
+  return text;
 }
 
 int SlotModel::shareCount() const {

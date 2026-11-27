@@ -12,11 +12,25 @@ Window {
     title: "backhaul"
     color: Theme.bg
 
+    // Set from the command line for pictures of the settings pages.
+    property bool settingsOpen: false
+    property string settingsTab: "slots"
+
+    SettingsScreen {
+        id: settings
+        anchors.fill: parent
+        visible: settingsOpen
+        tab: settingsTab
+        onTabChanged: settingsTab = tab
+        onClosed: settingsOpen = false
+    }
+
     ColumnLayout {
         anchors.fill: parent
         spacing: 0
+        visible: !settingsOpen
 
-        TopBar { Layout.fillWidth: true }
+        TopBar { Layout.fillWidth: true; onSettingsRequested: settingsOpen = true }
 
         RowLayout {
             Layout.fillWidth: true

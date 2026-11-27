@@ -24,7 +24,10 @@ void loadDemo(AppState& app) {
   app.meetingName_ = QStringLiteral("サンプル発表会");
   app.connected_ = true;
   app.elapsed_ = QStringLiteral("00:42:15");
-  app.audioDevice_ = QStringLiteral("サンプル音声機器（ASIO）");
+  app.audioDeviceName_ = QStringLiteral("サンプル音声機器");
+  app.audioAsio_ = true;
+  app.audioChannels_ = 8;
+  app.audioSampleRate_ = 48000;
   app.audioOk_ = true;
   app.returnVideoOk_ = app.returnAudioOk_ = true;
 
@@ -43,7 +46,7 @@ void loadDemo(AppState& app) {
     r.gainDb = gain;
     r.delayMs = delay;
     r.display = QStringLiteral("HDMI %1").arg(hdmi);
-    r.channel = ch;
+    r.channels = quint32{1} << (ch - 1);
     rows.push_back(r);
   };
   add(QStringLiteral("1"), QStringLiteral("架空 一郎"), QStringLiteral("Kakuu Ichiro"),

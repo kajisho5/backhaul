@@ -5,9 +5,11 @@
 #include <QQuickWindow>
 #include <QTimer>
 #include <cstdio>
+#include <memory>
 
 #include "app_state.h"
 #include "demo_source.h"
+#include "settings_saver.h"
 
 int main(int argc, char* argv[]) {
   QGuiApplication qtApp(argc, argv);
@@ -27,10 +29,27 @@ int main(int argc, char* argv[]) {
   args.addOption(demoOpt);
   args.addOption(shotOpt);
   args.addOption(sizeOpt);
+  const QCommandLineOption pageOpt(QStringLiteral("settings"),
+                                   QStringLiteral("Start on a settings page: slots or audio."), QStringLiteral("page"));
+  args.addOption(pageOpt);
   args.process(qtApp);
 
   AppState state;
-  if (args.isSet(demoOpt)) loadDemo(state);
+  std::unique_ptr<SettingsSaver> saver;
+  if (args.isSet(demoOpt)) {
+    // Made-up people: nothing is read from or written to the settings file.
+    loadDemo(state);
+  } else {
+    saver = std::make_unique<SettingsSaver>(state, SettingsSaver::defaultPath());
+    state.savesSettings_ = true;
+    if (saver->load() == SettingsSaver::LoadResult::Unreadable) {
+      state.notice_ = saver->asidePath().isEmpty()
+                          ? QStringLiteral("設定ファイルを読めませんでした。初期設定で動いています（保存はしません）")
+                          : QStringLiteral("設定ファイルを読めなかったため、初期設定に戻しました（元のファイルは残してあります）");
+    }
+    state.notifyChanged();
+    QObject::connect(&qtApp, &QCoreApplication::aboutToQuit, saver.get(), [&saver] { saver->flush(); });
+  }
 
   QQmlApplicationEngine engine;
   engine.rootContext()->setContextProperty(QStringLiteral("app"), &state);
@@ -54,6 +73,16 @@ int main(int argc, char* argv[]) {
       return 5;
     }
     window->resize(w, h);
+  }
+
+  if (args.isSet(pageOpt)) {
+    const QString page = args.value(pageOpt);
+    if (page != QStringLiteral("slots") && page != QStringLiteral("audio")) {
+      std::fprintf(stderr, "--settings wants slots or audio\n");
+      return 5;
+    }
+    window->setProperty("settingsTab", page);
+    window->setProperty("settingsOpen", true);
   }
 
   if (args.isSet(shotOpt)) {

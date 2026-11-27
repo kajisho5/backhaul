@@ -41,3 +41,15 @@ void ParticipantModel::clearSlot(int slot) {
     if (rows_[i].slot == slot) setSlotOf(i, -1);
   }
 }
+
+void ParticipantModel::slotInserted(int at, QStringList slotNumbers) {
+  for (ParticipantRow& r : rows_) {
+    if (r.slot >= at) ++r.slot;
+  }
+  setSlotNumbers(std::move(slotNumbers));
+}
+
+void ParticipantModel::setSlotNumbers(QStringList slotNumbers) {
+  slotNumbers_ = std::move(slotNumbers);
+  if (!rows_.isEmpty()) emit dataChanged(index(0), index(static_cast<int>(rows_.size()) - 1));
+}
