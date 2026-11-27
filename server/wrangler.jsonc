@@ -1,0 +1,15 @@
+// backhaul gate: hands out what a PC needs to join a Zoom meeting, to PCs with a licence.
+// The Zoom keys and the admin token are Worker secrets (never in this file):
+//   ZOOM_CLIENT_ID, ZOOM_CLIENT_SECRET, ADMIN_TOKEN
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "backhaul-gate",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-01",
+  "routes": [{ "pattern": "backhaul-gate.seventh-well.com/*", "zone_name": "seventh-well.com" }],
+  "vars": { "PUBLIC_URL": "https://backhaul-gate.seventh-well.com" },
+  "d1_databases": [
+    { "binding": "DB", "database_name": "backhaul-gate", "database_id": "D1_ID_FILLED_IN_BY_THE_DEPLOY_WORKFLOW", "migrations_dir": "migrations" }
+  ],
+  "observability": { "enabled": true }
+}
