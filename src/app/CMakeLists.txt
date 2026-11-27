@@ -40,6 +40,15 @@ qt_add_qml_module(backhaul
 )
 
 target_link_libraries(backhaul PRIVATE backhaul_app_state Qt6::Qml Qt6::Quick)
+
+# Window icon (all platforms) and the icon of the .exe file (Windows).
+qt_add_resources(backhaul "appicon" PREFIX "/" BASE "${CMAKE_SOURCE_DIR}/assets/logo"
+  FILES "${CMAKE_SOURCE_DIR}/assets/logo/icon-256.png")
+if(WIN32)
+  file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/backhaul.rc"
+    "IDI_ICON1 ICON \"${CMAKE_SOURCE_DIR}/assets/logo/backhaul.ico\"\n")
+  target_sources(backhaul PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/backhaul.rc")
+endif()
 backhaul_warnings(backhaul app)
 
 if(WIN32)

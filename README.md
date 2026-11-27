@@ -1,4 +1,9 @@
-# backhaul
+<h1 align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/logo/logo-dark.svg">
+    <img src="assets/logo/logo-light.svg" alt="backhaul" height="72">
+  </picture>
+</h1>
 
 Bring remote Zoom presenters into a live venue: each presenter as a clean full-screen HDMI
 output and a separate mono audio channel, with the programme feed and a mix-minus sent back
