@@ -248,7 +248,7 @@ RowLayout {
                         LabeledInput {
                             visible: !root.slide
                             Layout.fillWidth: true
-                            label: one.side + "名前カードに出す名前"
+                            label: one.side + "名前（待機中・カメラオフ時に表示）"
                             value: one.label
                             maxLength: 40
                             onEdited: (text) => app.setLabel(one.index, text)
@@ -266,6 +266,14 @@ RowLayout {
                     }
                 }
 
+                LabeledInput {
+                    visible: root.slide
+                    Layout.fillWidth: true
+                    label: "まだ共有がないときに出す文字（空にすると黒）"
+                    value: app.standbyText
+                    maxLength: 24
+                    onEdited: (text) => app.standbyText = text
+                }
                 ColumnLayout {
                     visible: root.slide
                     Layout.fillWidth: true

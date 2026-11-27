@@ -44,6 +44,8 @@ class AppState : public QObject {
   Q_PROPERTY(QString joinName READ joinName WRITE setJoinName NOTIFY changed)
   Q_PROPERTY(bool qualityAuto READ qualityAuto WRITE setQualityAuto NOTIFY changed)
   Q_PROPERTY(bool cropSlides READ cropSlides WRITE setCropSlides NOTIFY changed)
+  // Shown on the slide output while nobody has shared yet; empty means plain black.
+  Q_PROPERTY(QString standbyText READ standbyText WRITE setStandbyText NOTIFY changed)
   Q_PROPERTY(bool canAddSlot READ canAddSlot NOTIFY changed)
   Q_PROPERTY(bool savesSettings MEMBER savesSettings_ NOTIFY changed)
   Q_PROPERTY(QString notice MEMBER notice_ NOTIFY changed)
@@ -114,6 +116,9 @@ class AppState : public QObject {
   // Slides that are not 16:9: true cuts them to 16:9, false shows all with black bars.
   bool cropSlides() const;
   void setCropSlides(bool crop);
+  QString standbyText() const { return standbyText_; }
+  void setStandbyText(const QString& text);
+  static constexpr int kMaxStandbyLength = 24;
   bool canAddSlot() const;
   // Zoom page. The meeting ID is kept as typed; "auto" picks the largest picture size
   // the number of people allows, otherwise 720p at most.
@@ -216,6 +221,7 @@ class AppState : public QObject {
 
  private:
   backhaul::Role role_ = backhaul::Role::Unset;
+  QString standbyText_ = QStringLiteral("SLIDE");
   QString micDeviceName_;
   int sendQuality_ = 0;
   bool sendStereo_ = false;

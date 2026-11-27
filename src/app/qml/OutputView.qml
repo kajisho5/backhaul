@@ -22,6 +22,8 @@ Rectangle {
             required property string label
             required property string videoOut
             required property bool crop
+            required property bool isShare
+            required property string state
             anchors.fill: parent
             visible: index === root.slotRow
 
@@ -37,6 +39,51 @@ Rectangle {
                 visible: one.videoOut === "live" || one.videoOut === "freeze"
                 slot: one.index
                 crop: one.crop || root.fill
+            }
+            // Before there is anything to show (nobody has shared yet, or the person is not in
+            // the meeting yet): a thin frame that shows the picture's edges, the output's name,
+            // and that it is waiting. Lets the switcher see which input this is.
+            Item {
+                id: standby
+                // The slide output has a word of its own; a person's output shows that person's name.
+                readonly property string word: one.isShare ? app.standbyText : one.label
+                readonly property int wordSize: Math.max(10, Math.round(one.height * 0.065))
+                readonly property int noteSize: Math.max(8, Math.round(one.height * 0.032))
+                readonly property int edge: Math.round(one.height * 0.075)
+                anchors.fill: parent
+                visible: one.state === "unassigned" && word.length > 0
+                Rectangle {
+                    anchors.fill: parent
+                    anchors.margins: Math.round(one.height * 0.035)
+                    color: "transparent"
+                    border.width: Math.max(1, Math.round(one.height / 540))
+                    border.color: "#3a3e44"
+                }
+                Text {
+                    x: standby.edge
+                    anchors.bottom: parent.bottom
+                    anchors.bottomMargin: Math.round(one.height * 0.065)
+                    width: Math.max(0, one.width - standby.edge * 2 - waiting.width - one.height * 0.04)
+                    elide: Text.ElideRight
+                    text: standby.word
+                    color: Theme.ink
+                    font.family: one.isShare ? app.monoFamily : app.sansFamily
+                    font.pixelSize: standby.wordSize
+                    font.bold: true
+                    font.letterSpacing: one.isShare ? standby.wordSize * 0.16 : 0
+                }
+                Text {
+                    id: waiting
+                    anchors.right: parent.right
+                    anchors.rightMargin: standby.edge
+                    anchors.bottom: parent.bottom
+                    anchors.bottomMargin: standby.edge
+                    text: one.isShare ? "WAITING FOR SHARE" : "WAITING"
+                    color: Theme.mute
+                    font.family: app.monoFamily
+                    font.pixelSize: standby.noteSize
+                    font.letterSpacing: standby.noteSize * 0.08
+                }
             }
             Rectangle {
                 anchors.fill: parent
