@@ -57,7 +57,7 @@ jobs:
           $p = Start-Process -FilePath $exe.FullName -ArgumentList '--demo','--screenshot',"$PWD\operator-windows.png" -Wait -PassThru
           if ($p.ExitCode -ne 0) { throw "backhaul exited with $($p.ExitCode)" }
           if (-not (Test-Path operator-windows.png)) { throw "no picture was written" }
-          foreach ($page in 'slots','audio','video') {
+          foreach ($page in 'zoom','slots','audio','video') {
             $p = Start-Process -FilePath $exe.FullName -ArgumentList '--demo','--settings',$page,'--screenshot',"$PWD\settings-$page-windows.png" -Wait -PassThru
             if ($p.ExitCode -ne 0) { throw "backhaul --settings $page exited with $($p.ExitCode)" }
             if (-not (Test-Path "settings-$page-windows.png")) { throw "no picture of the $page settings was written" }
@@ -70,6 +70,7 @@ jobs:
             settings-slots-windows.png
             settings-audio-windows.png
             settings-video-windows.png
+            settings-zoom-windows.png
 
   app-linux:
     name: app (ubuntu 24.04, Qt 6.4)
@@ -95,6 +96,7 @@ jobs:
           ./build/src/app/backhaul --demo --settings slots --screenshot settings-slots-linux.png
           ./build/src/app/backhaul --demo --settings audio --screenshot settings-audio-linux.png
           ./build/src/app/backhaul --demo --settings video --screenshot settings-video-linux.png
+          ./build/src/app/backhaul --demo --settings zoom --screenshot settings-zoom-linux.png
       - uses: actions/upload-artifact@v4
         with:
           name: operator-screen-linux
@@ -103,3 +105,4 @@ jobs:
             settings-slots-linux.png
             settings-audio-linux.png
             settings-video-linux.png
+            settings-zoom-linux.png

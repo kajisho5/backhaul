@@ -38,27 +38,6 @@ ColumnLayout {
         }
     }
 
-    Rectangle {
-        Layout.fillWidth: true
-        Layout.maximumWidth: root.tableWidth
-        Layout.bottomMargin: 14
-        implicitHeight: notice.implicitHeight + 20
-        radius: 2
-        color: "transparent"
-        border.width: 1
-        border.color: Theme.muted
-        Text {
-            id: notice
-            anchors.fill: parent
-            anchors.margins: 10
-            anchors.leftMargin: 12
-            anchors.rightMargin: 12
-            wrapMode: Text.WordWrap
-            text: "全画面への出力は、まだこのバージョンに入っていません。ここで選んだ割り当ては保存され、出力ができしだい使われます。"
-            color: Theme.muted; font.family: app.sansFamily; font.pixelSize: 13
-        }
-    }
-
     Text {
         visible: displayRows.count === 0
         text: "モニターが見つかりません"
@@ -144,8 +123,8 @@ ColumnLayout {
             Text {
                 Layout.preferredWidth: 72
                 horizontalAlignment: Text.AlignRight
-                text: line.isOperator ? "—" : (line.slot >= 0 ? "割り当て済み" : "黒")
-                color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 12; font.bold: true
+                text: line.isOperator ? "—" : (line.slot >= 0 ? (app.demo ? "割り当て済み" : "出力中") : "黒")
+                color: line.slot >= 0 && !line.isOperator && !app.demo ? Theme.ok : Theme.mute; font.family: app.sansFamily; font.pixelSize: 12; font.bold: true
             }
         }
     }

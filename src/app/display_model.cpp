@@ -26,6 +26,15 @@ QHash<int, QByteArray> DisplayModel::roleNames() const {
 }
 
 void DisplayModel::setRows(QVector<DisplayRow> rows) {
+  // Same monitors as before: update in place, so the output windows that follow this
+  // list are not torn down and rebuilt (that would flash on air).
+  bool sameMonitors = rows.size() == rows_.size();
+  for (int i = 0; sameMonitors && i < rows.size(); ++i) sameMonitors = rows[i].key == rows_[i].key;
+  if (sameMonitors) {
+    rows_ = std::move(rows);
+    if (!rows_.isEmpty()) emit dataChanged(index(0), index(static_cast<int>(rows_.size()) - 1));
+    return;
+  }
   beginResetModel();
   rows_ = std::move(rows);
   endResetModel();

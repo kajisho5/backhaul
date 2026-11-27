@@ -25,12 +25,13 @@ include(CTest)
 
 add_subdirectory(src/core)
 
-if(BACKHAUL_BUILD_APP)
-  add_subdirectory(src/app)
-endif()
-
+# Before the app, which links the Zoom part when it exists.
 if(BACKHAUL_ZOOM_SDK_DIR)
   add_subdirectory(src/zoom)
+endif()
+
+if(BACKHAUL_BUILD_APP)
+  add_subdirectory(src/app)
 endif()
 
 if(BUILD_TESTING)

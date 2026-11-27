@@ -10,6 +10,8 @@ ColumnLayout {
     property string placeholder: ""
     property int maxLength: 100
     property bool readOnly: false
+    property bool secret: false       // show dots instead of the text
+    property alias text: input.text
     signal edited(string text)
     spacing: 6
 
@@ -33,6 +35,7 @@ ColumnLayout {
             activeFocusOnTab: !root.readOnly
             selectByMouse: true
             maximumLength: root.maxLength
+            echoMode: root.secret ? TextInput.Password : TextInput.Normal
             color: Theme.ink
             selectionColor: Theme.ink
             selectedTextColor: Theme.bg

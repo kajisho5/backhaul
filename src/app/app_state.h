@@ -27,6 +27,9 @@ class AppState : public QObject {
   Q_PROPERTY(bool audioAsio READ audioAsio WRITE setAudioAsio NOTIFY changed)
   Q_PROPERTY(int audioChannels MEMBER audioChannels_ NOTIFY changed)
   Q_PROPERTY(int audioSampleRate MEMBER audioSampleRate_ NOTIFY changed)
+  Q_PROPERTY(QString meetingId READ meetingId WRITE setMeetingId NOTIFY changed)
+  Q_PROPERTY(QString joinName READ joinName WRITE setJoinName NOTIFY changed)
+  Q_PROPERTY(bool qualityAuto READ qualityAuto WRITE setQualityAuto NOTIFY changed)
   Q_PROPERTY(bool cropSlides READ cropSlides WRITE setCropSlides NOTIFY changed)
   Q_PROPERTY(bool canAddSlot READ canAddSlot NOTIFY changed)
   Q_PROPERTY(bool savesSettings MEMBER savesSettings_ NOTIFY changed)
@@ -64,6 +67,15 @@ class AppState : public QObject {
   bool cropSlides() const;
   void setCropSlides(bool crop);
   bool canAddSlot() const;
+  // Zoom page. The meeting ID is kept as typed; "auto" picks the largest picture size
+  // the number of people allows, otherwise 720p at most.
+  QString meetingId() const { return meetingId_; }
+  void setMeetingId(const QString& text);
+  QString joinName() const { return joinName_; }
+  void setJoinName(const QString& text);
+  bool qualityAuto() const { return qualityAuto_; }
+  void setQualityAuto(bool on);
+  QStringList slotNumbers() const;
   QString monoFamily() const { return mono_; }
 
   // Level steps of 0.5 dB within -60..+12 dB; delay steps of 10 ms within 0..2000 ms.
@@ -119,6 +131,8 @@ class AppState : public QObject {
   void changed();
   // Something that settingsJson() covers was changed by the operator.
   void settingsEdited();
+  // Someone was put into a slot by hand.
+  void assignmentsChanged();
   void selectedChanged();
 
  private:
@@ -128,7 +142,6 @@ class AppState : public QObject {
   int selected_ = 0;
   QString sans_, mono_;
 
-  QStringList slotNumbers() const;
   void refreshDisplays();
   QVector<int> outputRows() const;  // display rows that can be an output
 
@@ -138,5 +151,8 @@ class AppState : public QObject {
   // Remembered by monitor name, including monitors that are unplugged right now.
   QMap<QString, int> slotByScreen_;
   QString gridScreen_;
+  QString meetingId_;
+  QString joinName_ = QStringLiteral("会場（backhaul）");
+  bool qualityAuto_ = true;
   void edited(int row);
 };

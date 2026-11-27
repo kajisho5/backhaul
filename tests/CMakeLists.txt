@@ -8,6 +8,7 @@ add_executable(core_tests
   test_route_matrix.cpp
   test_sdk_token.cpp
   test_slot_output.cpp
+  test_yuv.cpp
 )
 target_link_libraries(core_tests PRIVATE backhaul_core)
 backhaul_warnings(core_tests strict)

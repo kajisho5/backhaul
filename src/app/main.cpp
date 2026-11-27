@@ -3,6 +3,7 @@
 #include <QIcon>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
+#include <qqml.h>
 #include <QQuickWindow>
 #include <QScreen>
 #include <QTimer>
@@ -11,6 +12,9 @@
 
 #include "app_state.h"
 #include "demo_source.h"
+#include "frame_item.h"
+#include "frame_store.h"
+#include "meeting_controller.h"
 #include "settings_saver.h"
 
 int main(int argc, char* argv[]) {
@@ -33,7 +37,7 @@ int main(int argc, char* argv[]) {
   args.addOption(shotOpt);
   args.addOption(sizeOpt);
   const QCommandLineOption pageOpt(QStringLiteral("settings"),
-                                   QStringLiteral("Start on a settings page: slots, audio or video."), QStringLiteral("page"));
+                                   QStringLiteral("Start on a settings page: zoom, slots, audio or video."), QStringLiteral("page"));
   args.addOption(pageOpt);
   args.process(qtApp);
 
@@ -54,7 +58,16 @@ int main(int argc, char* argv[]) {
     QObject::connect(&qtApp, &QCoreApplication::aboutToQuit, saver.get(), [&saver] { saver->flush(); });
   }
 
+  // Demo mode never joins a meeting and never touches saved credentials.
+  const bool demo = args.isSet(demoOpt);
+  FrameStore frames;
+  FrameItem::setStore(&frames);
+  qmlRegisterType<FrameItem>("Backhaul.Video", 1, 0, "FrameItem");
+  MeetingController meeting(state, frames, demo ? nullptr : backhaul::makeMeetingClient(),
+                            demo ? nullptr : makeCredentialStore());
+
   QQmlApplicationEngine engine;
+  engine.rootContext()->setContextProperty(QStringLiteral("meeting"), &meeting);
   engine.rootContext()->setContextProperty(QStringLiteral("app"), &state);
   QObject::connect(&engine, &QQmlApplicationEngine::objectCreationFailed, &qtApp,
                    [] { QCoreApplication::exit(2); }, Qt::QueuedConnection);
@@ -108,8 +121,9 @@ int main(int argc, char* argv[]) {
 
   if (args.isSet(pageOpt)) {
     const QString page = args.value(pageOpt);
-    if (page != QStringLiteral("slots") && page != QStringLiteral("audio") && page != QStringLiteral("video")) {
-      std::fprintf(stderr, "--settings wants slots, audio or video\n");
+    if (page != QStringLiteral("slots") && page != QStringLiteral("audio") && page != QStringLiteral("video") &&
+        page != QStringLiteral("zoom")) {
+      std::fprintf(stderr, "--settings wants zoom, slots, audio or video\n");
       return 5;
     }
     window->setProperty("settingsTab", page);
