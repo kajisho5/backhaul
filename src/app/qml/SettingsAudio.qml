@@ -22,7 +22,16 @@ ColumnLayout {
             spacing: 6
             Layout.alignment: Qt.AlignBottom
             Text { text: "方式"; color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 12 }
+            Segmented {
+                visible: audio.asioAvailable
+                implicitHeight: 40
+                firstText: "ASIO"
+                secondText: "WASAPI"
+                first: app.audioAsio
+                onChosen: (first) => audio.setAsio(first)
+            }
             Item {
+                visible: !audio.asioAvailable
                 implicitWidth: methodText.implicitWidth
                 implicitHeight: 40
                 Text {
@@ -93,7 +102,10 @@ ColumnLayout {
         Layout.topMargin: -16
         Layout.bottomMargin: 20
         wrapMode: Text.WordWrap
-        text: audio.problem.length > 0 ? audio.problem : "ASIOはまだ使えません。Windowsの音声（WASAPI）で出します。"
+        text: audio.problem.length > 0 ? audio.problem
+                : !audio.asioAvailable ? "このプログラムにはASIOが入っていません。Windowsの音声（WASAPI）で出します。"
+                : app.audioAsio ? "ASIOは機器を48kHzで動かします。出力chの数は機器のドライバーに従います。"
+                : "Windowsの音声（WASAPI）で出します。機器側の周波数へはWindowsが変換します。"
         color: audio.problem.length > 0 ? Theme.lost : Theme.mute
         font.family: app.sansFamily; font.pixelSize: 13
     }

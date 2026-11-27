@@ -28,7 +28,9 @@ class AudioOutput {
   virtual int channels() const = 0;  // of the running device, 0 when stopped
 };
 
-// Null on systems without an implementation.
+// The system's own sound output (WASAPI on Windows). Null where there is none.
 std::unique_ptr<AudioOutput> makeAudioOutput();
+// Steinberg ASIO drivers. Null when the program was built without the ASIO SDK.
+std::unique_ptr<AudioOutput> makeAsioOutput();
 
 }  // namespace backhaul

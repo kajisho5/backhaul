@@ -6,6 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(BACKHAUL_BUILD_APP "Build the Qt operator application (needs Qt 6.4 or newer)" OFF)
+set(BACKHAUL_ASIO_SDK_DIR "" CACHE PATH "The unpacked Steinberg ASIOSDK folder; empty builds without ASIO")
 set(BACKHAUL_ZOOM_SDK_DIR "" CACHE PATH "x64 folder of the unpacked Zoom Meeting SDK for Windows; empty builds without Zoom")
 
 # Our own code is built with warnings as errors. The strictest set is used for the

@@ -317,7 +317,83 @@ int main(int argc, char* argv[]) {
     CHECK(!out->alive && a.property("audioDeviceName").toString().isEmpty());
     audio.chooseDevice(9);  // not in the list
     CHECK(audio.deviceIndex() == 0);
+    CHECK(!audio.asioAvailable());
+    audio.setAsio(true);  // not built in: stays on the system output
+    CHECK(!a.audioAsio());
   }
+
+  {  // ASIO next to the system output: each has its own list, and switching stops the other
+    struct NamedOutput final : backhaul::AudioOutput {
+      explicit NamedOutput(std::string n) : name(std::move(n)) {}
+      std::string name;
+      bool alive = false;
+      std::vector<backhaul::AudioDevice> devices() override { return {{name + "-id", name}}; }
+      bool start(const std::string&, backhaul::AudioMixer*, std::string*) override {
+        alive = true;
+        return true;
+      }
+      void stop() override { alive = false; }
+      bool running() const override { return alive; }
+      int channels() const override { return alive ? (name == "サンプルASIO機器" ? 64 : 2) : 0; }
+    };
+    AppState a;
+    a.loadDefaults();
+    auto* system = new NamedOutput("サンプル音声機器");
+    auto* asio = new NamedOutput("サンプルASIO機器");
+    AudioController audio(a, std::unique_ptr<backhaul::AudioOutput>(system), std::unique_ptr<backhaul::AudioOutput>(asio));
+    CHECK(audio.asioAvailable() && !a.audioAsio());
+    CHECK(audio.deviceNames().value(1) == QStringLiteral("サンプル音声機器"));
+    audio.chooseDevice(1);
+    CHECK(system->alive && a.property("audioChannels").toInt() == 2);
+
+    audio.setAsio(true);
+    CHECK(a.audioAsio() && !system->alive && audio.deviceIndex() == 0);
+    CHECK(a.property("audioDeviceName").toString().isEmpty() && !a.property("audioOk").toBool());
+    CHECK(audio.deviceNames().value(1) == QStringLiteral("サンプルASIO機器"));
+    audio.chooseDevice(1);
+    CHECK(asio->alive && !system->alive);
+    CHECK(a.property("audioChannels").toInt() == 32);  // the table shows at most 32 channels
+    CHECK(a.property("audioDevice").toString() == QStringLiteral("サンプルASIO機器（ASIO）"));
+
+    // Saved as ASIO: next time the ASIO device is started again...
+    {
+      AppState b;
+      CHECK(b.applySettings(a.settingsJson()));
+      auto* system2 = new NamedOutput("サンプル音声機器");
+      auto* asio2 = new NamedOutput("サンプルASIO機器");
+      AudioController again(b, std::unique_ptr<backhaul::AudioOutput>(system2), std::unique_ptr<backhaul::AudioOutput>(asio2));
+      again.startSaved();
+      CHECK(asio2->alive && !system2->alive && again.deviceIndex() == 1);
+    }
+    // ...and a program without ASIO says so instead of silently using something else.
+    {
+      AppState b;
+      CHECK(b.applySettings(a.settingsJson()));
+      auto* system2 = new NamedOutput("サンプル音声機器");
+      AudioController again(b, std::unique_ptr<backhaul::AudioOutput>(system2));
+      again.startSaved();
+      CHECK(!system2->alive && !again.problem().isEmpty());
+    }
+    audio.setAsio(false);
+    CHECK(!asio->alive && !a.audioAsio());
+  }
+
+#ifdef BACKHAUL_HAVE_ASIO
+  {  // the real ASIO host code: listing drivers and refusing an unknown one must not crash
+    auto real = backhaul::makeAsioOutput();
+    CHECK(real != nullptr);
+    if (real != nullptr) {
+      const auto found = real->devices();
+      std::printf("ASIO drivers on this PC: %d\n", static_cast<int>(found.size()));
+      backhaul::AudioMixer silent(1);
+      std::string error;
+      CHECK(!real->start("no such driver", &silent, &error));
+      CHECK(!error.empty() && !real->running() && real->channels() == 0);
+    }
+  }
+#else
+  CHECK(backhaul::makeAsioOutput() == nullptr);
+#endif
 
 #ifdef _WIN32
   {  // the real Windows sound devices can at least be listed without trouble
