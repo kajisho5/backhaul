@@ -258,6 +258,7 @@ RowLayout {
                 }
                 LevelBar { Layout.fillWidth: true; label: "L"; level: audio.micLevels[0] }
                 LevelBar { Layout.fillWidth: true; label: "R"; level: audio.micLevels[1] }
+                PluginRack { Layout.fillWidth: true; target: -1 }
                 Text { text: "音質"; color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 12 }
                 Dropdown {
                     id: qualityPick

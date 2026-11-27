@@ -1,4 +1,5 @@
 #include <QCommandLineParser>
+#include <QFileInfo>
 #include <QGuiApplication>
 #include <QIcon>
 #include <QQmlApplicationEngine>
@@ -17,6 +18,9 @@
 #include "frame_item.h"
 #include "frame_store.h"
 #include "meeting_controller.h"
+#include "plugin_controller.h"
+#include "plugins/plugin_host.h"
+#include "project_controller.h"
 #include "return_controller.h"
 #include "settings_saver.h"
 
@@ -97,7 +101,19 @@ int main(int argc, char* argv[]) {
   audio.setSender([&meeting, &sendPaused](const std::int16_t* samples, std::size_t frames, int channels) {
     return !sendPaused.load(std::memory_order_relaxed) && meeting.sendAudio(samples, frames, channels);
   });
-  if (!demo) audio.startSaved();
+  // Plug-ins. The rows they sit in belong to `audio`, which is created first and so is
+  // still there when this object takes its plug-ins out of them at the end.
+  PluginController plugins(state, audio.mixer(), audio.micEffects(), demo ? nullptr : backhaul::makePluginHost(),
+                           demo ? QString() : QFileInfo(SettingsSaver::defaultPath()).absolutePath());
+  if (!demo) {
+    plugins.restore();
+    // The plug-ins' own settings are asked for once more right before the last save.
+    QObject::connect(&qtApp, &QCoreApplication::aboutToQuit, &plugins, [&plugins, &saver] {
+      plugins.capture();
+      if (saver != nullptr) saver->flush();
+    });
+    audio.startSaved();
+  }
 
   ReturnController returning(state, frames, demo ? nullptr : backhaul::makeVideoInput());
   returning.setSender([&meeting](const std::uint8_t* i420, int width, int height) {
@@ -107,11 +123,17 @@ int main(int argc, char* argv[]) {
   QObject::connect(&returning, &ReturnController::changed, &qtApp,
                    [&returning, &sendPaused] { sendPaused = returning.paused(); });
   meeting.setMixer(audio.mixer());
+  ProjectController project(state, plugins, [&audio, &returning] {
+    audio.reloadSaved();
+    returning.reloadSaved();
+  });
 
   QQmlApplicationEngine engine;
   engine.rootContext()->setContextProperty(QStringLiteral("meeting"), &meeting);
   engine.rootContext()->setContextProperty(QStringLiteral("audio"), &audio);
   engine.rootContext()->setContextProperty(QStringLiteral("returning"), &returning);
+  engine.rootContext()->setContextProperty(QStringLiteral("plugins"), &plugins);
+  engine.rootContext()->setContextProperty(QStringLiteral("project"), &project);
   engine.rootContext()->setContextProperty(QStringLiteral("app"), &state);
   QObject::connect(&engine, &QQmlApplicationEngine::objectCreationFailed, &qtApp,
                    [] { QCoreApplication::exit(2); }, Qt::QueuedConnection);
@@ -166,8 +188,8 @@ int main(int argc, char* argv[]) {
   if (args.isSet(pageOpt)) {
     const QString page = args.value(pageOpt);
     if (page != QStringLiteral("slots") && page != QStringLiteral("audio") && page != QStringLiteral("video") &&
-        page != QStringLiteral("zoom")) {
-      std::fprintf(stderr, "--settings wants zoom, slots, audio or video\n");
+        page != QStringLiteral("zoom") && page != QStringLiteral("project")) {
+      std::fprintf(stderr, "--settings wants zoom, slots, audio, video or project\n");
       return 5;
     }
     window->setProperty("settingsTab", page);

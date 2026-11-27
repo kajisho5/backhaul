@@ -25,6 +25,10 @@ class MicFeed {
   // Sending thread. Takes up to `maxFrames`; stereo gives left/right interleaved, mono the
   // average of both. Returns the number of frames written to `out`.
   std::size_t read(std::int16_t* out, std::size_t maxFrames, bool stereo);
+  // The same sound as separate left and right floats, for work on it before it is sent.
+  std::size_t readFloat(float* left, float* right, std::size_t maxFrames);
+  // Turns such floats into what read() gives: 16-bit, interleaved for stereo, averaged for mono.
+  static void toPcm(const float* left, const float* right, std::size_t frames, bool stereo, std::int16_t* out);
   // Frames waiting to be read.
   std::size_t available() const;
   // Forget what is waiting (sending thread).

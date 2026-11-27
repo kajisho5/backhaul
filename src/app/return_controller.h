@@ -59,6 +59,8 @@ class ReturnController : public QObject, public backhaul::VideoSink {
   Q_INVOKABLE void chooseDevice(int index);
   // Starts the device named in the settings, if it is present and the role sends pictures.
   void startSaved();
+  // After the settings were replaced as a whole (a project was opened).
+  void reloadSaved();
 
   // VideoSink (device thread)
   void onFrame(const std::uint8_t* y, int yStride, const std::uint8_t* uv, int uvStride, int width, int height,

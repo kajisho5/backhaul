@@ -87,6 +87,14 @@ Item {
                 }
                 Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; Layout.topMargin: 4; color: Theme.line }
 
+                PluginRack {
+                    visible: !one.isShare && app.playsAudio
+                    Layout.fillWidth: true
+                    Layout.topMargin: 8
+                    target: one.index
+                }
+                Rectangle { visible: !one.isShare && app.playsAudio; Layout.fillWidth: true; Layout.preferredHeight: 1; Layout.topMargin: 4; color: Theme.line }
+
                 RowLayout {
                     Layout.fillWidth: true
                     Layout.topMargin: 8

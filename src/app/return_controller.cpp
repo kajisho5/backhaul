@@ -114,6 +114,11 @@ void ReturnController::startSaved() {
   emit changed();
 }
 
+void ReturnController::reloadSaved() {
+  stopDevice();
+  startSaved();
+}
+
 void ReturnController::tick() {
   const int sent = sentCount_.exchange(0);
   bool moved = sent != sentPerSecond_;

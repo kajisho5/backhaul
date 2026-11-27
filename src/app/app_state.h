@@ -117,6 +117,9 @@ class AppState : public QObject {
   bool cropSlides() const;
   void setCropSlides(bool crop);
   QString standbyText() const { return standbyText_; }
+  // The plug-in rows and their settings, kept as the plug-in part of the program wrote them.
+  QJsonObject pluginSettings() const { return pluginSettings_; }
+  void setPluginSettings(const QJsonObject& plugins);
   void setStandbyText(const QString& text);
   static constexpr int kMaxStandbyLength = 24;
   bool canAddSlot() const;
@@ -222,6 +225,7 @@ class AppState : public QObject {
  private:
   backhaul::Role role_ = backhaul::Role::Unset;
   QString standbyText_ = QStringLiteral("SLIDE");
+  QJsonObject pluginSettings_;
   QString micDeviceName_;
   int sendQuality_ = 0;
   bool sendStereo_ = false;

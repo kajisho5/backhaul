@@ -90,3 +90,32 @@ float MicFeed::takePeak(int side) {
 }
 
 }  // namespace backhaul
+
+namespace backhaul {
+
+std::size_t MicFeed::readFloat(float* left, float* right, std::size_t maxFrames) {
+  if (left == nullptr || right == nullptr) return 0;
+  const std::size_t r = read_.load(std::memory_order_relaxed);
+  const std::size_t take = std::min(maxFrames, write_.load(std::memory_order_acquire) - r);
+  for (std::size_t i = 0; i < take; ++i) {
+    const std::size_t at = ((r + i) & mask_) * 2;
+    left[i] = ring_[at];
+    right[i] = ring_[at + 1];
+  }
+  read_.store(r + take, std::memory_order_release);
+  return take;
+}
+
+void MicFeed::toPcm(const float* left, const float* right, std::size_t frames, bool stereo, std::int16_t* out) {
+  if (left == nullptr || right == nullptr || out == nullptr) return;
+  for (std::size_t i = 0; i < frames; ++i) {
+    if (stereo) {
+      out[i * 2] = toInt16(left[i]);
+      out[i * 2 + 1] = toInt16(right[i]);
+    } else {
+      out[i] = toInt16((left[i] + right[i]) * 0.5f);
+    }
+  }
+}
+
+}  // namespace backhaul

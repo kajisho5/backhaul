@@ -282,6 +282,8 @@ Flickable {
                             onChosen: (first) => app.sendStereo = !first
                         }
                     }
+                    Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: Theme.line }
+                    PluginRack { Layout.fillWidth: true; target: -1 }
                     Text {
                         Layout.fillWidth: true
                         wrapMode: Text.WordWrap

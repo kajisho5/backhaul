@@ -12,14 +12,17 @@ add_library(backhaul_app_state STATIC
   demo_source.cpp demo_source.h
   display_model.cpp display_model.h
   participant_model.cpp participant_model.h
+  plugin_controller.cpp plugin_controller.h
+  project_controller.cpp project_controller.h
+  file_pick.cpp file_pick.h
   settings_saver.cpp settings_saver.h
   slot_model.cpp slot_model.h
 )
 target_include_directories(backhaul_app_state PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(backhaul_app_state PUBLIC backhaul_core backhaul_audio backhaul_video Qt6::Gui)
+target_link_libraries(backhaul_app_state PUBLIC backhaul_core backhaul_audio backhaul_video backhaul_plugins Qt6::Gui)
 target_include_directories(backhaul_app_state PUBLIC ${CMAKE_SOURCE_DIR}/src)
 if(WIN32)
-  target_link_libraries(backhaul_app_state PRIVATE advapi32)
+  target_link_libraries(backhaul_app_state PRIVATE advapi32 comdlg32)
 endif()
 backhaul_warnings(backhaul_app_state app)
 
@@ -63,6 +66,9 @@ qt_add_qml_module(backhaul
     qml/RoleScreen.qml
     qml/RoleTile.qml
     qml/TwoShotView.qml
+    qml/PluginRack.qml
+    qml/PickLine.qml
+    qml/SettingsProject.qml
 )
 
 target_link_libraries(backhaul PRIVATE backhaul_app_state Qt6::Qml Qt6::Quick)
@@ -101,4 +107,11 @@ if(BUILD_TESTING)
   backhaul_warnings(meeting_controller_tests app)
   add_test(NAME meeting_controller_tests COMMAND meeting_controller_tests)
   set_tests_properties(meeting_controller_tests PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+  add_executable(plugin_controller_tests ${CMAKE_SOURCE_DIR}/tests/app/test_plugin_controller.cpp)
+  target_include_directories(plugin_controller_tests PRIVATE ${CMAKE_SOURCE_DIR}/tests)
+  target_link_libraries(plugin_controller_tests PRIVATE backhaul_app_state)
+  backhaul_warnings(plugin_controller_tests app)
+  add_test(NAME plugin_controller_tests COMMAND plugin_controller_tests)
+  set_tests_properties(plugin_controller_tests PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 endif()

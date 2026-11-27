@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "core/delay_line.h"
+#include "core/effect_chain.h"
 #include "core/resampler.h"
 #include "core/test_tone.h"
 
@@ -41,6 +42,10 @@ class AudioMixer {
   float takePeak(int source);
   // Loudest sample sent to one output channel (0-based) since the last call, 0..1.
   float takeOutputPeak(int channel);
+
+  // The effects one source goes through (after its delay, before its level). Null for an
+  // unknown source. See EffectChain for which thread may call what.
+  EffectChain* effects(int source);
 
   // The sound-check signal, added to the output channels after the slots (so the output
   // meters show it). Its own comments say which thread may call what.

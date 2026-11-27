@@ -180,6 +180,23 @@ void AudioController::startSaved() {
   emit changed();
 }
 
+void AudioController::reloadSaved() {
+  stopTest();
+  stopMic();
+  if (output_ != nullptr) output_->stop();
+  if (asio_ != nullptr) asio_->stop();
+  deviceIndex_ = 0;
+  problem_.clear();
+  app_.audioOk_ = false;
+  stereo_ = app_.sendStereo();
+  syncSlots();
+  refreshDevices();
+  refreshMics();
+  app_.notifyChanged();
+  emit changed();
+  startSaved();
+}
+
 // ---- recording side ----
 
 bool AudioController::micAvailable() const { return app_.audioAsio() ? asio_ != nullptr : input_ != nullptr; }
@@ -287,11 +304,15 @@ void AudioController::setSender(Sender sender) { sender_ = std::move(sender); }
 
 int AudioController::pumpOnce() {
   constexpr std::size_t kBlock = 480;  // 10 ms
+  float left[kBlock], right[kBlock];
   std::int16_t block[kBlock * 2];
   int blocks = 0;
   while (feed_.available() >= kBlock) {
     const bool stereo = stereo_.load(std::memory_order_relaxed);
-    const std::size_t frames = feed_.read(block, kBlock, stereo);
+    const std::size_t frames = feed_.readFloat(left, right, kBlock);
+    float* const both[2] = {left, right};
+    if (frames > 0) micEffects_.process(both, 2, frames);
+    backhaul::MicFeed::toPcm(left, right, frames, stereo, block);
     // When the meeting is not taking sound the block is simply let go, so nothing piles up.
     if (frames > 0 && sender_) sender_(block, frames, stereo ? 2 : 1);
     ++blocks;

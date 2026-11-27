@@ -309,6 +309,12 @@ void AppState::setStandbyText(const QString& text) {
   emit settingsEdited();
 }
 
+void AppState::setPluginSettings(const QJsonObject& plugins) {
+  if (plugins == pluginSettings_) return;
+  pluginSettings_ = plugins;
+  emit settingsEdited();
+}
+
 bool AppState::canAddSlot() const {
   return static_cast<int>(slots_.rows().size()) - slots_.shareCount() < kMaxPersonSlots;
 }
@@ -416,6 +422,7 @@ QJsonObject AppState::settingsJson() const {
   returning[QStringLiteral("as")] = returnAsShare_ ? QStringLiteral("share") : QStringLiteral("camera");
   root[QStringLiteral("return")] = returning;
   root[QStringLiteral("standbyText")] = standbyText_;
+  if (!pluginSettings_.isEmpty()) root[QStringLiteral("plugins")] = pluginSettings_;
   root[QStringLiteral("role")] = role();
   root[QStringLiteral("roleScreen")] = roleScreen_;
   QJsonObject twoShot;
@@ -591,7 +598,12 @@ bool AppState::applySettings(const QJsonObject& settings) {
   }
   slots_.setRows(rows);
   participants_.setRows({}, slotNumbers());
+  // Plug-ins: absent in older files. What is inside is checked by the plug-in part itself.
+  const QJsonValue pluginsValue = settings.value(QStringLiteral("plugins"));
+  if (!pluginsValue.isUndefined() && !pluginsValue.isObject()) return false;
+
   slotByScreen_ = slotByScreen;
+  pluginSettings_ = pluginsValue.toObject();
   gridScreen_ = gridValue.toString().left(kMaxZoomNameLength);
   meetingId_ = meetingId;
   joinName_ = joinName;
@@ -640,6 +652,7 @@ void AppState::loadDefaults() {
   slotByScreen_.clear();
   gridScreen_.clear();
   standbyText_ = QStringLiteral("SLIDE");
+  pluginSettings_ = QJsonObject();
   videoDeviceName_.clear();
   returnAsShare_ = false;
   role_ = backhaul::Role::Unset;

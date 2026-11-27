@@ -2,6 +2,7 @@ add_library(backhaul_core STATIC
   aspect_fit.cpp
   audio_mixer.cpp
   delay_line.cpp
+  effect_chain.cpp
   mic_feed.cpp
   nv12.cpp
   quality_policy.cpp
