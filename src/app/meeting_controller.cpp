@@ -123,8 +123,10 @@ void MeetingController::join() {
   request.displayName = app_.joinName().trimmed().toStdString();
   request.passcode = passcode_.toStdString();
   request.zak = zak_.trimmed().toStdString();
-  request.audio = app_.handlesAudio();
   request.sendAudio = app_.sendsAudio() && !app_.micDeviceName().isEmpty();
+  // Joining the sound opens it in both directions, so only a PC that plays the voices or
+  // has a device of its own to send from joins it.
+  request.audio = app_.playsAudio() || request.sendAudio;
   request.sendQuality = app_.sendQuality() == 2   ? backhaul::SendQuality::Music
                         : app_.sendQuality() == 1 ? backhaul::SendQuality::Original
                                                   : backhaul::SendQuality::Speech;
@@ -278,6 +280,8 @@ void MeetingController::resetSlots() {
       r.situation.videoOn = r.situation.audioOn = r.situation.hasLastFrame = r.situation.unstable = false;
       r.width = r.height = r.fps = 0;
       r.level = 0.0;
+      // "Shared by ..." belongs to the meeting that just ended, not to the slot.
+      if (r.situation.kind == backhaul::SlotKind::Share) r.zoomName.clear();
     });
   }
   frames_.clearAll();

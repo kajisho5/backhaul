@@ -43,6 +43,9 @@ AudioController::AudioController(AppState& app, std::unique_ptr<backhaul::AudioO
     app_.audioOk_ = false;
     app_.notifyChanged();
     emit changed();
+    // A PC that only sends (the return role with a Windows recording device) needs no
+    // output device, but its recording device still has to come back.
+    if (app_.sendsAudio() && micIndex_ == 0) startSavedMic();
   });
 }
 

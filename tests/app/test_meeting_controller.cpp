@@ -7,6 +7,7 @@
 #endif
 
 #include <QImage>
+#include <QJsonArray>
 #include <QJsonObject>
 
 #include "app_state.h"
@@ -334,6 +335,16 @@ static void testAudioRole() {
     a.setRole(QStringLiteral("audio"));
     CHECK(mic->alive && audio.micIndex() == 1);  // chooseMic(1) was remembered as the wish
 
+    // The return PC sends too, but plays nothing: the recording device runs, the speaker does not.
+    audio.chooseDevice(1);
+    CHECK(speaker->alive);
+    a.setRole(QStringLiteral("camera"));
+    CHECK(!mic->alive && !speaker->alive);
+    a.setRole(QStringLiteral("return"));
+    CHECK(mic->alive && audio.micIndex() == 1 && !speaker->alive);
+    a.setRole(QStringLiteral("audio"));
+    CHECK(mic->alive && speaker->alive);
+
     // ASIO: the inputs are pairs of the running output device.
     audio.setAsio(true);
     CHECK(!mic->alive && audio.micIndex() == 0 && a.micDeviceName().isEmpty());
@@ -441,6 +452,9 @@ static void testSlides() {
   CHECK(slotData(a, row, SlotModel::VideoOutRole).toString() == QStringLiteral("black"));
   client->events->onShares({{503, 10}});
   CHECK(client->shareWant == 503 && slotData(a, row, SlotModel::VideoOutRole).toString() == QStringLiteral("live"));
+  // Who shares is not a setting: it is not saved, and it is gone when the meeting ends.
+  CHECK(!slotData(a, row, SlotModel::ZoomNameRole).toString().isEmpty());
+  CHECK(a.settingsJson().value(QStringLiteral("slots")).toArray().at(row).toObject().value(QStringLiteral("zoomName")).toString().isEmpty());
 
   // A PC that shows one person takes no shared screen; the do-everything PC does.
   m.leave();
@@ -458,6 +472,7 @@ static void testSlides() {
   CHECK(client->shareWant == 601);
   m.leave();
   CHECK(slotData(a, row, SlotModel::VideoOutRole).toString() == QStringLiteral("black"));
+  CHECK(slotData(a, row, SlotModel::ZoomNameRole).toString().isEmpty());
 }
 
 // the return PC: a capture device's picture goes into the meeting, as camera or as shared screen
@@ -499,7 +514,14 @@ static void testReturnRole() {
   // Nothing chosen: the PC joins but sends no picture, and asks for nothing from the meeting.
   m.join();
   CHECK(client->lastRequest.sendVideo == backhaul::SendVideo::None && !client->lastRequest.receive);
-  CHECK(client->lastRequest.audio && !client->lastRequest.sendAudio);
+  // With no sound device chosen it stays out of the meeting's sound altogether
+  // (joining it would open this PC's own microphone).
+  CHECK(!client->lastRequest.audio && !client->lastRequest.sendAudio);
+  a.setMicDeviceName(QStringLiteral("サンプル卓入力A"));
+  m.leave();
+  m.join();
+  CHECK(client->lastRequest.audio && client->lastRequest.sendAudio);
+  a.setMicDeviceName(QString());
   m.leave();
 
   CHECK(returning.available());

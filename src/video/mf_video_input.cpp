@@ -13,6 +13,7 @@
 #include <atomic>
 #include <cstdio>
 #include <future>
+#include <mutex>
 #include <string>
 #include <thread>
 #include <vector>
@@ -150,6 +151,12 @@ class MfVideoInput final : public VideoInput {
 
   void stop() override {
     stopRequested_ = true;
+    {
+      // Reading from a device without a signal can wait for ever; shutting the source
+      // down makes that read return.
+      const std::lock_guard<std::mutex> lock(sourceMutex_);
+      if (source_ != nullptr) source_->Shutdown();
+    }
     if (thread_.joinable()) thread_.join();
     running_ = false;
     width_ = height_ = milliFps_ = 0;
@@ -163,8 +170,8 @@ class MfVideoInput final : public VideoInput {
  private:
   static constexpr DWORD kStream = static_cast<DWORD>(MF_SOURCE_READER_FIRST_VIDEO_STREAM);
 
-  // The device's own mode to use: the largest picture up to 1920x1080, and among
-  // those the fastest up to 60 per second.
+  // The device's own mode to use: among the modes with smooth motion, the largest picture
+  // up to 1920x1080, and among those the fastest up to 60 per second.
   static bool pickNative(IMFSourceReader* reader, Com<IMFMediaType>& chosen, UINT32& width, UINT32& height,
                          UINT32& milliFps) {
     std::uint64_t best = 0;
@@ -181,7 +188,10 @@ class MfVideoInput final : public VideoInput {
       }
       const std::uint64_t rate = static_cast<std::uint64_t>(num) * 1000 / den;
       if (rate > 61000) continue;
-      const std::uint64_t score = static_cast<std::uint64_t>(w) * h * 100000 + rate + 1;
+      // Smooth motion first: a mode below 29 per second (some boxes offer 1080p at 5) only
+      // wins when the device has nothing faster.
+      const std::uint64_t smooth = rate >= 29000 ? 1 : 0;
+      const std::uint64_t score = smooth * 100000000000000ULL + static_cast<std::uint64_t>(w) * h * 100000 + rate + 1;
       if (score > best) {
         best = score;
         width = w;
@@ -246,6 +256,10 @@ class MfVideoInput final : public VideoInput {
     width_ = static_cast<int>(width);
     height_ = static_cast<int>(height);
     milliFps_ = static_cast<int>(milliFps);
+    {
+      const std::lock_guard<std::mutex> lock(sourceMutex_);
+      source_ = source.get();
+    }
     running_ = true;
     ready.set_value({});
 
@@ -284,7 +298,11 @@ class MfVideoInput final : public VideoInput {
       buffer->Unlock();
     }
     reader.reset();
-    source->Shutdown();
+    {
+      const std::lock_guard<std::mutex> lock(sourceMutex_);
+      source_ = nullptr;
+    }
+    source->Shutdown();  // a second shutdown after stop() is harmless
     running_ = false;
   }
 
@@ -292,6 +310,8 @@ class MfVideoInput final : public VideoInput {
   std::atomic<bool> stopRequested_{false};
   std::atomic<bool> running_{false};
   std::atomic<int> width_{0}, height_{0}, milliFps_{0};
+  std::mutex sourceMutex_;
+  IMFMediaSource* source_ = nullptr;  // only while the reading loop runs
 };
 
 }  // namespace
