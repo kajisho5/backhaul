@@ -1,5 +1,6 @@
 #include <QCoreApplication>
 #include <QGuiApplication>
+#include <algorithm>
 #include <cmath>
 #include <vector>
 #ifdef _WIN32
@@ -613,6 +614,126 @@ static void testReturnRole() {
   CHECK(!b.applySettings(old));
 }
 
+// sound check: a test signal on chosen outputs, which never reaches the meeting and never lingers
+static void testSoundCheck() {
+  struct CheckOutput final : backhaul::AudioOutput {
+    bool alive = false;
+    std::vector<backhaul::AudioDevice> devices() override { return {{"desk-a", "サンプル卓出力A"}, {"desk-b", "サンプル卓出力B"}}; }
+    bool start(const std::string&, backhaul::AudioMixer*, std::string*) override { return alive = true; }
+    void stop() override { alive = false; }
+    bool running() const override { return alive; }
+    int channels() const override { return alive ? 4 : 0; }
+  };
+  struct CheckMic final : backhaul::AudioInput {
+    bool alive = false;
+    backhaul::AudioSink* sink = nullptr;
+    std::vector<backhaul::AudioDevice> devices() override { return {{"mic-a", "サンプル卓入力A"}}; }
+    bool start(const std::string&, backhaul::AudioSink* s, std::string*) override {
+      sink = s;
+      return alive = true;
+    }
+    void stop() override { alive = false; }
+    bool running() const override { return alive; }
+    int channels() const override { return alive ? 2 : 0; }
+  };
+  auto loudest = [](const std::vector<float>& block, std::size_t channel) {
+    float peak = 0.0f;
+    for (std::size_t i = 240; i * 4 + channel < block.size(); ++i) peak = std::max(peak, std::fabs(block[i * 4 + channel]));
+    return peak;
+  };
+
+  AppState a;
+  a.loadDefaults();
+  a.setRole(QStringLiteral("audio"));
+  auto* out = new CheckOutput;
+  auto* mic = new CheckMic;
+  AudioController audio(a, std::unique_ptr<backhaul::AudioOutput>(out), nullptr, std::unique_ptr<backhaul::AudioInput>(mic));
+  std::vector<std::int16_t> sent;
+  audio.setSender([&](const std::int16_t* samples, std::size_t n, int channels) {
+    sent.insert(sent.end(), samples, samples + n * static_cast<std::size_t>(channels));
+    return true;
+  });
+  int notes = 0;
+  QObject::connect(&audio, &AudioController::testChanged, [&] { ++notes; });
+
+  // Without a running device there is nothing to check.
+  CHECK(audio.testOn().isEmpty() && !audio.testing());
+  audio.toggleTest(0);
+  audio.sweepTest();
+  CHECK(!audio.testing() && !audio.testSweeping() && notes == 0);
+
+  audio.chooseDevice(1);
+  audio.chooseMic(1);
+  CHECK(audio.testOn().size() == 4 && audio.testLevelDb() == -20 && audio.testKind() == 0);
+
+  // Channels switch on and off one by one; the signal is on exactly those.
+  audio.toggleTest(1);
+  audio.toggleTest(3);
+  audio.toggleTest(4);   // no such channel
+  audio.toggleTest(-1);
+  CHECK(audio.testing() && audio.testChannelsText() == QStringLiteral("2, 4"));
+  CHECK(!audio.testOn()[0].toBool() && audio.testOn()[1].toBool() && !audio.testOn()[2].toBool() && audio.testOn()[3].toBool());
+  std::vector<float> block(480 * 4);
+  audio.mixer()->render(block.data(), 480, 4);
+  CHECK_NEAR(loudest(block, 1), 0.1, 0.003);
+  CHECK_NEAR(loudest(block, 3), 0.1, 0.003);
+  CHECK_NEAR(loudest(block, 0), 0.0, 1e-9);
+  CHECK_NEAR(loudest(block, 2), 0.0, 1e-9);
+
+  // What goes to the meeting is what the recording device hears, nothing of the test signal.
+  const std::vector<float> quiet(480 * 2, 0.0f);
+  mic->sink->onCaptured(quiet.data(), 480, 2);
+  CHECK(audio.pumpOnce() == 1 && !sent.empty());
+  CHECK(std::all_of(sent.begin(), sent.end(), [](std::int16_t v) { return v == 0; }));
+
+  audio.toggleTest(1);
+  CHECK(audio.testChannelsText() == QStringLiteral("4"));
+
+  // The level moves in steps of 2 dB and stops at both ends, well below full level.
+  for (int i = 0; i < 40; ++i) audio.nudgeTestLevel(1);
+  CHECK(audio.testLevelDb() == -6 && audio.testLevelMax() == -6);
+  for (int i = 0; i < 40; ++i) audio.nudgeTestLevel(-1);
+  CHECK(audio.testLevelDb() == -40 && audio.testLevelMin() == -40);
+  audio.setTestKind(1);
+  audio.setTestKind(7);  // unknown: ignored
+  CHECK(audio.testKind() == 1);
+
+  // The sweep goes through every channel once and then falls silent.
+  audio.sweepTest();
+  CHECK(audio.testSweeping() && audio.testChannelsText() == QStringLiteral("1"));
+  audio.sweepStep();
+  CHECK(audio.testChannelsText() == QStringLiteral("2"));
+  audio.sweepStep();
+  audio.sweepStep();
+  CHECK(audio.testSweeping() && audio.testChannelsText() == QStringLiteral("4"));
+  audio.sweepStep();
+  CHECK(!audio.testSweeping() && !audio.testing());
+  audio.sweepStep();  // nothing running: nothing happens
+  CHECK(!audio.testing());
+
+  // A hand on a button during the sweep takes over.
+  audio.sweepTest();
+  audio.toggleTest(2);
+  CHECK(!audio.testSweeping() && audio.testChannelsText() == QStringLiteral("3"));
+  audio.stopTest();
+  CHECK(!audio.testing());
+  for (int i = 0; i < 4; ++i) audio.mixer()->render(block.data(), 480, 4);  // faded out
+  CHECK_NEAR(loudest(block, 2), 0.0, 1e-9);
+
+  // It never lingers: another device, no device, the device dying, another role.
+  audio.toggleTest(0);
+  audio.chooseDevice(2);
+  CHECK(!audio.testing());
+  audio.toggleTest(0);
+  audio.chooseDevice(0);
+  CHECK(!audio.testing() && audio.testOn().isEmpty());
+  audio.chooseDevice(1);
+  audio.sweepTest();
+  a.setRole(QStringLiteral("camera"));
+  CHECK(!audio.testing() && !audio.testSweeping());
+  CHECK(audio.mixer()->tone().channels() == 0u);
+}
+
 int main(int argc, char* argv[]) {
   QGuiApplication qtApp(argc, argv);
 
@@ -983,6 +1104,7 @@ int main(int argc, char* argv[]) {
   testAudioRole();
   testSlides();
   testReturnRole();
+  testSoundCheck();
 
   if (testing::failures() == 0) {
     std::printf("all meeting controller tests passed\n");

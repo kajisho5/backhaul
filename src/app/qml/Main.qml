@@ -88,6 +88,33 @@ Window {
 
         TopBar { Layout.fillWidth: true; onSettingsRequested: settingsOpen = true; onRoleRequested: roleOpen = true }
 
+        // A test signal is sounding: said on every screen, with the way to stop it.
+        Rectangle {
+            visible: audio.testing
+            Layout.fillWidth: true
+            Layout.preferredHeight: visible ? 36 : 0
+            color: Theme.muted
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 16
+                anchors.rightMargin: 16
+                spacing: 12
+                Text {
+                    Layout.fillWidth: true
+                    elide: Text.ElideRight
+                    text: "テスト音を出しています　出力 " + audio.testChannelsText
+                    color: Theme.bg; font.family: app.sansFamily; font.pixelSize: 13; font.bold: true
+                }
+                PlainButton {
+                    text: "止める"
+                    tint: Theme.bg
+                    implicitHeight: 26
+                    Accessible.name: "テスト音を止める"
+                    onClicked: audio.stopTest()
+                }
+            }
+        }
+
         RoleScreen {
             visible: app.role === "camera" || app.role === "twoshot" || app.role === "slide"
             Layout.fillWidth: true

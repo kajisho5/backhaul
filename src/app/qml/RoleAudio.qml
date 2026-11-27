@@ -39,6 +39,17 @@ Flickable {
                     x: 18; y: 16
                     width: parent.width - 36
                     spacing: 12
+                    // A test signal that would start from silence during a meeting waits here
+                    // until the operator says yes. While one already sounds, more need no question.
+                    property var waiting: null
+                    function ask(run) {
+                        if (app.connected && !audio.testing) waiting = run
+                        else run()
+                    }
+                    Connections {
+                        target: app
+                        function onChanged() { if (!app.connected) speaker.waiting = null }
+                    }
                     RowLayout {
                         Layout.fillWidth: true
                         spacing: 10
@@ -72,14 +83,110 @@ Flickable {
                         rowSpacing: 8
                         Repeater {
                             model: audio.outputLevels
-                            delegate: LevelBar {
+                            delegate: RowLayout {
+                                id: channel
                                 required property int index
                                 required property var modelData
+                                readonly property bool sounding: audio.testOn[index] === true
                                 Layout.fillWidth: true
                                 Layout.preferredWidth: 1
-                                label: index + 1
-                                level: modelData
+                                spacing: 8
+                                LevelBar {
+                                    Layout.fillWidth: true
+                                    label: channel.index + 1
+                                    level: channel.modelData
+                                }
+                                PlainButton {
+                                    text: channel.sounding ? "停止" : "鳴らす"
+                                    strong: channel.sounding
+                                    tint: channel.sounding ? Theme.muted : Theme.ink
+                                    implicitWidth: 58
+                                    Accessible.name: "出力" + (channel.index + 1) + "のテスト音を" + (channel.sounding ? "止める" : "鳴らす")
+                                    onClicked: speaker.ask(() => audio.toggleTest(channel.index))
+                                }
                             }
+                        }
+                    }
+                    // ---- sound check ----
+                    Rectangle { visible: audio.outputLevels.length > 0; Layout.fillWidth: true; Layout.preferredHeight: 1; color: Theme.line }
+                    Flow {
+                        visible: audio.outputLevels.length > 0
+                        Layout.fillWidth: true
+                        spacing: 10
+                        Text {
+                            height: 32
+                            verticalAlignment: Text.AlignVCenter
+                            text: "サウンドチェック"
+                            color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 12
+                        }
+                        Segmented {
+                            firstText: "サイン 1kHz"
+                            secondText: "ピンクノイズ"
+                            first: audio.testKind === 0
+                            onChosen: (first) => audio.testKind = first ? 0 : 1
+                        }
+                        Row {
+                            height: 32
+                            spacing: 6
+                            PlainButton {
+                                text: "−"; textSize: 15; implicitWidth: 32; implicitHeight: 32
+                                enabled: audio.testLevelDb > audio.testLevelMin
+                                Accessible.name: "テスト音を小さくする"
+                                onClicked: audio.nudgeTestLevel(-1)
+                            }
+                            Text {
+                                width: 58; height: 32
+                                horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
+                                text: audio.testLevelDb + " dB"
+                                color: Theme.ink; font.family: app.monoFamily; font.pixelSize: 13
+                            }
+                            PlainButton {
+                                text: "＋"; textSize: 15; implicitWidth: 32; implicitHeight: 32
+                                enabled: audio.testLevelDb < audio.testLevelMax
+                                Accessible.name: "テスト音を大きくする"
+                                onClicked: audio.nudgeTestLevel(1)
+                            }
+                        }
+                        PlainButton {
+                            text: audio.testSweeping ? "順に鳴らしています" : "1から順に"
+                            implicitHeight: 32
+                            enabled: !audio.testSweeping
+                            Accessible.name: "出力1から順にテスト音を鳴らす"
+                            onClicked: speaker.ask(() => audio.sweepTest())
+                        }
+                        PlainButton {
+                            text: "すべて止める"
+                            implicitHeight: 32
+                            enabled: audio.testing
+                            tint: audio.testing ? Theme.muted : Theme.ink
+                            onClicked: audio.stopTest()
+                        }
+                    }
+                    // During a meeting the first press is asked about once: the venue would hear it.
+                    Rectangle {
+                        visible: speaker.waiting !== null
+                        Layout.fillWidth: true
+                        implicitHeight: confirm.implicitHeight + 20
+                        color: "transparent"
+                        border.width: 1
+                        border.color: Theme.muted
+                        RowLayout {
+                            id: confirm
+                            x: 12; y: 10
+                            width: parent.width - 24
+                            spacing: 10
+                            Text {
+                                Layout.fillWidth: true
+                                wrapMode: Text.WordWrap
+                                text: "会議に入っています。会場のスピーカーからテスト音が出ます（Zoomへは送りません）。"
+                                color: Theme.muted; font.family: app.sansFamily; font.pixelSize: 12
+                            }
+                            PlainButton {
+                                text: "鳴らす"; strong: true; tint: Theme.muted
+                                onClicked: { const run = speaker.waiting; speaker.waiting = null; run() }
+                            }
+                            PlainButton { text: "やめる"; onClicked: speaker.waiting = null }
                         }
                     }
                     Text {
@@ -88,7 +195,7 @@ Flickable {
                         wrapMode: Text.WordWrap
                         text: audio.problem.length > 0 ? audio.problem
                               : (!audio.available && !app.demo) ? "このPCでは音を出せません。"
-                              : "WASAPIとASIOの切り替えは「設定 → 音声出力」にあります。"
+                              : "テスト音は選んだ出力にだけ出て、Zoomへは送りません。WASAPIとASIOの切り替えは「設定 → 音声出力」にあります。"
                         color: audio.problem.length > 0 ? Theme.lost : Theme.mute
                         font.family: app.sansFamily; font.pixelSize: 12
                     }

@@ -150,6 +150,8 @@ void AudioMixer::render(float* out, std::size_t frames, int channels) {
     }
   }
 
+  tone_.addTo(out, frames, channels);
+
   for (std::size_t c = 0; c < ch && c < static_cast<std::size_t>(kMaxChannels); ++c) {
     float peak = 0.0f;
     for (std::size_t i = 0; i < frames; ++i) peak = std::max(peak, std::fabs(out[i * ch + c]));

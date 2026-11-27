@@ -38,6 +38,15 @@ class AudioController : public QObject {
   Q_PROPERTY(int micIndex READ micIndex NOTIFY changed)
   Q_PROPERTY(QString micProblem READ micProblem NOTIFY changed)
   Q_PROPERTY(QVariantList micLevels READ micLevels NOTIFY levelsChanged)  // left, right
+  // Sound check: a test signal on chosen output channels. Never part of what goes to the meeting.
+  Q_PROPERTY(QVariantList testOn READ testOn NOTIFY testChanged)  // one true/false per output channel
+  Q_PROPERTY(bool testing READ testing NOTIFY testChanged)        // at least one channel sounds
+  Q_PROPERTY(bool testSweeping READ testSweeping NOTIFY testChanged)
+  Q_PROPERTY(QString testChannelsText READ testChannelsText NOTIFY testChanged)  // "1, 3"
+  Q_PROPERTY(int testKind READ testKind WRITE setTestKind NOTIFY testChanged)    // 0 = 1 kHz sine, 1 = pink noise
+  Q_PROPERTY(int testLevelDb READ testLevelDb NOTIFY testChanged)
+  Q_PROPERTY(int testLevelMin READ testLevelMin CONSTANT)
+  Q_PROPERTY(int testLevelMax READ testLevelMax CONSTANT)
 
  public:
   static constexpr int kSources = 20;  // every possible slot: 16 people and 4 slides
@@ -61,6 +70,15 @@ class AudioController : public QObject {
   int micIndex() const { return micIndex_; }
   QString micProblem() const { return micProblem_; }
   QVariantList micLevels() const { return micLevels_; }
+  QVariantList testOn() const;
+  bool testing() const { return testMask_ != 0; }
+  bool testSweeping() const { return sweepChannel_ >= 0; }
+  QString testChannelsText() const;
+  int testKind() const { return testKind_; }
+  void setTestKind(int kind);
+  int testLevelDb() const { return testLevelDb_; }
+  int testLevelMin() const { return static_cast<int>(backhaul::TestTone::kMinDb); }
+  int testLevelMax() const { return static_cast<int>(backhaul::TestTone::kMaxDb); }
 
   using Sender = std::function<bool(const std::int16_t* samples, std::size_t frames, int channels)>;
   // Where recorded sound goes, in blocks of 10 ms, on a thread of this object.
@@ -79,12 +97,22 @@ class AudioController : public QObject {
   // Reads the list of recording devices again (something was plugged in).
   Q_INVOKABLE void refreshMics();
 
+  // Sound check. Channels count from 0. Switching a channel by hand ends a running sweep.
+  Q_INVOKABLE void toggleTest(int channel);
+  Q_INVOKABLE void stopTest();
+  // One channel after the other, from the first to the last, then silence.
+  Q_INVOKABLE void sweepTest();
+  Q_INVOKABLE void nudgeTestLevel(int direction);  // one step is 2 dB
+  // The sweep's clock, also callable from a test: moves on to the next channel.
+  void sweepStep();
+
   // Starts the device named in the settings, if it is present. Call once after loading settings.
   void startSaved();
 
  signals:
   void changed();
   void levelsChanged();
+  void testChanged();
 
  private:
   void syncSlots();
@@ -95,6 +123,8 @@ class AudioController : public QObject {
   void stopMic();
   void startSavedMic();
   void pump();
+  int testChannels() const;  // how many output channels can be checked right now
+  void applyTest(std::uint32_t mask);
 
   // Recorded sound arrives here on a device thread.
   struct Sink final : backhaul::AudioSink {
@@ -115,6 +145,11 @@ class AudioController : public QObject {
   QString problem_;
   QTimer timer_;
   QVariantList outputLevels_;
+  std::uint32_t testMask_ = 0;
+  int testKind_ = 0;
+  int testLevelDb_ = static_cast<int>(backhaul::TestTone::kDefaultDb);
+  int sweepChannel_ = -1;  // -1 = no sweep running
+  QTimer sweepTimer_;
 
   std::unique_ptr<backhaul::AudioInput> input_;
   std::vector<backhaul::AudioDevice> mics_;  // system recording devices (not used with ASIO)
