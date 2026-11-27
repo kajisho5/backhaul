@@ -1,0 +1,6 @@
+build/
+build-*/
+third_party/*
+!third_party/README.md
+.vs/
+CMakeUserPresets.json
