@@ -165,4 +165,21 @@ void testAudioMixer() {
     m.render(mono.data(), 480, 1);
     CHECK(rms(mono, 1, 0, 0, 480) > 0.3);
   }
+
+  {  // output meters: the loudest sample per output channel since last asked
+    AudioMixer m(2);
+    m.setChannels(0, 0b01);
+    m.setChannels(1, 0b10);
+    m.setGainDb(1, -6.0f);
+    const auto a = tone(48000, 440.0, 9600, 0.5);
+    m.push(0, a.data(), a.size(), 48000);
+    m.push(1, a.data(), a.size(), 48000);
+    std::vector<float> out(4800 * 3);
+    m.render(out.data(), 4800, 3);
+    CHECK_NEAR(m.takeOutputPeak(0), 0.5, 0.01);
+    CHECK_NEAR(m.takeOutputPeak(1), 0.25, 0.01);
+    CHECK(m.takeOutputPeak(2) == 0.0f);   // nothing is sent there
+    CHECK(m.takeOutputPeak(0) == 0.0f);   // asked already
+    CHECK(m.takeOutputPeak(-1) == 0.0f && m.takeOutputPeak(AudioMixer::kMaxChannels) == 0.0f);
+  }
 }

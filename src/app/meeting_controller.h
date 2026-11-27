@@ -35,6 +35,9 @@ class MeetingController : public QObject, public backhaul::MeetingEvents {
   Q_PROPERTY(QString statusText READ statusText NOTIFY changed)
   Q_PROPERTY(QString detail READ detail NOTIFY changed)
   Q_PROPERTY(bool canJoin READ canJoin NOTIFY changed)
+  // Sound sent into the meeting: whether the meeting takes it right now, and a note when not.
+  Q_PROPERTY(bool sendingAudio READ sendingAudio NOTIFY changed)
+  Q_PROPERTY(QString sendNote READ sendNote NOTIFY changed)
 
  public:
   MeetingController(AppState& app, FrameStore& frames, std::unique_ptr<backhaul::MeetingClient> client,
@@ -51,6 +54,10 @@ class MeetingController : public QObject, public backhaul::MeetingEvents {
   QString statusText() const;
   QString detail() const { return detail_; }
   bool canJoin() const;
+  bool sendingAudio() const { return sendingAudio_; }
+  QString sendNote() const { return sendNote_; }
+  // Any one thread (the sound side's sending thread). 16-bit, 48 kHz.
+  bool sendAudio(const std::int16_t* samples, std::size_t frames, int channels);
 
   Q_INVOKABLE void join();
   Q_INVOKABLE void leave();
@@ -91,6 +98,8 @@ class MeetingController : public QObject, public backhaul::MeetingEvents {
   std::vector<backhaul::VideoWant> wants_;
   QTimer pollTimer_, secondTimer_;
   qint64 joinedAtMs_ = 0;
+  bool sendingAudio_ = false;
+  QString sendNote_;
 
   // Read on the video thread.
   QMutex routeMutex_;

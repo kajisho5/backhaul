@@ -2,6 +2,7 @@
 #include <windows.h>
 
 #include <chrono>
+#include <atomic>
 #include <map>
 #include <mutex>
 #include <string>
@@ -15,6 +16,7 @@
 #include "rawdata/rawdata_audio_helper_interface.h"
 #include "rawdata/rawdata_renderer_interface.h"
 #include "rawdata/zoom_rawdata_api.h"
+#include "setting_service_interface.h"
 #include "zoom_sdk.h"
 #include "zoom_sdk_raw_data_def.h"
 
@@ -107,6 +109,39 @@ class AudioTap final : public sdk::IZoomSDKAudioRawDataDelegate {
   MeetingEvents* events_ = nullptr;
 };
 
+// The meeting's "microphone" when this PC sends a device's sound. The meeting library
+// says when it is ready and when it wants sound; sound arrives from another thread.
+class MicSource final : public sdk::IZoomSDKVirtualAudioMicEvent {
+ public:
+  void onMicInitialize(sdk::IZoomSDKAudioRawDataSender* sender) override {
+    const std::lock_guard<std::mutex> lock(mutex_);
+    sender_ = sender;
+  }
+  void onMicStartSend() override { sending_ = true; }
+  void onMicStopSend() override { sending_ = false; }
+  void onMicUninitialized() override {
+    const std::lock_guard<std::mutex> lock(mutex_);
+    sender_ = nullptr;
+    sending_ = false;
+  }
+
+  bool sending() const { return sending_; }
+
+  bool send(const std::int16_t* samples, std::size_t frames, int channels) {
+    if (samples == nullptr || frames == 0 || frames > 4800 || channels < 1 || channels > 2) return false;
+    const std::lock_guard<std::mutex> lock(mutex_);
+    if (sender_ == nullptr || !sending_) return false;
+    const unsigned int bytes = static_cast<unsigned int>(frames) * 2u * static_cast<unsigned int>(channels);
+    return sender_->send(const_cast<char*>(reinterpret_cast<const char*>(samples)), bytes, 48000,
+                         channels == 2 ? sdk::ZoomSDKAudioChannel_Stereo : sdk::ZoomSDKAudioChannel_Mono) == sdk::SDKERR_SUCCESS;
+  }
+
+ private:
+  std::mutex mutex_;
+  sdk::IZoomSDKAudioRawDataSender* sender_ = nullptr;
+  std::atomic<bool> sending_{false};
+};
+
 struct Subscription {
   std::unique_ptr<VideoTap> tap;
   sdk::IZoomSDKRenderer* renderer = nullptr;
@@ -182,6 +217,15 @@ class ZoomClient final : public MeetingClient,
     applyWants();
   }
 
+  bool sendAudio(const std::int16_t* samples, std::size_t frames, int channels) override {
+    return mic_.send(samples, frames, channels);
+  }
+  bool sendingAudio() const override { return mic_.sending(); }
+  std::string sendAudioNote() const override {
+    const std::lock_guard<std::mutex> lock(noteMutex_);
+    return sendNote_;
+  }
+
   void poll() override {
     if (participants_ == nullptr || events_ == nullptr) return;
     std::vector<Participant> everyone;
@@ -201,6 +245,7 @@ class ZoomClient final : public MeetingClient,
         everyone.push_back(std::move(p));
       }
     }
+    if (inMeeting_ && request_.audio && request_.sendAudio) keepSending(everyone);
     if (everyone != lastParticipants_) {
       lastParticipants_ = everyone;
       events_->onParticipants(everyone);
@@ -336,9 +381,79 @@ class ZoomClient final : public MeetingClient,
     // play or send any.
     sdk::IMeetingAudioController* audio = meeting_->GetMeetingAudioController();
     if (request_.audio && audio != nullptr) audio->JoinVoip();
+    if (request_.audio && request_.sendAudio) applySendQuality();
     state(MeetingState::WaitingForPermission, {});
     tryStartRaw();
     poll();
+  }
+
+  void setSendNote(const std::string& note) {
+    const std::lock_guard<std::mutex> lock(noteMutex_);
+    sendNote_ = note;
+  }
+
+  // "Original sound", music mode and stereo are settings of the meeting library.
+  void applySendQuality() {
+    if (settings_ == nullptr && sdk::CreateSettingService(&settings_) != sdk::SDKERR_SUCCESS) settings_ = nullptr;
+    sdk::IAudioSettingContext* audio = settings_ != nullptr ? settings_->GetAudioSettings() : nullptr;
+    if (audio == nullptr) {
+      qualityNote_ = "音質の設定を反映できませんでした";
+      return;
+    }
+    const bool original = request_.sendQuality != SendQuality::Speech;
+    bool ok = audio->EnableMicOriginalInput(original) == sdk::SDKERR_SUCCESS;
+    if (original) {
+      // Both are only valid while "original sound" is on.
+      ok = audio->EnableHighFidelityMusicMode(request_.sendQuality == SendQuality::Music) == sdk::SDKERR_SUCCESS && ok;
+      ok = audio->EnableStereoAudio(request_.sendStereo) == sdk::SDKERR_SUCCESS && ok;
+    }
+    qualityNote_ = ok ? std::string() : std::string("音質の設定を一部反映できませんでした");
+  }
+
+  // Becomes the meeting's microphone and unmutes once. Called from poll() until both
+  // have worked: right after joining, the meeting is often not ready for either.
+  void keepSending(const std::vector<Participant>& everyone) {
+    if (!micSet_) {
+      sdk::IZoomSDKAudioRawDataHelper* helper = sdk::GetAudioRawdataHelper();
+      const sdk::SDKError result =
+          helper != nullptr ? helper->setExternalAudioSource(&mic_) : sdk::SDKERR_UNINITIALIZE;
+      micSet_ = result == sdk::SDKERR_SUCCESS;
+      if (!micSet_) {
+        setSendNote(code("Zoomへ音を送る準備ができていません", static_cast<int>(result)));
+        return;
+      }
+    }
+    if (!unmuted_) {
+      // Once only: if the host mutes this PC later, that is the host's decision.
+      for (const Participant& p : everyone) {
+        if (!p.isSelf) continue;
+        if (!p.audioMuted) {
+          unmuted_ = true;
+        } else {
+          sdk::IMeetingAudioController* audio = meeting_->GetMeetingAudioController();
+          unmuted_ = audio != nullptr && audio->UnMuteAudio(p.id) == sdk::SDKERR_SUCCESS;
+        }
+      }
+      if (!unmuted_) {
+        setSendNote("ミュートを解除できていません");
+        return;
+      }
+    }
+    bool mutedNow = false;
+    for (const Participant& p : everyone) {
+      if (p.isSelf) mutedNow = p.audioMuted;
+    }
+    setSendNote(mutedNow ? std::string("ミュートされています（ホストに解除を頼んでください）") : qualityNote_);
+  }
+
+  void stopSending() {
+    if (micSet_) {
+      sdk::IZoomSDKAudioRawDataHelper* helper = sdk::GetAudioRawdataHelper();
+      if (helper != nullptr) helper->setExternalAudioSource(nullptr);
+    }
+    micSet_ = false;
+    unmuted_ = false;
+    setSendNote({});
   }
 
   void tryStartRaw() {
@@ -419,6 +534,7 @@ class ZoomClient final : public MeetingClient,
   }
 
   void endOfMeeting() {
+    stopSending();
     inMeeting_ = false;
     busy_ = false;
     askedPermission_ = false;
@@ -437,6 +553,10 @@ class ZoomClient final : public MeetingClient,
       if (meeting_->GetMeetingStatus() == sdk::MEETING_STATUS_INMEETING) meeting_->Leave(sdk::LEAVE_MEETING);
       sdk::DestroyMeetingService(meeting_);
       meeting_ = nullptr;
+    }
+    if (settings_ != nullptr) {
+      sdk::DestroySettingService(settings_);
+      settings_ = nullptr;
     }
     if (auth_ != nullptr) {
       sdk::DestroyAuthService(auth_);
@@ -465,6 +585,13 @@ class ZoomClient final : public MeetingClient,
   bool askedPermission_ = false;
   bool audioSubscribed_ = false;
   AudioTap audioTap_;
+  MicSource mic_;
+  sdk::ISettingService* settings_ = nullptr;
+  bool micSet_ = false;
+  bool unmuted_ = false;
+  std::string qualityNote_;
+  mutable std::mutex noteMutex_;
+  std::string sendNote_;
 };
 
 }  // namespace

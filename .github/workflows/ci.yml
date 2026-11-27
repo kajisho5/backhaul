@@ -62,7 +62,7 @@ jobs:
             if ($p.ExitCode -ne 0) { throw "backhaul --settings $page exited with $($p.ExitCode)" }
             if (-not (Test-Path "settings-$page-windows.png")) { throw "no picture of the $page settings was written" }
           }
-          foreach ($role in 'ask','camera','twoshot') {
+          foreach ($role in 'ask','camera','twoshot','audio') {
             $p = Start-Process -FilePath $exe.FullName -ArgumentList '--demo','--role',$role,'--screenshot',"$PWD\role-$role-windows.png" -Wait -PassThru
             if ($p.ExitCode -ne 0) { throw "backhaul --role $role exited with $($p.ExitCode)" }
             if (-not (Test-Path "role-$role-windows.png")) { throw "no picture of the $role role was written" }
@@ -106,6 +106,7 @@ jobs:
           ./build/src/app/backhaul --demo --role ask --screenshot role-ask-linux.png
           ./build/src/app/backhaul --demo --role camera --screenshot role-camera-linux.png
           ./build/src/app/backhaul --demo --role twoshot --screenshot role-twoshot-linux.png
+          ./build/src/app/backhaul --demo --role audio --screenshot role-audio-linux.png
       - uses: actions/upload-artifact@v4
         with:
           name: operator-screen-linux

@@ -56,6 +56,8 @@ qt_add_qml_module(backhaul
     qml/OutputView.qml
     qml/Dropdown.qml
     qml/RoleSelect.qml
+    qml/RoleAudio.qml
+    qml/LevelBar.qml
     qml/RoleScreen.qml
     qml/RoleTile.qml
     qml/TwoShotView.qml

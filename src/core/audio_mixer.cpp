@@ -40,6 +40,7 @@ struct AudioMixer::Source {
 
 AudioMixer::AudioMixer(int sources) {
   for (int i = 0; i < std::max(sources, 0); ++i) sources_.push_back(std::make_unique<Source>());
+  for (auto& peak : outputPeak_) peak.store(0.0f);
 }
 
 AudioMixer::~AudioMixer() = default;
@@ -148,6 +149,18 @@ void AudioMixer::render(float* out, std::size_t frames, int channels) {
       for (std::size_t i = 0; i < frames; ++i) out[i * ch + c] += scratch_[i] * gain;
     }
   }
+
+  for (std::size_t c = 0; c < ch && c < static_cast<std::size_t>(kMaxChannels); ++c) {
+    float peak = 0.0f;
+    for (std::size_t i = 0; i < frames; ++i) peak = std::max(peak, std::fabs(out[i * ch + c]));
+    peak = std::min(peak, 1.0f);
+    if (peak > outputPeak_[c].load(std::memory_order_relaxed)) outputPeak_[c].store(peak, std::memory_order_relaxed);
+  }
+}
+
+float AudioMixer::takeOutputPeak(int channel) {
+  if (channel < 0 || channel >= kMaxChannels) return 0.0f;
+  return outputPeak_[channel].exchange(0.0f, std::memory_order_relaxed);
 }
 
 }  // namespace backhaul

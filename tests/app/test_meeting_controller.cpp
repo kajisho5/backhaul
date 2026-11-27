@@ -6,6 +6,8 @@
 #include <windows.h>
 #endif
 
+#include <QJsonObject>
+
 #include "app_state.h"
 #include "audio_controller.h"
 #include "check.h"
@@ -35,6 +37,19 @@ class ScriptedClient final : public backhaul::MeetingClient {
   }
   void setVideoWants(const std::vector<backhaul::VideoWant>& w) override { wants = w; }
   void poll() override { ++polls; }
+  bool sendAudio(const std::int16_t* samples, std::size_t frames, int channels) override {
+    if (!taking) return false;
+    sent.insert(sent.end(), samples, samples + frames * static_cast<std::size_t>(channels));
+    sentChannels = channels;
+    return true;
+  }
+  bool sendingAudio() const override { return taking; }
+  std::string sendAudioNote() const override { return note; }
+
+  bool taking = false;
+  std::string note;
+  std::vector<std::int16_t> sent;
+  int sentChannels = 0;
 
   backhaul::JoinRequest lastRequest;
   backhaul::MeetingEvents* events = nullptr;
@@ -170,6 +185,183 @@ static void testTwoShotRole() {
   client->events->onParticipants({person(10, "Kakuu Ichiro"), person(11, "Mihon Hanako"), person(12, "Shiken Goro")});
   CHECK(client->wants.size() == 3);  // every slot is in use again
   m.leave();
+}
+
+// the sound PC: no pictures, every person can be heard, and a device's sound goes into the meeting
+static void testAudioRole() {
+  struct FakeSpeaker final : backhaul::AudioOutput {
+    bool alive = false;
+    int inputs = 0;
+    backhaul::AudioSink* sink = nullptr;
+    std::vector<backhaul::AudioDevice> devices() override { return {{"spk", "サンプル卓出力"}}; }
+    bool start(const std::string&, backhaul::AudioMixer*, std::string*) override { return alive = true; }
+    void stop() override { alive = false; }
+    bool running() const override { return alive; }
+    int channels() const override { return alive ? 8 : 0; }
+    int inputChannels() const override { return alive ? inputs : 0; }
+    void setInputSink(backhaul::AudioSink* s) override { sink = s; }
+  };
+  struct FakeMic final : backhaul::AudioInput {
+    bool alive = false, refuse = false;
+    backhaul::AudioSink* sink = nullptr;
+    std::vector<backhaul::AudioDevice> devices() override { return {{"mic-a", "サンプル卓入力A"}, {"mic-b", "サンプル卓入力B"}}; }
+    bool start(const std::string&, backhaul::AudioSink* s, std::string* error) override {
+      if (refuse) {
+        *error = "busy";
+        return alive = false;
+      }
+      sink = s;
+      return alive = true;
+    }
+    void stop() override { alive = false; }
+    bool running() const override { return alive; }
+    int channels() const override { return alive ? 2 : 0; }
+  };
+
+  AppState a;
+  a.loadDefaults();
+  a.setRole(QStringLiteral("audio"));
+  CHECK(a.handlesAudio() && a.sendsAudio() && !a.receivesVideo());
+  a.setZoomName(0, QStringLiteral("Kakuu Ichiro"));
+  a.setMeetingId(QStringLiteral("123 4567 8901"));
+  FrameStore frames;
+  ZoomCredentials saved{QStringLiteral("SampleClientId_01"), QStringLiteral("sample-secret")};
+  auto* client = new ScriptedClient;
+  MeetingController m(a, frames, std::unique_ptr<backhaul::MeetingClient>(client),
+                      std::make_unique<MemoryCredentials>(&saved));
+  auto* speaker = new FakeSpeaker;
+  auto* asio = new FakeSpeaker;
+  asio->inputs = 5;
+  auto* mic = new FakeMic;
+  {
+    AudioController audio(a, std::unique_ptr<backhaul::AudioOutput>(speaker), std::unique_ptr<backhaul::AudioOutput>(asio),
+                          std::unique_ptr<backhaul::AudioInput>(mic));
+    // No sending thread in this test: blocks are handed over by calling pumpOnce().
+    std::vector<std::int16_t> got;
+    int gotChannels = 0;
+    audio.setSender([&](const std::int16_t* samples, std::size_t n, int channels) {
+      got.insert(got.end(), samples, samples + n * static_cast<std::size_t>(channels));
+      gotChannels = channels;
+      return true;
+    });
+    m.setMixer(audio.mixer());
+
+    // Without a recording device the PC joins with sound but sends none.
+    m.join();
+    CHECK(client->lastRequest.audio && !client->lastRequest.sendAudio);
+    m.leave();
+
+    // Sending settings. Stereo needs "original" or "music".
+    a.setSendStereo(true);
+    CHECK(!a.sendStereo());
+    a.setSendQuality(7);
+    CHECK(a.sendQuality() == 0);
+    a.setSendQuality(2);
+    CHECK(a.sendQuality() == 2 && a.sendStereo());
+
+    // A Windows recording device.
+    CHECK(audio.micAvailable());
+    CHECK(audio.micNames() == (QStringList{QStringLiteral("使わない"), QStringLiteral("サンプル卓入力A"),
+                                           QStringLiteral("サンプル卓入力B")}));
+    CHECK(audio.micIndex() == 0);
+    audio.chooseMic(9);  // not in the list
+    CHECK(audio.micIndex() == 0 && a.micDeviceName().isEmpty());
+    mic->refuse = true;
+    audio.chooseMic(2);
+    CHECK(audio.micIndex() == 0 && !audio.micProblem().isEmpty());
+    CHECK(a.micDeviceName() == QStringLiteral("サンプル卓入力B"));  // the wish is kept
+    mic->refuse = false;
+    audio.chooseMic(2);
+    CHECK(mic->alive && audio.micIndex() == 2 && audio.micProblem().isEmpty());
+    CHECK(audio.micNames().value(2) == QStringLiteral("サンプル卓入力B"));
+
+    // What the device records reaches the sender in 10 ms blocks, both sides kept apart.
+    std::vector<float> block(1000 * 2);
+    for (std::size_t i = 0; i < 1000; ++i) {
+      block[i * 2] = 0.5f;
+      block[i * 2 + 1] = -0.25f;
+    }
+    mic->sink->onCaptured(block.data(), 1000, 2);
+    CHECK(audio.pumpOnce() == 2);            // 960 of the 1000 frames
+    CHECK(got.size() == 960 * 2 && gotChannels == 2);
+    CHECK(got[0] == 16384 && got[1] == -8192);
+    CHECK(audio.pumpOnce() == 0);            // the rest waits for a full block
+    a.setSendQuality(0);                     // speech: one side, the average of both
+    got.clear();
+    mic->sink->onCaptured(block.data(), 1000, 2);
+    CHECK(audio.pumpOnce() == 2);
+    CHECK(got.size() == 960 && gotChannels == 1 && got[0] == 4096);
+    a.setSendQuality(2);
+
+    // Joining now asks the meeting to take the sound, with the chosen quality.
+    m.join();
+    CHECK(client->lastRequest.audio && client->lastRequest.sendAudio);
+    CHECK(client->lastRequest.sendQuality == backhaul::SendQuality::Music && client->lastRequest.sendStereo);
+    client->events->onMeetingState(MeetingState::Receiving, {});
+    client->events->onParticipants({person(10, "Kakuu Ichiro"), person(11, "Mihon Hanako")});
+    CHECK(client->wants.empty());  // a sound-only PC asks for no pictures
+    CHECK(slotData(a, 0, SlotModel::StateRole).toString() == QStringLiteral("ok"));
+    std::vector<std::int16_t> voice(480, 12000);
+    a.toggleRoute(0, 1);  // defaults already send slot 1 to channel 1: off...
+    a.toggleRoute(0, 1);  // ...and on again
+    client->events->onAudio(10, voice.data(), voice.size(), 48000, 1);
+    CHECK(audio.mixer()->takePeak(0) > 0.3f);  // voices are heard on this PC
+    client->taking = true;
+    CHECK(m.sendAudio(voice.data(), 240, 2));
+    CHECK(client->sent.size() == 480 && client->sentChannels == 2);
+    m.leave();
+
+    // A role that sends nothing stops the recording device and refuses to start one.
+    a.setRole(QStringLiteral("all"));
+    CHECK(!mic->alive && audio.micIndex() == 0);
+    audio.chooseMic(1);
+    CHECK(!mic->alive && !audio.micProblem().isEmpty());
+    a.setRole(QStringLiteral("audio"));
+    CHECK(mic->alive && audio.micIndex() == 1);  // chooseMic(1) was remembered as the wish
+
+    // ASIO: the inputs are pairs of the running output device.
+    audio.setAsio(true);
+    CHECK(!mic->alive && audio.micIndex() == 0 && a.micDeviceName().isEmpty());
+    CHECK(audio.micNames().size() == 1);
+    audio.chooseDevice(1);
+    CHECK(asio->alive);
+    CHECK(audio.micNames() == (QStringList{QStringLiteral("使わない"), QStringLiteral("入力 1-2"), QStringLiteral("入力 3-4"),
+                                           QStringLiteral("入力 5-6")}));
+    audio.chooseMic(2);
+    CHECK(audio.micIndex() == 2 && asio->sink != nullptr && a.micDeviceName() == QStringLiteral("入力 3-4"));
+    std::vector<float> five(480 * 5, 0.0f);
+    for (std::size_t i = 0; i < 480; ++i) {
+      five[i * 5 + 2] = 0.5f;   // input 3
+      five[i * 5 + 3] = 0.25f;  // input 4
+    }
+    got.clear();
+    asio->sink->onCaptured(five.data(), 480, 5);
+    CHECK(audio.pumpOnce() == 1);
+    CHECK(got.size() == 960 && got[958] == 16384 && got[959] == 8192);  // the chosen pair, left and right
+    audio.chooseDevice(0);  // the output device is switched off: its inputs go with it
+    CHECK(asio->sink == nullptr && audio.micIndex() == 0);
+    CHECK(a.micDeviceName() == QStringLiteral("入力 3-4"));
+    audio.chooseDevice(1);  // and come back with it
+    CHECK(audio.micIndex() == 2 && asio->sink != nullptr);
+
+    // The sending choices survive a restart; older files simply have none.
+    AppState b;
+    CHECK(b.applySettings(a.settingsJson()));
+    CHECK(b.micDeviceName() == QStringLiteral("入力 3-4") && b.sendQuality() == 2 && b.sendStereo());
+    QJsonObject old = a.settingsJson();
+    QJsonObject oldAudio = old.value(QStringLiteral("audio")).toObject();
+    oldAudio.remove(QStringLiteral("input"));
+    oldAudio.remove(QStringLiteral("sendQuality"));
+    oldAudio.remove(QStringLiteral("sendStereo"));
+    old[QStringLiteral("audio")] = oldAudio;
+    CHECK(b.applySettings(old));
+    CHECK(b.micDeviceName().isEmpty() && b.sendQuality() == 0 && !b.sendStereo());
+    oldAudio[QStringLiteral("input")] = QStringLiteral("x");
+    oldAudio[QStringLiteral("sendQuality")] = QStringLiteral("loud");
+    oldAudio[QStringLiteral("sendStereo")] = false;
+    old[QStringLiteral("audio")] = oldAudio;
+    CHECK(!b.applySettings(old));
+  }
 }
 
 int main(int argc, char* argv[]) {
@@ -539,6 +731,7 @@ int main(int argc, char* argv[]) {
 
   testCameraRole();
   testTwoShotRole();
+  testAudioRole();
 
   if (testing::failures() == 0) {
     std::printf("all meeting controller tests passed\n");

@@ -11,6 +11,7 @@ enum class Role {
   All,      // every slot, picture and sound, on this one PC
   Camera,   // one person, full screen
   TwoShot,  // two people side by side in one picture
+  Audio,    // the meeting's voices to the sound desk, and the venue's sound to the meeting
 };
 
 // How many person slots the role uses, counted from the first; 0 means all of them.
@@ -18,6 +19,12 @@ int personSlotsOf(Role role);
 
 // Whether this PC takes the meeting's sound. Only one PC per meeting should.
 bool handlesAudio(Role role);
+
+// Whether this PC shows anyone's picture. A sound-only PC receives no video at all.
+bool receivesVideo(Role role);
+
+// Whether this PC sends a device's sound into the meeting (the venue's mix-minus).
+bool sendsAudio(Role role);
 
 // Name used in the settings file ("" for Unset).
 const char* keyOf(Role role);

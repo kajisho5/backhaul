@@ -6,11 +6,16 @@
 #include <QString>
 #include <QStringList>
 #include <QTimer>
+#include <QVariantList>
+#include <atomic>
+#include <functional>
 #include <memory>
+#include <thread>
 #include <vector>
 
 #include "audio/audio_output.h"
 #include "core/audio_mixer.h"
+#include "core/mic_feed.h"
 
 class AppState;
 
@@ -24,13 +29,24 @@ class AudioController : public QObject {
   Q_PROPERTY(QStringList deviceNames READ deviceNames NOTIFY changed)
   Q_PROPERTY(int deviceIndex READ deviceIndex NOTIFY changed)
   Q_PROPERTY(QString problem READ problem NOTIFY changed)
+  // Level of each output channel of the running device, 0..1 (same scale as the slot meters).
+  Q_PROPERTY(QVariantList outputLevels READ outputLevels NOTIFY levelsChanged)
+  // Recording side (sound sent into the meeting). Entry 0 is "not used". With ASIO the
+  // entries are input pairs of the running output device; otherwise Windows recording devices.
+  Q_PROPERTY(bool micAvailable READ micAvailable NOTIFY changed)
+  Q_PROPERTY(QStringList micNames READ micNames NOTIFY changed)
+  Q_PROPERTY(int micIndex READ micIndex NOTIFY changed)
+  Q_PROPERTY(QString micProblem READ micProblem NOTIFY changed)
+  Q_PROPERTY(QVariantList micLevels READ micLevels NOTIFY levelsChanged)  // left, right
 
  public:
   static constexpr int kSources = 20;  // every possible slot: 16 people and 4 slides
 
   // `output` is the system's own output; `asio` may be null.
+  // `input` is the system's recording side; it may be null like the others.
   AudioController(AppState& app, std::unique_ptr<backhaul::AudioOutput> output,
-                  std::unique_ptr<backhaul::AudioOutput> asio = nullptr, QObject* parent = nullptr);
+                  std::unique_ptr<backhaul::AudioOutput> asio = nullptr,
+                  std::unique_ptr<backhaul::AudioInput> input = nullptr, QObject* parent = nullptr);
   ~AudioController() override;
 
   backhaul::AudioMixer* mixer() { return &mixer_; }
@@ -39,22 +55,54 @@ class AudioController : public QObject {
   QStringList deviceNames() const;
   int deviceIndex() const { return deviceIndex_; }
   QString problem() const { return problem_; }
+  QVariantList outputLevels() const { return outputLevels_; }
+  bool micAvailable() const;
+  QStringList micNames() const;
+  int micIndex() const { return micIndex_; }
+  QString micProblem() const { return micProblem_; }
+  QVariantList micLevels() const { return micLevels_; }
+
+  using Sender = std::function<bool(const std::int16_t* samples, std::size_t frames, int channels)>;
+  // Where recorded sound goes, in blocks of 10 ms, on a thread of this object.
+  // Set once, before a recording device is chosen; must stay valid until this object is gone.
+  void setSender(Sender sender);
+  // The sending thread's work, also callable from a test: hands over every full 10 ms block
+  // that is waiting. Returns the number of blocks handed over.
+  int pumpOnce();
+  backhaul::MicFeed* micFeed() { return &feed_; }
 
   Q_INVOKABLE void refreshDevices();
   Q_INVOKABLE void chooseDevice(int index);
   // Switches between ASIO and the system output. The device has to be chosen again afterwards.
   Q_INVOKABLE void setAsio(bool asio);
+  Q_INVOKABLE void chooseMic(int index);
+  // Reads the list of recording devices again (something was plugged in).
+  Q_INVOKABLE void refreshMics();
 
   // Starts the device named in the settings, if it is present. Call once after loading settings.
   void startSaved();
 
  signals:
   void changed();
+  void levelsChanged();
 
  private:
   void syncSlots();
   void tick();
   bool startDevice(int index);
+  bool startMic(int index);
+  void stopMic();
+  void startSavedMic();
+  void pump();
+
+  // Recorded sound arrives here on a device thread.
+  struct Sink final : backhaul::AudioSink {
+    backhaul::MicFeed* feed = nullptr;
+    std::atomic<int> firstChannel{0};
+    void onCaptured(const float* interleaved, std::size_t frames, int channels) override {
+      feed->write(interleaved, frames, channels, firstChannel.load(std::memory_order_relaxed));
+    }
+  };
 
   AppState& app_;
   backhaul::AudioMixer mixer_{kSources};
@@ -65,4 +113,18 @@ class AudioController : public QObject {
   int deviceIndex_ = 0;
   QString problem_;
   QTimer timer_;
+  QVariantList outputLevels_;
+
+  std::unique_ptr<backhaul::AudioInput> input_;
+  std::vector<backhaul::AudioDevice> mics_;  // system recording devices (not used with ASIO)
+  int micPairs_ = 0;                         // ASIO: input pairs of the running device
+  int micIndex_ = 0;
+  QString micProblem_;
+  QVariantList micLevels_;
+  backhaul::MicFeed feed_;
+  Sink sink_;
+  Sender sender_;
+  std::atomic<bool> stereo_{false};
+  std::atomic<bool> pumpStop_{false};
+  std::thread pumpThread_;
 };

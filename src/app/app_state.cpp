@@ -360,6 +360,10 @@ QJsonObject AppState::settingsJson() const {
   QJsonObject audio;
   audio[QStringLiteral("method")] = audioAsio_ ? QStringLiteral("asio") : QStringLiteral("wasapi");
   audio[QStringLiteral("device")] = audioDeviceName_;
+  audio[QStringLiteral("input")] = micDeviceName_;
+  audio[QStringLiteral("sendQuality")] =
+      sendQuality_ == 2 ? QStringLiteral("music") : sendQuality_ == 1 ? QStringLiteral("original") : QStringLiteral("speech");
+  audio[QStringLiteral("sendStereo")] = sendStereo_;
 
   QJsonObject root;
   root[QStringLiteral("format")] = 1;
@@ -398,6 +402,21 @@ bool AppState::applySettings(const QJsonObject& settings) {
   const QString method = audio.value(QStringLiteral("method")).toString();
   if (method != QStringLiteral("asio") && method != QStringLiteral("wasapi")) return false;
   if (!audio.value(QStringLiteral("device")).isString()) return false;
+
+  // Sending side: absent in files written before the sound role existed.
+  QString micDevice;
+  int sendQuality = 0;
+  bool sendStereo = false;
+  if (audio.contains(QStringLiteral("input"))) {
+    const QString quality = audio.value(QStringLiteral("sendQuality")).toString();
+    if (!audio.value(QStringLiteral("input")).isString() || !audio.value(QStringLiteral("sendStereo")).isBool() ||
+        (quality != QStringLiteral("speech") && quality != QStringLiteral("original") && quality != QStringLiteral("music"))) {
+      return false;
+    }
+    micDevice = audio.value(QStringLiteral("input")).toString().left(kMaxZoomNameLength);
+    sendQuality = quality == QStringLiteral("music") ? 2 : quality == QStringLiteral("original") ? 1 : 0;
+    sendStereo = audio.value(QStringLiteral("sendStereo")).toBool();
+  }
 
   QVector<SlotRow> people;
   QVector<SlotRow> shares;
@@ -530,6 +549,9 @@ bool AppState::applySettings(const QJsonObject& settings) {
   emit roleChanged();
   audioAsio_ = method == QStringLiteral("asio");
   audioDeviceName_ = audio.value(QStringLiteral("device")).toString().left(kMaxZoomNameLength);
+  micDeviceName_ = micDevice;
+  sendQuality_ = sendQuality;
+  sendStereo_ = sendStereo;
   selected_ = 0;
   emit selectedChanged();
   emit changed();
@@ -566,6 +588,9 @@ void AppState::loadDefaults() {
   emit roleChanged();
   audioAsio_ = false;
   audioDeviceName_.clear();
+  micDeviceName_.clear();
+  sendQuality_ = 0;
+  sendStereo_ = false;
   selected_ = 0;
   emit selectedChanged();
   emit changed();
@@ -687,6 +712,28 @@ void AppState::setJoinName(const QString& text) {
 void AppState::setQualityAuto(bool on) {
   if (on == qualityAuto_) return;
   qualityAuto_ = on;
+  emit changed();
+  emit settingsEdited();
+}
+
+void AppState::setMicDeviceName(const QString& name) {
+  const QString value = name.left(kMaxZoomNameLength);
+  if (value == micDeviceName_) return;
+  micDeviceName_ = value;
+  emit changed();
+  emit settingsEdited();
+}
+
+void AppState::setSendQuality(int quality) {
+  if (quality < 0 || quality > 2 || quality == sendQuality_) return;
+  sendQuality_ = quality;
+  emit changed();
+  emit settingsEdited();
+}
+
+void AppState::setSendStereo(bool stereo) {
+  if (stereo == sendStereo_) return;
+  sendStereo_ = stereo;
   emit changed();
   emit settingsEdited();
 }

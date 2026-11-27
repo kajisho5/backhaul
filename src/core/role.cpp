@@ -7,25 +7,31 @@ int personSlotsOf(Role role) {
     case Role::Camera: return 1;
     case Role::TwoShot: return 2;
     case Role::Unset:
-    case Role::All: break;
+    case Role::All:
+    case Role::Audio: break;
   }
   return 0;
 }
 
-bool handlesAudio(Role role) { return role == Role::All; }
+bool handlesAudio(Role role) { return role == Role::All || role == Role::Audio; }
+
+bool receivesVideo(Role role) { return role != Role::Audio && role != Role::Unset; }
+
+bool sendsAudio(Role role) { return role == Role::Audio; }
 
 const char* keyOf(Role role) {
   switch (role) {
     case Role::All: return "all";
     case Role::Camera: return "camera";
     case Role::TwoShot: return "twoshot";
+    case Role::Audio: return "audio";
     case Role::Unset: break;
   }
   return "";
 }
 
 bool roleFromKey(std::string_view key, Role* out) {
-  for (const Role r : {Role::Unset, Role::All, Role::Camera, Role::TwoShot}) {
+  for (const Role r : {Role::Unset, Role::All, Role::Camera, Role::TwoShot, Role::Audio}) {
     if (key == keyOf(r)) {
       *out = r;
       return true;

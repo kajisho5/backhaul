@@ -6,7 +6,7 @@ Rectangle {
     id: bar
     signal settingsRequested()
     signal roleRequested()
-    readonly property var roleNames: ({ all: "1台でぜんぶ", camera: "カメラ（1人）", twoshot: "2ショット" })
+    readonly property var roleNames: ({ all: "1台でぜんぶ", camera: "カメラ（1人）", twoshot: "2ショット", audio: "音声" })
     color: Theme.bg
     implicitHeight: 48
 
@@ -41,7 +41,7 @@ Rectangle {
         }
         Row {
             spacing: 6
-            visible: app.audioDevice.length > 0 && app.handlesAudio
+            visible: app.audioDevice.length > 0 && app.role === "all"
             Text { text: "音声"; color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 13 }
             Text { text: app.audioDevice; color: Theme.ink; font.family: app.sansFamily; font.pixelSize: 13 }
             Text {

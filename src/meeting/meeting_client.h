@@ -10,6 +10,13 @@
 
 namespace backhaul {
 
+// How the sound this PC sends is treated by the meeting service.
+enum class SendQuality {
+  Speech,    // the service's usual processing for talking
+  Original,  // no processing
+  Music,     // no processing, higher quality for music
+};
+
 struct JoinRequest {
   std::string clientId;      // Zoom app credentials (UTF-8)
   std::string clientSecret;
@@ -18,6 +25,9 @@ struct JoinRequest {
   std::string passcode;      // may be empty
   std::string zak;           // may be empty; needed for meetings of other accounts
   bool audio = true;         // false: do not join the meeting's sound at all (another PC handles it)
+  bool sendAudio = false;    // this PC sends a device's sound into the meeting (needs `audio`)
+  SendQuality sendQuality = SendQuality::Speech;
+  bool sendStereo = false;   // only with Original or Music
 };
 
 enum class MeetingState {
@@ -82,6 +92,14 @@ class MeetingClient {
   virtual void leave() = 0;
   // Whose picture to receive, and how large. Replaces the previous list.
   virtual void setVideoWants(const std::vector<VideoWant>& wants) = 0;
+  // Sound for the meeting: 16-bit, 48 kHz, `frames` per channel (1 or 2 channels,
+  // interleaved), at most 100 ms per call. May be called from any one thread.
+  // False when it cannot be sent right now (not in a meeting, muted, not asked for).
+  virtual bool sendAudio(const std::int16_t* samples, std::size_t frames, int channels) = 0;
+  // Whether the meeting is taking the sound at this moment, and if not, why
+  // (empty when there is nothing to say).
+  virtual bool sendingAudio() const = 0;
+  virtual std::string sendAudioNote() const = 0;
   // Call a few times per second from the thread that called join(): reports
   // changes in the participant list (camera, mute, names, roles).
   virtual void poll() = 0;

@@ -123,9 +123,19 @@ void MeetingController::join() {
   request.passcode = passcode_.toStdString();
   request.zak = zak_.trimmed().toStdString();
   request.audio = app_.handlesAudio();
+  request.sendAudio = app_.sendsAudio() && !app_.micDeviceName().isEmpty();
+  request.sendQuality = app_.sendQuality() == 2   ? backhaul::SendQuality::Music
+                        : app_.sendQuality() == 1 ? backhaul::SendQuality::Original
+                                                  : backhaul::SendQuality::Speech;
+  request.sendStereo = app_.sendStereo();
   authenticated_ = false;
   detail_.clear();
   client_->join(request, this);  // reports through onMeetingState, also when it cannot start
+}
+
+bool MeetingController::sendAudio(const std::int16_t* samples, std::size_t frames, int channels) {
+  // client_ is set once in the constructor and outlives every caller.
+  return client_ != nullptr && client_->sendAudio(samples, frames, channels);
 }
 
 void MeetingController::leave() {
@@ -160,6 +170,8 @@ void MeetingController::onMeetingState(MeetingState state, const std::string& de
     secondTimer_.start();
   }
   if (!live) {
+    sendingAudio_ = false;
+    sendNote_.clear();
     pollTimer_.stop();
     secondTimer_.stop();
     everyone_.clear();
@@ -307,6 +319,7 @@ void MeetingController::updateWants() {
     const QMutexLocker lock(&routeMutex_);
     slotByUser = slotByUser_;
   }
+  if (!app_.receivesVideo()) slotByUser.clear();  // a sound-only PC asks for no pictures
   const backhaul::QualityCap cap = app_.qualityAuto() ? backhaul::QualityCap::Auto : backhaul::QualityCap::Max720;
   const backhaul::VideoSize size =
       toVideoSize(backhaul::pickPersonResolution(static_cast<int>(slotByUser.size()), cap));
@@ -336,6 +349,15 @@ void MeetingController::onVideoFrame(std::uint32_t userId, const backhaul::Video
 }
 
 void MeetingController::everySecond() {
+  if (client_ != nullptr) {
+    const bool sending = client_->sendingAudio();
+    const QString note = QString::fromStdString(client_->sendAudioNote());
+    if (sending != sendingAudio_ || note != sendNote_) {
+      sendingAudio_ = sending;
+      sendNote_ = note;
+      emit changed();
+    }
+  }
   if (joinedAtMs_ != 0) {
     const qint64 s = (QDateTime::currentMSecsSinceEpoch() - joinedAtMs_) / 1000;
     app_.elapsed_ = QStringLiteral("%1:%2:%3")
