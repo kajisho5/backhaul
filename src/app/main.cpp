@@ -1,5 +1,6 @@
 #include <QCommandLineParser>
 #include <QGuiApplication>
+#include <QIcon>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QQuickWindow>
@@ -15,6 +16,7 @@ int main(int argc, char* argv[]) {
   QGuiApplication qtApp(argc, argv);
   QGuiApplication::setApplicationName(QStringLiteral("backhaul"));
   QGuiApplication::setApplicationVersion(QStringLiteral("0.1.0"));
+  QGuiApplication::setWindowIcon(QIcon(QStringLiteral(":/icon-256.png")));
 
   QCommandLineParser args;
   args.addHelpOption();
