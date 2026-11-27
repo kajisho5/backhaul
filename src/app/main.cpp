@@ -88,11 +88,12 @@ int main(int argc, char* argv[]) {
   MeetingController meeting(state, frames, demo ? nullptr : backhaul::makeMeetingClient(),
                             demo ? nullptr : makeCredentialStore());
 
+  // While the operator has paused sending, the sound stays here too. Declared before
+  // `audio` so that it is still there when audio's sending thread makes its last call.
+  std::atomic<bool> sendPaused{false};
   AudioController audio(state, demo ? nullptr : backhaul::makeAudioOutput(),
                         demo ? nullptr : backhaul::makeAsioOutput(), demo ? nullptr : backhaul::makeAudioInput());
   // `meeting` is created before `audio` and so outlives it and its sending thread.
-  // While the operator has paused sending, the sound stays here too.
-  std::atomic<bool> sendPaused{false};
   audio.setSender([&meeting, &sendPaused](const std::int16_t* samples, std::size_t frames, int channels) {
     return !sendPaused.load(std::memory_order_relaxed) && meeting.sendAudio(samples, frames, channels);
   });

@@ -388,6 +388,17 @@ int main(int argc, char* argv[]) {
     a.setRole(QStringLiteral("all"));
     CHECK(a.displays()->rows()[2].slot == -1);
 
+    // PCs that show no pictures open no output window, even on monitors set up for "everything".
+    a.setDisplayChoice(1, 1);
+    CHECK(a.displays()->rows()[1].slot == 0);
+    a.setRole(QStringLiteral("audio"));
+    CHECK(a.displays()->rows()[1].slot == -1 && a.displays()->rows()[2].slot == -1);
+    a.setRole(QStringLiteral("return"));
+    CHECK(a.displays()->rows()[1].slot == -1 && a.displays()->rows()[2].slot == -1);
+    a.setRole(QStringLiteral("all"));
+    CHECK(a.displays()->rows()[1].slot == 0);  // the set-up is still there
+    a.setDisplayChoice(1, 0);
+
     // Files from before roles existed belong to PCs that did everything.
     QJsonObject old = a.settingsJson();
     old.remove(QStringLiteral("role"));

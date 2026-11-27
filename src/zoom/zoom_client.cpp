@@ -357,6 +357,7 @@ class ZoomClient final : public MeetingClient,
       }
     }
     if (inMeeting_ && request_.audio && request_.sendAudio) keepSending(everyone);
+    if (inMeeting_ && request_.audio && !request_.sendAudio) keepMuted(everyone);
     if (inMeeting_ && request_.sendVideo != SendVideo::None) keepSendingVideo();
     if (everyone != lastParticipants_) {
       lastParticipants_ = everyone;
@@ -689,6 +690,16 @@ class ZoomClient final : public MeetingClient,
     videoSet_ = false;
     shareRateNote_.clear();
     setVideoNote({});
+  }
+
+  // A PC that only plays the meeting's voices must never send this PC's own microphone:
+  // joining the sound opens the default microphone, and the meeting may let people in unmuted.
+  void keepMuted(const std::vector<Participant>& everyone) {
+    for (const Participant& p : everyone) {
+      if (!p.isSelf || p.audioMuted) continue;
+      sdk::IMeetingAudioController* audio = meeting_->GetMeetingAudioController();
+      if (audio != nullptr) audio->MuteAudio(p.id, true);
+    }
   }
 
   void stopSending() {

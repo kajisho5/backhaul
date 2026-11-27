@@ -368,7 +368,8 @@ QJsonObject AppState::settingsJson() const {
     QJsonObject slot;
     slot[QStringLiteral("kind")] = isShare(r) ? QStringLiteral("share") : QStringLiteral("person");
     slot[QStringLiteral("label")] = r.label;
-    slot[QStringLiteral("zoomName")] = r.zoomName;
+    // A slide slot has no person set up for it; what it shows there is who shares right now.
+    slot[QStringLiteral("zoomName")] = isShare(r) ? QString() : r.zoomName;
     slot[QStringLiteral("freezeOnLoss")] = r.situation.onDisconnect == backhaul::DisconnectPolicy::Freeze;
     slot[QStringLiteral("gainDb")] = r.gainDb;
     slot[QStringLiteral("delayMs")] = r.delayMs;
@@ -479,6 +480,7 @@ bool AppState::applySettings(const QJsonObject& settings) {
       const QJsonValue crop = slot.value(QStringLiteral("cropTo169"));
       if (!crop.isBool()) return false;
       r.cropTo169 = crop.toBool();
+      r.zoomName.clear();  // older files may hold the name of whoever shared last
       shares.push_back(r);
     } else {
       people.push_back(r);
@@ -666,8 +668,12 @@ void AppState::refreshDisplays() {
     // Single-output roles send their one picture to one monitor; the slot-by-monitor
     // table belongs to the "everything" role and is left alone meanwhile.
     const bool single = backhaul::singleOutput(role_);
-    const int slot = single ? (s.key == roleScreen_ && roleRow() < slotRows.size() ? roleRow() : -1)
-                            : slotByScreen_.value(s.key, -1);
+    // A PC whose role shows no pictures (sound, return) opens no output window at all,
+    // whatever monitors were set up for another role.
+    const bool pictures = backhaul::receivesVideo(role_) || role_ == backhaul::Role::Unset;
+    const int slot = !pictures ? -1
+                     : single  ? (s.key == roleScreen_ && roleRow() >= 0 && roleRow() < slotRows.size() ? roleRow() : -1)
+                               : slotByScreen_.value(s.key, -1);
     if (r.isOperator) {
       r.slotText = QStringLiteral("操作画面（このPCの画面）");
     } else if (slot >= 0 && slot < slotRows.size()) {
