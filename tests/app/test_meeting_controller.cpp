@@ -17,9 +17,9 @@ using backhaul::VideoSize;
 // play the part of Zoom.
 class ScriptedClient final : public backhaul::MeetingClient {
  public:
-  bool join(const backhaul::JoinRequest& request, backhaul::MeetingEvents* events) override {
+  bool join(const backhaul::JoinRequest& request, backhaul::MeetingEvents* sink) override {
     lastRequest = request;
-    this->events = events;
+    events = sink;
     ++joins;
     events->onMeetingState(MeetingState::Authenticating, {});
     return true;
