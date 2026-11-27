@@ -5,6 +5,7 @@
 void testAspectFit();
 void testAudioMixer();
 void testDelayLine();
+void testMicFeed();
 void testQualityPolicy();
 void testResampler();
 void testRole();
@@ -17,6 +18,7 @@ int main() {
   testAspectFit();
   testAudioMixer();
   testDelayLine();
+  testMicFeed();
   testQualityPolicy();
   testResampler();
   testRole();

@@ -26,6 +26,13 @@ class AppState : public QObject {
   Q_PROPERTY(QString audioDevice READ audioDevice NOTIFY changed)
   Q_PROPERTY(QString audioDeviceName MEMBER audioDeviceName_ NOTIFY changed)
   Q_PROPERTY(bool audioAsio READ audioAsio WRITE setAudioAsio NOTIFY changed)
+  // Sound sent into the meeting (the sound role): the recording device by name, how the
+  // meeting treats it (0 speech, 1 original, 2 music) and whether both sides are sent.
+  Q_PROPERTY(QString micDeviceName READ micDeviceName NOTIFY changed)
+  Q_PROPERTY(int sendQuality READ sendQuality WRITE setSendQuality NOTIFY changed)
+  Q_PROPERTY(bool sendStereo READ sendStereo WRITE setSendStereo NOTIFY changed)
+  Q_PROPERTY(bool sendsAudio READ sendsAudio NOTIFY roleChanged)
+  Q_PROPERTY(bool receivesVideo READ receivesVideo NOTIFY roleChanged)
   Q_PROPERTY(int audioChannels MEMBER audioChannels_ NOTIFY changed)
   Q_PROPERTY(int audioSampleRate MEMBER audioSampleRate_ NOTIFY changed)
   Q_PROPERTY(QString meetingId READ meetingId WRITE setMeetingId NOTIFY changed)
@@ -81,6 +88,15 @@ class AppState : public QObject {
   bool audioAsio() const { return audioAsio_; }
   void setAudioAsio(bool asio);
   void setAudioDeviceName(const QString& name);
+  QString micDeviceName() const { return micDeviceName_; }
+  void setMicDeviceName(const QString& name);
+  int sendQuality() const { return sendQuality_; }
+  void setSendQuality(int quality);
+  // Stereo needs "original" or "music": with speech processing the meeting sends one side only.
+  bool sendStereo() const { return sendStereo_ && sendQuality_ != 0; }
+  void setSendStereo(bool stereo);
+  bool sendsAudio() const { return backhaul::sendsAudio(role_); }
+  bool receivesVideo() const { return backhaul::receivesVideo(role_); }
   // Slides that are not 16:9: true cuts them to 16:9, false shows all with black bars.
   bool cropSlides() const;
   void setCropSlides(bool crop);
@@ -183,6 +199,9 @@ class AppState : public QObject {
 
  private:
   backhaul::Role role_ = backhaul::Role::Unset;
+  QString micDeviceName_;
+  int sendQuality_ = 0;
+  bool sendStereo_ = false;
   QString roleScreen_;
   bool twoShotSwapped_ = false, twoShotFill_ = true, twoShotSolo_ = false;
   int twoShotSplit_ = 0;

@@ -1,4 +1,4 @@
-// AudioOutput on Steinberg ASIO. Built only when the ASIO SDK is given to the build
+// AudioOutput on Steinberg ASIO, including the driver's inputs. Built only when the ASIO SDK is given to the build
 // (BACKHAUL_ASIO_SDK_DIR); the SDK itself is not part of this repository.
 // The driver runs on a thread of its own with a message loop, as ASIO drivers expect.
 #include <windows.h>
@@ -30,6 +30,7 @@ namespace {
 
 constexpr long kMaxDrivers = 64;
 constexpr int kMaxOutputs = 64;
+constexpr int kMaxInputs = 64;
 
 std::string asioError(const char* what, ASIOError code) {
   return std::string(what) + " (" + std::to_string(static_cast<long>(code)) + ")";
@@ -84,10 +85,13 @@ class AsioOutput final : public AudioOutput {
     }
     running_ = false;
     channels_ = 0;
+    inputChannels_ = 0;
   }
 
   bool running() const override { return running_; }
   int channels() const override { return channels_; }
+  int inputChannels() const override { return inputChannels_; }
+  void setInputSink(AudioSink* sink) override { sink_.store(sink, std::memory_order_release); }
 
  private:
   // Driver names are in the system's legacy code page.
@@ -152,6 +156,50 @@ class AsioOutput final : public AudioOutput {
     }
   }
 
+  // One channel from the driver's buffer into the interleaved float block.
+  static void readChannel(const void* in, ASIOSampleType type, long frames, float* interleaved, int channel,
+                          int channels) {
+    float* out = interleaved + channel;
+    switch (type) {
+      case ASIOSTFloat32LSB: {
+        const float* src = static_cast<const float*>(in);
+        for (long i = 0; i < frames; ++i) out[static_cast<std::ptrdiff_t>(i) * channels] = src[i];
+        break;
+      }
+      case ASIOSTFloat64LSB: {
+        const double* src = static_cast<const double*>(in);
+        for (long i = 0; i < frames; ++i) out[static_cast<std::ptrdiff_t>(i) * channels] = static_cast<float>(src[i]);
+        break;
+      }
+      case ASIOSTInt32LSB: {
+        const std::int32_t* src = static_cast<const std::int32_t*>(in);
+        for (long i = 0; i < frames; ++i) {
+          out[static_cast<std::ptrdiff_t>(i) * channels] = static_cast<float>(static_cast<double>(src[i]) / 2147483648.0);
+        }
+        break;
+      }
+      case ASIOSTInt24LSB: {
+        const std::uint8_t* src = static_cast<const std::uint8_t*>(in);
+        for (long i = 0; i < frames; ++i) {
+          // Assemble in the top three bytes so the sign comes out right.
+          const std::uint32_t raw = (static_cast<std::uint32_t>(src[i * 3]) << 8) |
+                                    (static_cast<std::uint32_t>(src[i * 3 + 1]) << 16) |
+                                    (static_cast<std::uint32_t>(src[i * 3 + 2]) << 24);
+          out[static_cast<std::ptrdiff_t>(i) * channels] =
+              static_cast<float>(static_cast<double>(static_cast<std::int32_t>(raw)) / 2147483648.0);
+        }
+        break;
+      }
+      case ASIOSTInt16LSB: {
+        const std::int16_t* src = static_cast<const std::int16_t*>(in);
+        for (long i = 0; i < frames; ++i) out[static_cast<std::ptrdiff_t>(i) * channels] = static_cast<float>(src[i]) / 32768.0f;
+        break;
+      }
+      default:
+        break;
+    }
+  }
+
   static std::int32_t toInt(float sample, double fullScale) {
     double v = static_cast<double>(sample);
     if (v > 1.0) v = 1.0;
@@ -167,6 +215,16 @@ class AsioOutput final : public AudioOutput {
       if (target != nullptr) writeChannel(block_.data(), c, outputs_, bufferFrames_, target, types_[static_cast<std::size_t>(c)]);
     }
     if (outputReady_) ASIOOutputReady();
+
+    AudioSink* sink = sink_.load(std::memory_order_acquire);
+    if (sink != nullptr && inputs_ > 0) {
+      for (int c = 0; c < inputs_; ++c) {
+        const std::size_t at = static_cast<std::size_t>(outputs_ + c);
+        const void* source = buffers_[at].buffers[index];
+        if (source != nullptr) readChannel(source, types_[at], bufferFrames_, inBlock_.data(), c, inputs_);
+      }
+      sink->onCaptured(inBlock_.data(), static_cast<std::size_t>(bufferFrames_), inputs_);
+    }
   }
 
   static void onBufferSwitch(long index, ASIOBool) {
@@ -224,6 +282,7 @@ class AsioOutput final : public AudioOutput {
       r = ASIOGetChannels(&inputs, &outputs);
       if (r != ASE_OK || outputs < 1) return asioError("no output channels", r);
       outputs_ = static_cast<int>(outputs > kMaxOutputs ? kMaxOutputs : outputs);
+      inputs_ = static_cast<int>(inputs < 0 ? 0 : (inputs > kMaxInputs ? kMaxInputs : inputs));
 
       ASIOSampleRate rate = 0.0;
       if (ASIOGetSampleRate(&rate) != ASE_OK || rate != static_cast<double>(AudioMixer::kRate)) {
@@ -236,29 +295,35 @@ class AsioOutput final : public AudioOutput {
       if (r != ASE_OK || preferred < 1 || preferred > 1 << 16) return asioError("buffer size", r);
       bufferFrames_ = preferred;
 
-      buffers_.assign(static_cast<std::size_t>(outputs_), ASIOBufferInfo{});
+      // Outputs first, then the inputs: both directions run on the one driver.
+      buffers_.assign(static_cast<std::size_t>(outputs_ + inputs_), ASIOBufferInfo{});
       for (int c = 0; c < outputs_; ++c) {
         buffers_[static_cast<std::size_t>(c)].isInput = ASIOFalse;
         buffers_[static_cast<std::size_t>(c)].channelNum = c;
+      }
+      for (int c = 0; c < inputs_; ++c) {
+        buffers_[static_cast<std::size_t>(outputs_ + c)].isInput = ASIOTrue;
+        buffers_[static_cast<std::size_t>(outputs_ + c)].channelNum = c;
       }
       callbacks_.bufferSwitch = &AsioOutput::onBufferSwitch;
       callbacks_.sampleRateDidChange = &AsioOutput::onSampleRateChanged;
       callbacks_.asioMessage = &AsioOutput::onMessage;
       callbacks_.bufferSwitchTimeInfo = &AsioOutput::onBufferSwitchTimeInfo;
-      r = ASIOCreateBuffers(buffers_.data(), outputs_, bufferFrames_, &callbacks_);
+      r = ASIOCreateBuffers(buffers_.data(), outputs_ + inputs_, bufferFrames_, &callbacks_);
       if (r != ASE_OK) return asioError("buffers", r);
       haveBuffers = true;
 
-      types_.assign(static_cast<std::size_t>(outputs_), ASIOSTInt32LSB);
-      for (int c = 0; c < outputs_; ++c) {
+      types_.assign(static_cast<std::size_t>(outputs_ + inputs_), ASIOSTInt32LSB);
+      for (int c = 0; c < outputs_ + inputs_; ++c) {
         ASIOChannelInfo channel{};
-        channel.channel = c;
-        channel.isInput = ASIOFalse;
+        channel.channel = c < outputs_ ? c : c - outputs_;
+        channel.isInput = c < outputs_ ? ASIOFalse : ASIOTrue;
         r = ASIOGetChannelInfo(&channel);
         if (r != ASE_OK) return asioError("channel info", r);
         if (!supported(channel.type)) return "sample format " + std::to_string(static_cast<long>(channel.type)) + " is not supported";
         types_[static_cast<std::size_t>(c)] = channel.type;
       }
+      inBlock_.assign(static_cast<std::size_t>(bufferFrames_) * static_cast<std::size_t>(inputs_), 0.0f);
       block_.assign(static_cast<std::size_t>(bufferFrames_) * static_cast<std::size_t>(outputs_), 0.0f);
       outputReady_ = ASIOOutputReady() == ASE_OK;
       mixer_ = mixer;
@@ -271,6 +336,7 @@ class AsioOutput final : public AudioOutput {
 
     if (problem.empty()) {
       channels_ = outputs_;
+      inputChannels_ = inputs_;
       running_ = true;
       ready.set_value({});
       while (!stopRequested_) {
@@ -289,6 +355,7 @@ class AsioOutput final : public AudioOutput {
     if (loaded && asioDrivers != nullptr) asioDrivers->removeCurrentDriver();
     if (com) CoUninitialize();
     running_ = false;
+    inputChannels_ = 0;
     if (!problem.empty()) ready.set_value(problem);
   }
 
@@ -297,15 +364,19 @@ class AsioOutput final : public AudioOutput {
   std::atomic<bool> stopRequested_{false};
   std::atomic<bool> running_{false};
   std::atomic<int> channels_{0};
+  std::atomic<int> inputChannels_{0};
+  std::atomic<AudioSink*> sink_{nullptr};
 
   // Set up on the driver thread before the callbacks start; read by the callbacks.
   AudioMixer* mixer_ = nullptr;
   int outputs_ = 0;
+  int inputs_ = 0;
   long bufferFrames_ = 0;
   bool outputReady_ = false;
   std::vector<ASIOBufferInfo> buffers_;
   std::vector<ASIOSampleType> types_;
   std::vector<float> block_;
+  std::vector<float> inBlock_;
   ASIOCallbacks callbacks_{};
 };
 

@@ -1,7 +1,7 @@
 # Sound devices. Windows: WASAPI, and Steinberg ASIO when its SDK is given to the build.
 # Elsewhere there is no output (the mixer is still tested).
 if(WIN32)
-  add_library(backhaul_audio STATIC wasapi_output.cpp audio_output.h)
+  add_library(backhaul_audio STATIC wasapi_output.cpp wasapi_input.cpp wasapi_common.h audio_output.h)
   target_link_libraries(backhaul_audio PRIVATE ole32)
   target_compile_definitions(backhaul_audio PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
 else()

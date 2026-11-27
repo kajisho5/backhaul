@@ -9,15 +9,23 @@ void testRole() {
   CHECK(personSlotsOf(Role::TwoShot) == 2);
   CHECK(personSlotsOf(Role::All) == 0);
   CHECK(personSlotsOf(Role::Unset) == 0);
+  CHECK(personSlotsOf(Role::Audio) == 0);  // every person can be given an output channel
 
-  // Only the "everything" role takes the meeting's sound.
+  // The "everything" role and the sound role take the meeting's sound.
   CHECK(handlesAudio(Role::All));
   CHECK(!handlesAudio(Role::Camera));
   CHECK(!handlesAudio(Role::TwoShot));
   CHECK(!handlesAudio(Role::Unset));
+  CHECK(handlesAudio(Role::Audio));
+
+  // The sound PC shows nobody and is the only one that sends sound into the meeting.
+  CHECK(!receivesVideo(Role::Audio) && !receivesVideo(Role::Unset));
+  CHECK(receivesVideo(Role::All) && receivesVideo(Role::Camera) && receivesVideo(Role::TwoShot));
+  CHECK(sendsAudio(Role::Audio));
+  CHECK(!sendsAudio(Role::All) && !sendsAudio(Role::Camera) && !sendsAudio(Role::TwoShot) && !sendsAudio(Role::Unset));
 
   // Settings names go both ways; unknown names are refused and leave the value alone.
-  for (const Role r : {Role::Unset, Role::All, Role::Camera, Role::TwoShot}) {
+  for (const Role r : {Role::Unset, Role::All, Role::Camera, Role::TwoShot, Role::Audio}) {
     Role back = r == Role::All ? Role::Camera : Role::All;
     CHECK(roleFromKey(keyOf(r), &back));
     CHECK(back == r);
@@ -25,6 +33,8 @@ void testRole() {
   Role kept = Role::TwoShot;
   CHECK(!roleFromKey("Camera", &kept));
   CHECK(!roleFromKey("slide", &kept));
+  CHECK(roleFromKey("audio", &kept) && kept == Role::Audio);
+  kept = Role::TwoShot;
   CHECK(kept == Role::TwoShot);
 
   // Two-shot halves.

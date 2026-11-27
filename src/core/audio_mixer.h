@@ -38,6 +38,8 @@ class AudioMixer {
   void setChannels(int source, std::uint32_t mask);  // bit 0 = output channel 1
   // Loudest sample since the last call, 0..1, before gain.
   float takePeak(int source);
+  // Loudest sample sent to one output channel (0-based) since the last call, 0..1.
+  float takeOutputPeak(int channel);
 
   // Device thread. Writes frames * channels samples, channel-interleaved.
   void render(float* out, std::size_t frames, int channels);
@@ -46,6 +48,7 @@ class AudioMixer {
   struct Source;
   std::vector<std::unique_ptr<Source>> sources_;
   std::vector<float> scratch_;
+  std::atomic<float> outputPeak_[kMaxChannels];
 };
 
 }  // namespace backhaul

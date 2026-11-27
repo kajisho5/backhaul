@@ -4,6 +4,7 @@ add_executable(core_tests
   test_aspect_fit.cpp
   test_audio_mixer.cpp
   test_delay_line.cpp
+  test_mic_feed.cpp
   test_quality_policy.cpp
   test_resampler.cpp
   test_role.cpp

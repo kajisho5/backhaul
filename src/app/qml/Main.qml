@@ -95,12 +95,19 @@ Window {
         }
 
         RowLayout {
-            visible: app.role === "all"
+            visible: app.role === "all" || app.role === "audio"
             Layout.fillWidth: true
             Layout.fillHeight: true
             spacing: 0
 
+            RoleAudio {
+                visible: app.role === "audio"
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+            }
+
             Flickable {
+                visible: app.role === "all"
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 contentHeight: wall.implicitHeight + 32

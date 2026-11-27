@@ -41,15 +41,15 @@ int main(int argc, char* argv[]) {
                                    QStringLiteral("Start on a settings page: zoom, slots, audio or video."), QStringLiteral("page"));
   args.addOption(pageOpt);
   const QCommandLineOption roleOpt(QStringLiteral("role"),
-                                   QStringLiteral("Start in a role: all, camera or twoshot; \"ask\" shows the role question."),
+                                   QStringLiteral("Start in a role: all, camera, twoshot or audio; \"ask\" shows the role question."),
                                    QStringLiteral("role"));
   args.addOption(roleOpt);
   args.process(qtApp);
   if (args.isSet(roleOpt)) {
     const QString role = args.value(roleOpt);
     if (role != QStringLiteral("all") && role != QStringLiteral("camera") && role != QStringLiteral("twoshot") &&
-        role != QStringLiteral("ask")) {
-      std::fprintf(stderr, "--role wants all, camera, twoshot or ask\n");
+        role != QStringLiteral("audio") && role != QStringLiteral("ask")) {
+      std::fprintf(stderr, "--role wants all, camera, twoshot, audio or ask\n");
       return 5;
     }
   }
@@ -86,7 +86,11 @@ int main(int argc, char* argv[]) {
                             demo ? nullptr : makeCredentialStore());
 
   AudioController audio(state, demo ? nullptr : backhaul::makeAudioOutput(),
-                        demo ? nullptr : backhaul::makeAsioOutput());
+                        demo ? nullptr : backhaul::makeAsioOutput(), demo ? nullptr : backhaul::makeAudioInput());
+  // `meeting` is created before `audio` and so outlives it and its sending thread.
+  audio.setSender([&meeting](const std::int16_t* samples, std::size_t frames, int channels) {
+    return meeting.sendAudio(samples, frames, channels);
+  });
   if (!demo) audio.startSaved();
   meeting.setMixer(audio.mixer());
 
