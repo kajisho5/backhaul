@@ -30,7 +30,7 @@ else()
 endif()
 # The folder layout VST 3 asks for: SampleGain.vst3/Contents/<system>/<file>
 set(plugin_bundle ${CMAKE_CURRENT_BINARY_DIR}/SampleGain.vst3)
-set_target_properties(backhaul_test_plugin PROPERTIES PREFIX "" OUTPUT_NAME SampleGain)
+set_target_properties(backhaul_test_plugin PROPERTIES PREFIX "" OUTPUT_NAME SampleGain CXX_STANDARD 17)
 add_custom_command(TARGET backhaul_test_plugin POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E make_directory ${plugin_bundle}/Contents/${plugin_arch}
   COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:backhaul_test_plugin> ${plugin_bundle}/Contents/${plugin_arch}/${plugin_file})
