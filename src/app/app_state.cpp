@@ -301,6 +301,14 @@ void AppState::setCropSlides(bool crop) {
   emit settingsEdited();
 }
 
+void AppState::setStandbyText(const QString& text) {
+  const QString value = text.left(kMaxStandbyLength);
+  if (value == standbyText_) return;
+  standbyText_ = value;
+  emit changed();
+  emit settingsEdited();
+}
+
 bool AppState::canAddSlot() const {
   return static_cast<int>(slots_.rows().size()) - slots_.shareCount() < kMaxPersonSlots;
 }
@@ -407,6 +415,7 @@ QJsonObject AppState::settingsJson() const {
   returning[QStringLiteral("device")] = videoDeviceName_;
   returning[QStringLiteral("as")] = returnAsShare_ ? QStringLiteral("share") : QStringLiteral("camera");
   root[QStringLiteral("return")] = returning;
+  root[QStringLiteral("standbyText")] = standbyText_;
   root[QStringLiteral("role")] = role();
   root[QStringLiteral("roleScreen")] = roleScreen_;
   QJsonObject twoShot;
@@ -547,6 +556,14 @@ bool AppState::applySettings(const QJsonObject& settings) {
   }
   if (role == backhaul::Role::TwoShot && people.size() < 2) return false;
 
+  // Standby text of the slide output: absent in older files, which then get the usual word.
+  QString standbyText = QStringLiteral("SLIDE");
+  const QJsonValue standbyValue = settings.value(QStringLiteral("standbyText"));
+  if (!standbyValue.isUndefined()) {
+    if (!standbyValue.isString()) return false;
+    standbyText = standbyValue.toString().left(kMaxStandbyLength);
+  }
+
   // Return picture: absent in files written before that role existed.
   QString videoDevice;
   bool returnAsShare = false;
@@ -579,6 +596,7 @@ bool AppState::applySettings(const QJsonObject& settings) {
   meetingId_ = meetingId;
   joinName_ = joinName;
   qualityAuto_ = qualityAuto;
+  standbyText_ = standbyText;
   videoDeviceName_ = videoDevice;
   returnAsShare_ = returnAsShare;
   role_ = role;
@@ -621,6 +639,7 @@ void AppState::loadDefaults() {
   participants_.setRows({}, slotNumbers());
   slotByScreen_.clear();
   gridScreen_.clear();
+  standbyText_ = QStringLiteral("SLIDE");
   videoDeviceName_.clear();
   returnAsShare_ = false;
   role_ = backhaul::Role::Unset;

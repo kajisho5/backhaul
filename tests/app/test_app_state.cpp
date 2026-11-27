@@ -399,6 +399,29 @@ int main(int argc, char* argv[]) {
     CHECK(a.displays()->rows()[1].slot == 0);  // the set-up is still there
     a.setDisplayChoice(1, 0);
 
+    // The word on the slide output while nobody shares: kept, held to a sane length, may be empty.
+    CHECK(a.standbyText() == QStringLiteral("SLIDE"));
+    a.setStandbyText(QStringLiteral("SAMPLE SLIDE PC 1"));
+    a.setStandbyText(QString(100, QLatin1Char('x')));
+    CHECK(a.standbyText().size() == AppState::kMaxStandbyLength);
+    a.setStandbyText(QString());
+    {
+      AppState kept;
+      CHECK(kept.applySettings(a.settingsJson()));
+      CHECK(kept.standbyText().isEmpty());
+      a.setStandbyText(QStringLiteral("SAMPLE SLIDE PC 1"));
+      CHECK(kept.applySettings(a.settingsJson()));
+      CHECK(kept.standbyText() == QStringLiteral("SAMPLE SLIDE PC 1"));
+      QJsonObject before = a.settingsJson();
+      before.remove(QStringLiteral("standbyText"));
+      CHECK(kept.applySettings(before));
+      CHECK(kept.standbyText() == QStringLiteral("SLIDE"));  // files from before this existed
+      before[QStringLiteral("standbyText")] = 7;
+      CHECK(!kept.applySettings(before));
+      kept.loadDefaults();
+      CHECK(kept.standbyText() == QStringLiteral("SLIDE"));
+    }
+
     // Files from before roles existed belong to PCs that did everything.
     QJsonObject old = a.settingsJson();
     old.remove(QStringLiteral("role"));
