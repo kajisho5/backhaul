@@ -7,6 +7,7 @@ void testDelayLine();
 void testQualityPolicy();
 void testResampler();
 void testRouteMatrix();
+void testSdkToken();
 void testSlotOutput();
 
 int main() {
@@ -15,6 +16,7 @@ int main() {
   testQualityPolicy();
   testResampler();
   testRouteMatrix();
+  testSdkToken();
   testSlotOutput();
   if (testing::failures() == 0) {
     std::printf("all tests passed\n");
