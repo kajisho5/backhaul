@@ -255,6 +255,82 @@ int main(int argc, char* argv[]) {
     }
   }
 
+  {  // video output: monitors and the slots they show
+    AppState a;
+    a.loadDefaults();
+    int edits = 0;
+    QObject::connect(&a, &AppState::settingsEdited, [&edits] { ++edits; });
+    auto display = [&a](int row, int role) { return a.displays()->data(a.displays()->index(row), role); };
+
+    a.setScreens({{QStringLiteral("op"), QStringLiteral("サンプルモニターA"), QStringLiteral("1920×1080・60Hz")},
+                  {QStringLiteral("out-a"), QStringLiteral("HDMI 2"), QStringLiteral("1920×1080・59.94Hz")},
+                  {QStringLiteral("out-b"), QStringLiteral("HDMI 3"), QStringLiteral("1920×1080・59.94Hz")}},
+                 QStringLiteral("op"));
+    CHECK(a.displays()->rowCount() == 3);
+    CHECK(display(0, DisplayModel::IsOperatorRole).toBool());
+    CHECK(display(1, DisplayModel::SlotRole).toInt() == -1);
+    CHECK(a.outputChoices().size() == 6);  // black + five slots
+    CHECK(edits == 0);                     // plugging monitors in is not an edit
+
+    a.setDisplayChoice(1, 1);  // HDMI 2 shows slot 1
+    a.setDisplayChoice(2, 5);  // HDMI 3 shows the slide
+    CHECK(display(1, DisplayModel::SlotRole).toInt() == 0);
+    CHECK(display(1, DisplayModel::SlotTextRole).toString() == QStringLiteral("枠1　演者1"));
+    CHECK(display(2, DisplayModel::SlotTextRole).toString() == QStringLiteral("S　スライド"));
+    CHECK(slotData(a, 0, SlotModel::DisplayRole).toString() == QStringLiteral("HDMI 2"));
+    CHECK(slotData(a, 4, SlotModel::DisplayRole).toString() == QStringLiteral("HDMI 3"));
+    CHECK(edits == 2);
+    a.setDisplayChoice(0, 2);   // the operator's monitor is never an output
+    a.setDisplayChoice(1, 99);
+    a.setDisplayChoice(9, 1);
+    a.setDisplayChoice(1, 1);   // unchanged
+    CHECK(edits == 2);
+    CHECK(display(0, DisplayModel::SlotRole).toInt() == -1);
+
+    // The label on the monitor follows the slot's name.
+    a.setLabel(0, QStringLiteral("架空 一郎"));
+    CHECK(display(1, DisplayModel::SlotTextRole).toString() == QStringLiteral("枠1　架空 一郎"));
+
+    // Adding a person moves the slide down one row; its monitor keeps showing the slide.
+    a.addPersonSlot();
+    CHECK(display(2, DisplayModel::SlotTextRole).toString() == QStringLiteral("S　スライド"));
+    CHECK(slotData(a, 5, SlotModel::DisplayRole).toString() == QStringLiteral("HDMI 3"));
+
+    CHECK(a.gridChoices().size() == 3);  // none + the two outputs
+    CHECK(a.gridChoice() == 0);
+    a.setGridChoice(2);
+    CHECK(a.gridChoice() == 2);
+    a.setGridChoice(7);
+    CHECK(a.gridChoice() == 2);
+
+    // An unplugged monitor is remembered and comes back with its slot.
+    a.setScreens({{QStringLiteral("op"), QStringLiteral("サンプルモニターA"), QString()}}, QStringLiteral("op"));
+    CHECK(slotData(a, 0, SlotModel::DisplayRole).toString().isEmpty());
+    AppState b;
+    CHECK(b.applySettings(a.settingsJson()));
+    CHECK(b.settingsJson() == a.settingsJson());
+    b.setScreens({{QStringLiteral("out-a"), QStringLiteral("HDMI 2"), QString()},
+                  {QStringLiteral("out-b"), QStringLiteral("HDMI 3"), QString()}},
+                 QString());
+    CHECK(slotData(b, 0, SlotModel::DisplayRole).toString() == QStringLiteral("HDMI 2"));
+    CHECK(b.gridChoice() == 2);
+    b.setDisplayChoice(0, 0);  // back to black
+    CHECK(slotData(b, 0, SlotModel::DisplayRole).toString().isEmpty());
+
+    // Files from before this page have no monitor entries and are still read.
+    QJsonObject old = a.settingsJson();
+    old.remove(QStringLiteral("outputs"));
+    old.remove(QStringLiteral("gridScreen"));
+    AppState c;
+    CHECK(c.applySettings(old));
+    // A monitor pointing at a slot that does not exist is refused.
+    QJsonObject bad = a.settingsJson();
+    bad[QStringLiteral("outputs")] = QJsonArray{QJsonObject{{QStringLiteral("screen"), QStringLiteral("x")}, {QStringLiteral("slot"), 50}}};
+    CHECK(!c.applySettings(bad));
+    bad[QStringLiteral("outputs")] = QStringLiteral("nope");
+    CHECK(!c.applySettings(bad));
+  }
+
   if (testing::failures() == 0) {
     std::printf("all app state tests passed\n");
     return 0;

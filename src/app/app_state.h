@@ -3,9 +3,11 @@
 #pragma once
 
 #include <QJsonObject>
+#include <QMap>
 #include <QObject>
 #include <QString>
 
+#include "display_model.h"
 #include "participant_model.h"
 #include "slot_model.h"
 
@@ -13,6 +15,10 @@ class AppState : public QObject {
   Q_OBJECT
   Q_PROPERTY(SlotModel* slotList READ slotList CONSTANT)
   Q_PROPERTY(ParticipantModel* participants READ participants CONSTANT)
+  Q_PROPERTY(DisplayModel* displays READ displays CONSTANT)
+  Q_PROPERTY(QStringList outputChoices READ outputChoices NOTIFY changed)
+  Q_PROPERTY(QStringList gridChoices READ gridChoices NOTIFY changed)
+  Q_PROPERTY(int gridChoice READ gridChoice NOTIFY changed)
   Q_PROPERTY(QString meetingName MEMBER meetingName_ NOTIFY changed)
   Q_PROPERTY(bool connected MEMBER connected_ NOTIFY changed)
   Q_PROPERTY(QString elapsed MEMBER elapsed_ NOTIFY changed)
@@ -41,6 +47,7 @@ class AppState : public QObject {
 
   SlotModel* slotList() { return &slots_; }
   ParticipantModel* participants() { return &participants_; }
+  DisplayModel* displays() { return &displays_; }
 
   bool gridMode() const { return gridMode_; }
   void setGridMode(bool on);
@@ -70,6 +77,19 @@ class AppState : public QObject {
   Q_INVOKABLE void setLabel(int row, const QString& text);
   Q_INVOKABLE void setZoomName(int row, const QString& text);
   Q_INVOKABLE void addPersonSlot();
+  // Video output page. `choice` 0 means black; choice n shows slot row n-1.
+  Q_INVOKABLE void setDisplayChoice(int displayRow, int choice);
+  // `choice` 0 means none; choice n is the n-th monitor that can be an output.
+  Q_INVOKABLE void setGridChoice(int choice);
+
+  // The monitors this PC has right now. `operatorKey` is the one the operator screen is on.
+  struct ScreenInfo {
+    QString key, title, mode;
+  };
+  void setScreens(const QVector<ScreenInfo>& screens, const QString& operatorKey);
+  QStringList outputChoices() const;
+  QStringList gridChoices() const;
+  int gridChoice() const;
 
   // What is kept between runs: slots (names, routes, level, delay, behaviour) and the
   // audio output choice. Nothing about the current meeting.
@@ -109,5 +129,14 @@ class AppState : public QObject {
   QString sans_, mono_;
 
   QStringList slotNumbers() const;
+  void refreshDisplays();
+  QVector<int> outputRows() const;  // display rows that can be an output
+
+  DisplayModel displays_;
+  QVector<ScreenInfo> screens_;
+  QString operatorKey_;
+  // Remembered by monitor name, including monitors that are unplugged right now.
+  QMap<QString, int> slotByScreen_;
+  QString gridScreen_;
   void edited(int row);
 };

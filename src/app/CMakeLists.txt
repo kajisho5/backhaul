@@ -5,6 +5,7 @@ qt_standard_project_setup()
 add_library(backhaul_app_state STATIC
   app_state.cpp app_state.h
   demo_source.cpp demo_source.h
+  display_model.cpp display_model.h
   participant_model.cpp participant_model.h
   settings_saver.cpp settings_saver.h
   slot_model.cpp slot_model.h
@@ -37,6 +38,8 @@ qt_add_qml_module(backhaul
     qml/SettingsAudio.qml
     qml/SettingsSlots.qml
     qml/LabeledInput.qml
+    qml/SettingsVideo.qml
+    qml/Dropdown.qml
 )
 
 target_link_libraries(backhaul PRIVATE backhaul_app_state Qt6::Qml Qt6::Quick)
