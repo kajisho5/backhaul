@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Window
+import QtQml
 import Backhaul
 
 Window {
@@ -23,6 +24,33 @@ Window {
         tab: settingsTab
         onTabChanged: settingsTab = tab
         onClosed: settingsOpen = false
+        onIdentifyRequested: identifyTimer.restart()
+    }
+
+    // "Which monitor is which": a big number on every monitor for a few seconds.
+    Timer { id: identifyTimer; interval: 4000 }
+    Instantiator {
+        model: Qt.application.screens
+        delegate: Window {
+            required property int index
+            required property var modelData
+            screen: modelData
+            x: modelData.virtualX + 40
+            y: modelData.virtualY + 40
+            width: 300
+            height: 220
+            flags: Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.WindowDoesNotAcceptFocus
+            color: Theme.ink
+            visible: identifyTimer.running
+            Text {
+                anchors.centerIn: parent
+                text: index + 1
+                color: Theme.bg
+                font.family: app.monoFamily
+                font.pixelSize: 150
+                font.bold: true
+            }
+        }
     }
 
     ColumnLayout {

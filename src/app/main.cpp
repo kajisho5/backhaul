@@ -4,6 +4,7 @@
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QQuickWindow>
+#include <QScreen>
 #include <QTimer>
 #include <cstdio>
 #include <memory>
@@ -32,7 +33,7 @@ int main(int argc, char* argv[]) {
   args.addOption(shotOpt);
   args.addOption(sizeOpt);
   const QCommandLineOption pageOpt(QStringLiteral("settings"),
-                                   QStringLiteral("Start on a settings page: slots or audio."), QStringLiteral("page"));
+                                   QStringLiteral("Start on a settings page: slots, audio or video."), QStringLiteral("page"));
   args.addOption(pageOpt);
   args.process(qtApp);
 
@@ -65,6 +66,34 @@ int main(int argc, char* argv[]) {
     std::fprintf(stderr, "the main window was not created\n");
     return 3;
   }
+  if (!args.isSet(demoOpt)) {
+    // Keep the monitor list current: monitors come and go, and the window can be moved.
+    auto publishScreens = [&state, window] {
+      QVector<AppState::ScreenInfo> list;
+      const auto screens = QGuiApplication::screens();
+      for (const QScreen* s : screens) {
+        const int number = static_cast<int>(list.size()) + 1;
+        // Some systems give no name; the position in the list is then the only handle.
+        const QString key = s->name().isEmpty() ? QStringLiteral("monitor-%1").arg(number) : s->name();
+        QString title = s->name().isEmpty() ? QStringLiteral("モニター%1").arg(number) : s->name();
+        if (title.startsWith(QStringLiteral("\\\\.\\"))) title.remove(0, 4);  // "\\.\DISPLAY2" -> "DISPLAY2"
+        if (!s->model().isEmpty() && s->model() != s->name()) title += QStringLiteral("（%1）").arg(s->model());
+        const QSize pixels = s->size() * s->devicePixelRatio();
+        const QString mode = QStringLiteral("%1×%2・%3Hz")
+                                 .arg(pixels.width())
+                                 .arg(pixels.height())
+                                 .arg(QString::number(s->refreshRate(), 'g', 4));
+        list.push_back({key, title, mode});
+      }
+      const int own = window->screen() != nullptr ? static_cast<int>(screens.indexOf(window->screen())) : -1;
+      state.setScreens(list, own >= 0 ? list[own].key : QString());
+    };
+    publishScreens();
+    QObject::connect(&qtApp, &QGuiApplication::screenAdded, window, publishScreens);
+    QObject::connect(&qtApp, &QGuiApplication::screenRemoved, window, publishScreens);
+    QObject::connect(window, &QWindow::screenChanged, window, publishScreens);
+  }
+
   if (args.isSet(sizeOpt)) {
     const QStringList parts = args.value(sizeOpt).split(QLatin1Char('x'));
     bool okW = false, okH = false;
@@ -79,8 +108,8 @@ int main(int argc, char* argv[]) {
 
   if (args.isSet(pageOpt)) {
     const QString page = args.value(pageOpt);
-    if (page != QStringLiteral("slots") && page != QStringLiteral("audio")) {
-      std::fprintf(stderr, "--settings wants slots or audio\n");
+    if (page != QStringLiteral("slots") && page != QStringLiteral("audio") && page != QStringLiteral("video")) {
+      std::fprintf(stderr, "--settings wants slots, audio or video\n");
       return 5;
     }
     window->setProperty("settingsTab", page);

@@ -5,6 +5,7 @@ qt_standard_project_setup()
 add_library(backhaul_app_state STATIC
   app_state.cpp app_state.h
   demo_source.cpp demo_source.h
+  display_model.cpp display_model.h
   participant_model.cpp participant_model.h
   settings_saver.cpp settings_saver.h
   slot_model.cpp slot_model.h
@@ -37,6 +38,8 @@ qt_add_qml_module(backhaul
     qml/SettingsAudio.qml
     qml/SettingsSlots.qml
     qml/LabeledInput.qml
+    qml/SettingsVideo.qml
+    qml/Dropdown.qml
 )
 
 target_link_libraries(backhaul PRIVATE backhaul_app_state Qt6::Qml Qt6::Quick)
@@ -50,6 +53,12 @@ if(WIN32)
   target_sources(backhaul PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/backhaul.rc")
 endif()
 backhaul_warnings(backhaul app)
+if(MSVC)
+  # The C++ that Qt generates from the QML files makes MSVC report "unreachable code"
+  # (C4702) inside Qt's own headers. Only this target holds generated code; the
+  # hand-written logic in backhaul_app_state keeps the full warning set.
+  target_compile_options(backhaul PRIVATE /wd4702)
+endif()
 
 if(WIN32)
   set_target_properties(backhaul PROPERTIES WIN32_EXECUTABLE TRUE)

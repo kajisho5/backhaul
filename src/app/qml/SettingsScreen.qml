@@ -7,12 +7,13 @@ Rectangle {
     id: root
     property string tab: "slots"
     signal closed()
+    signal identifyRequested()
     color: Theme.bg
 
     readonly property var pages: [
         { key: "zoom", title: "Zoom接続", ready: false },
         { key: "slots", title: "枠", ready: true },
-        { key: "video", title: "映像出力", ready: false },
+        { key: "video", title: "映像出力", ready: true },
         { key: "audio", title: "音声出力", ready: true },
         { key: "return", title: "返し", ready: false }
     ]
@@ -110,7 +111,7 @@ Rectangle {
                 clip: true
                 readonly property real pageWidth: Math.max(width, 760)
                 contentWidth: pageWidth
-                contentHeight: (root.tab === "audio" ? audioPage.implicitHeight : slotsPage.implicitHeight) + 56
+                contentHeight: (root.tab === "audio" ? audioPage.implicitHeight : root.tab === "video" ? videoPage.implicitHeight : slotsPage.implicitHeight) + 56
                 boundsBehavior: Flickable.StopAtBounds
 
                 SettingsAudio {
@@ -118,6 +119,13 @@ Rectangle {
                     visible: root.tab === "audio"
                     x: 32; y: 28
                     width: scroller.pageWidth - 64
+                }
+                SettingsVideo {
+                    id: videoPage
+                    visible: root.tab === "video"
+                    x: 32; y: 28
+                    width: scroller.pageWidth - 64
+                    onIdentifyRequested: root.identifyRequested()
                 }
                 SettingsSlots {
                     id: slotsPage

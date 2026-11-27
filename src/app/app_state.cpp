@@ -21,6 +21,7 @@ constexpr double kMaxGainDb = 12.0;
 constexpr int kMaxDelayMs = 2000;
 constexpr int kMaxShareSlots = 4;
 constexpr int kMaxChannels = 32;
+constexpr int kMaxRememberedScreens = 64;
 
 bool isShare(const SlotRow& r) { return r.situation.kind == backhaul::SlotKind::Share; }
 
@@ -135,6 +136,8 @@ void AppState::setLabel(int row, const QString& text) {
   const QString value = text.left(kMaxLabelLength);
   if (row < 0 || row >= slots_.rows().size() || slots_.rows()[row].label == value) return;
   slots_.update(row, [&value](SlotRow& r) { r.label = value; });
+  refreshDisplays();
+  emit changed();
   emit settingsEdited();
 }
 
@@ -165,6 +168,10 @@ void AppState::addPersonSlot() {
   row.situation.kind = backhaul::SlotKind::Person;
   slots_.insertRow(at, row);
   participants_.slotInserted(at, slotNumbers());
+  for (auto it = slotByScreen_.begin(); it != slotByScreen_.end(); ++it) {
+    if (it.value() >= at) ++it.value();
+  }
+  refreshDisplays();
   if (selected_ >= at) ++selected_;
   setSelected(at);
   emit selectedChanged();
@@ -187,7 +194,6 @@ QJsonObject AppState::settingsJson() const {
     slot[QStringLiteral("gainDb")] = r.gainDb;
     slot[QStringLiteral("delayMs")] = r.delayMs;
     slot[QStringLiteral("channels")] = channels;
-    slot[QStringLiteral("display")] = r.display;
     if (isShare(r)) slot[QStringLiteral("cropTo169")] = r.cropTo169;
     slotArray.push_back(slot);
   }
@@ -199,6 +205,15 @@ QJsonObject AppState::settingsJson() const {
   root[QStringLiteral("format")] = 1;
   root[QStringLiteral("audio")] = audio;
   root[QStringLiteral("slots")] = slotArray;
+  QJsonArray outputs;
+  for (auto it = slotByScreen_.constBegin(); it != slotByScreen_.constEnd(); ++it) {
+    QJsonObject o;
+    o[QStringLiteral("screen")] = it.key();
+    o[QStringLiteral("slot")] = it.value();
+    outputs.push_back(o);
+  }
+  root[QStringLiteral("outputs")] = outputs;
+  root[QStringLiteral("gridScreen")] = gridScreen_;
   return root;
 }
 
@@ -225,7 +240,7 @@ bool AppState::applySettings(const QJsonObject& settings) {
     const QJsonValue channels = slot.value(QStringLiteral("channels"));
     if (!slot.value(QStringLiteral("label")).isString() || !slot.value(QStringLiteral("zoomName")).isString() ||
         !slot.value(QStringLiteral("freezeOnLoss")).isBool() || !gain.isDouble() || !delay.isDouble() ||
-        !channels.isArray() || !slot.value(QStringLiteral("display")).isString()) {
+        !channels.isArray()) {
       return false;
     }
     SlotRow r;
@@ -246,7 +261,6 @@ bool AppState::applySettings(const QJsonObject& settings) {
       if (!ch.isDouble() || n < 1 || n > kMaxChannels) return false;
       r.channels |= quint32{1} << (n - 1);
     }
-    r.display = slot.value(QStringLiteral("display")).toString().left(kMaxLabelLength);
     if (isShare(r)) {
       const QJsonValue crop = slot.value(QStringLiteral("cropTo169"));
       if (!crop.isBool()) return false;
@@ -257,6 +271,28 @@ bool AppState::applySettings(const QJsonObject& settings) {
     }
   }
   if (people.isEmpty() || people.size() > kMaxPersonSlots || shares.size() > kMaxShareSlots) return false;
+
+  // Monitor assignments: absent in files written before the video output page existed.
+  QMap<QString, int> slotByScreen;
+  const QJsonValue outputsValue = settings.value(QStringLiteral("outputs"));
+  if (!outputsValue.isUndefined()) {
+    if (!outputsValue.isArray()) return false;
+    const QJsonArray outputs = outputsValue.toArray();
+    if (outputs.size() > kMaxRememberedScreens) return false;
+    for (const QJsonValue& value : outputs) {
+      const QJsonObject o = value.toObject();
+      const QJsonValue screen = o.value(QStringLiteral("screen"));
+      const QJsonValue slot = o.value(QStringLiteral("slot"));
+      const int row = slot.toInt(-1);
+      if (!screen.isString() || screen.toString().isEmpty() || !slot.isDouble() || row < 0 ||
+          row >= people.size() + shares.size()) {
+        return false;
+      }
+      slotByScreen.insert(screen.toString().left(kMaxZoomNameLength), row);
+    }
+  }
+  const QJsonValue gridValue = settings.value(QStringLiteral("gridScreen"));
+  if (!gridValue.isUndefined() && !gridValue.isString()) return false;
 
   // People first, then slides, numbered in order.
   QVector<SlotRow> rows;
@@ -270,6 +306,9 @@ bool AppState::applySettings(const QJsonObject& settings) {
   }
   slots_.setRows(rows);
   participants_.setRows({}, slotNumbers());
+  slotByScreen_ = slotByScreen;
+  gridScreen_ = gridValue.toString().left(kMaxZoomNameLength);
+  refreshDisplays();
   audioAsio_ = method == QStringLiteral("asio");
   audioDeviceName_ = audio.value(QStringLiteral("device")).toString().left(kMaxZoomNameLength);
   selected_ = 0;
@@ -297,9 +336,106 @@ void AppState::loadDefaults() {
   rows.push_back(slide);
   slots_.setRows(rows);
   participants_.setRows({}, slotNumbers());
+  slotByScreen_.clear();
+  gridScreen_.clear();
+  refreshDisplays();
   audioAsio_ = true;
   audioDeviceName_.clear();
   selected_ = 0;
   emit selectedChanged();
   emit changed();
+}
+
+void AppState::setScreens(const QVector<ScreenInfo>& screens, const QString& operatorKey) {
+  screens_ = screens;
+  operatorKey_ = operatorKey;
+  refreshDisplays();
+  emit changed();
+}
+
+QVector<int> AppState::outputRows() const {
+  QVector<int> rows;
+  for (int i = 0; i < screens_.size(); ++i) {
+    if (screens_[i].key != operatorKey_) rows.push_back(i);
+  }
+  return rows;
+}
+
+void AppState::refreshDisplays() {
+  const auto& slotRows = slots_.rows();
+  QVector<DisplayRow> rows;
+  QVector<QStringList> shownOn(slotRows.size());
+  for (const ScreenInfo& s : screens_) {
+    DisplayRow r;
+    r.key = s.key;
+    r.title = s.title;
+    r.mode = s.mode;
+    r.isOperator = s.key == operatorKey_;
+    const int slot = slotByScreen_.value(s.key, -1);
+    if (r.isOperator) {
+      r.slotText = QStringLiteral("操作画面（このPCの画面）");
+    } else if (slot >= 0 && slot < slotRows.size()) {
+      r.slot = slot;
+      const bool share = slotRows[slot].situation.kind == backhaul::SlotKind::Share;
+      r.slotText = QStringLiteral("%1%2　%3").arg(share ? QString() : QStringLiteral("枠"), slotRows[slot].number, slotRows[slot].label);
+      shownOn[slot].push_back(s.title);
+    } else {
+      r.slotText = QStringLiteral("出さない（黒）");
+    }
+    rows.push_back(r);
+  }
+  displays_.setRows(rows);
+  for (int i = 0; i < slotRows.size(); ++i) {
+    const QString text = shownOn[i].join(QStringLiteral("・"));
+    if (slotRows[i].display != text) slots_.update(i, [&text](SlotRow& r) { r.display = text; });
+  }
+}
+
+QStringList AppState::outputChoices() const {
+  QStringList choices{QStringLiteral("出さない（黒）")};
+  for (const SlotRow& r : slots_.rows()) {
+    const bool share = r.situation.kind == backhaul::SlotKind::Share;
+    choices.push_back(QStringLiteral("%1%2　%3").arg(share ? QString() : QStringLiteral("枠"), r.number, r.label));
+  }
+  return choices;
+}
+
+void AppState::setDisplayChoice(int displayRow, int choice) {
+  if (displayRow < 0 || displayRow >= screens_.size() || choice < 0 || choice > slots_.rows().size()) return;
+  const QString key = screens_[displayRow].key;
+  if (key == operatorKey_) return;
+  const int slot = choice - 1;
+  if (slotByScreen_.value(key, -1) == slot) return;
+  if (slot < 0) {
+    slotByScreen_.remove(key);
+  } else {
+    slotByScreen_.insert(key, slot);
+  }
+  refreshDisplays();
+  emit changed();
+  emit settingsEdited();
+}
+
+QStringList AppState::gridChoices() const {
+  QStringList choices{QStringLiteral("出さない")};
+  for (const int row : outputRows()) choices.push_back(screens_[row].title);
+  return choices;
+}
+
+int AppState::gridChoice() const {
+  const QVector<int> rows = outputRows();
+  for (int i = 0; i < rows.size(); ++i) {
+    if (screens_[rows[i]].key == gridScreen_) return i + 1;
+  }
+  return 0;
+}
+
+void AppState::setGridChoice(int choice) {
+  const QVector<int> rows = outputRows();
+  if (choice < 0 || choice > rows.size()) return;
+  const QString key = choice == 0 ? QString() : screens_[rows[choice - 1]].key;
+  if (key == gridScreen_) return;
+  gridScreen_ = key;
+  emit changed();
+  emit settingsEdited();
 }
