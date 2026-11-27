@@ -27,6 +27,24 @@ Window {
         onIdentifyRequested: identifyTimer.restart()
     }
 
+    // Full-screen output: one window on every monitor that has a slot.
+    Instantiator {
+        model: app.demo ? null : app.displays
+        delegate: Window {
+            required property int index
+            required property int slot
+            required property bool isOperator
+            screen: Qt.application.screens[index]
+            x: screen ? screen.virtualX : 0
+            y: screen ? screen.virtualY : 0
+            flags: Qt.Window | Qt.FramelessWindowHint
+            color: "black"
+            title: "backhaul 出力"
+            visibility: slot >= 0 && !isOperator ? Window.FullScreen : Window.Hidden
+            OutputView { anchors.fill: parent; slotRow: slot }
+        }
+    }
+
     // "Which monitor is which": a big number on every monitor for a few seconds.
     Timer { id: identifyTimer; interval: 4000 }
     Instantiator {

@@ -7,6 +7,7 @@
 
 struct ParticipantRow {
   QString name;
+  quint32 id = 0;  // the meeting's number for this person
   QString role;   // "主催" / "共同" / "自分" / ""
   int slot = -1;  // index of the slot this person is in, -1 = none
   bool isSelf = false;

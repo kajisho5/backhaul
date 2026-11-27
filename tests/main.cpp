@@ -9,6 +9,7 @@ void testResampler();
 void testRouteMatrix();
 void testSdkToken();
 void testSlotOutput();
+void testYuv();
 
 int main() {
   testAspectFit();
@@ -18,6 +19,7 @@ int main() {
   testRouteMatrix();
   testSdkToken();
   testSlotOutput();
+  testYuv();
   if (testing::failures() == 0) {
     std::printf("all tests passed\n");
     return 0;

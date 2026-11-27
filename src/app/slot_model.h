@@ -11,6 +11,7 @@ struct SlotRow {
   QString number;        // "1", "2", ... or "S" for the slide
   QString label;         // on-air name
   QString zoomName;      // who is assigned (empty = nobody)
+  quint32 userId = 0;    // the meeting's number for that person while they are present
   backhaul::SlotSituation situation;
   int width = 0;         // picture size currently arriving (0 = none)
   int height = 0;
@@ -46,6 +47,7 @@ class SlotModel : public QAbstractListModel {
     FreezeOnLossRole,
     GridRowRole,     // where the tile sits: people fill the two left columns,
     GridColumnRole,  // slides stack in the right column
+    CropRole,        // slide only: cut to 16:9
   };
 
   explicit SlotModel(QObject* parent = nullptr);

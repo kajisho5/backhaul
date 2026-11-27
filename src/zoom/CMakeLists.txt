@@ -24,3 +24,10 @@ add_executable(backhaul_probe_receive probe/receive_probe.cpp)
 target_link_libraries(backhaul_probe_receive PRIVATE backhaul_core zoom_sdk)
 target_compile_definitions(backhaul_probe_receive PRIVATE UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN)
 backhaul_warnings(backhaul_probe_receive strict)
+
+# The meeting client used by the application.
+add_library(backhaul_zoom STATIC zoom_client.cpp)
+target_include_directories(backhaul_zoom PUBLIC ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(backhaul_zoom PUBLIC backhaul_core zoom_sdk)
+target_compile_definitions(backhaul_zoom PRIVATE UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN)
+backhaul_warnings(backhaul_zoom strict)

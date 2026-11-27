@@ -71,6 +71,7 @@ QVariant SlotModel::data(const QModelIndex& index, int role) const {
     case DisplayRole: return r.display;
     case ChannelTextRole: return channelText(r.channels);
     case ChannelsRole: return static_cast<int>(r.channels);
+    case CropRole: return share && r.cropTo169;
     case FreezeOnLossRole: return r.situation.onDisconnect == backhaul::DisconnectPolicy::Freeze;
     case GridRowRole:
     case GridColumnRole: {
@@ -94,6 +95,7 @@ QHash<int, QByteArray> SlotModel::roleNames() const {
       {DelayRole, "delayMs"},       {DisplayRole, "display"},     {ChannelTextRole, "channelText"},
       {ChannelsRole, "channels"},
       {FreezeOnLossRole, "freezeOnLoss"}, {GridRowRole, "gridRow"}, {GridColumnRole, "gridColumn"},
+      {CropRole, "crop"},
   };
 }
 

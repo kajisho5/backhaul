@@ -4,6 +4,9 @@ qt_standard_project_setup()
 # State and models, separate from the executable so they can be tested.
 add_library(backhaul_app_state STATIC
   app_state.cpp app_state.h
+  credential_store.cpp credential_store.h
+  frame_store.cpp frame_store.h
+  meeting_controller.cpp meeting_controller.h
   demo_source.cpp demo_source.h
   display_model.cpp display_model.h
   participant_model.cpp participant_model.h
@@ -12,9 +15,18 @@ add_library(backhaul_app_state STATIC
 )
 target_include_directories(backhaul_app_state PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(backhaul_app_state PUBLIC backhaul_core Qt6::Gui)
+target_include_directories(backhaul_app_state PUBLIC ${CMAKE_SOURCE_DIR}/src)
+if(WIN32)
+  target_link_libraries(backhaul_app_state PRIVATE advapi32)
+endif()
 backhaul_warnings(backhaul_app_state app)
 
-qt_add_executable(backhaul main.cpp)
+qt_add_executable(backhaul main.cpp frame_item.cpp frame_item.h)
+if(TARGET backhaul_zoom)
+  target_link_libraries(backhaul PRIVATE backhaul_zoom)
+else()
+  target_sources(backhaul PRIVATE meeting_none.cpp)
+endif()
 
 set_source_files_properties(qml/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
 
@@ -39,6 +51,8 @@ qt_add_qml_module(backhaul
     qml/SettingsSlots.qml
     qml/LabeledInput.qml
     qml/SettingsVideo.qml
+    qml/SettingsZoom.qml
+    qml/OutputView.qml
     qml/Dropdown.qml
 )
 
@@ -71,4 +85,11 @@ if(BUILD_TESTING)
   backhaul_warnings(app_state_tests app)
   add_test(NAME app_state_tests COMMAND app_state_tests)
   set_tests_properties(app_state_tests PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+  add_executable(meeting_controller_tests ${CMAKE_SOURCE_DIR}/tests/app/test_meeting_controller.cpp)
+  target_include_directories(meeting_controller_tests PRIVATE ${CMAKE_SOURCE_DIR}/tests)
+  target_link_libraries(meeting_controller_tests PRIVATE backhaul_app_state)
+  backhaul_warnings(meeting_controller_tests app)
+  add_test(NAME meeting_controller_tests COMMAND meeting_controller_tests)
+  set_tests_properties(meeting_controller_tests PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 endif()

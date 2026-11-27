@@ -11,7 +11,7 @@ Rectangle {
     color: Theme.bg
 
     readonly property var pages: [
-        { key: "zoom", title: "Zoom接続", ready: false },
+        { key: "zoom", title: "Zoom接続", ready: true },
         { key: "slots", title: "枠", ready: true },
         { key: "video", title: "映像出力", ready: true },
         { key: "audio", title: "音声出力", ready: true },
@@ -111,12 +111,18 @@ Rectangle {
                 clip: true
                 readonly property real pageWidth: Math.max(width, 760)
                 contentWidth: pageWidth
-                contentHeight: (root.tab === "audio" ? audioPage.implicitHeight : root.tab === "video" ? videoPage.implicitHeight : slotsPage.implicitHeight) + 56
+                contentHeight: (root.tab === "audio" ? audioPage.implicitHeight : root.tab === "video" ? videoPage.implicitHeight : root.tab === "zoom" ? zoomPage.implicitHeight : slotsPage.implicitHeight) + 56
                 boundsBehavior: Flickable.StopAtBounds
 
                 SettingsAudio {
                     id: audioPage
                     visible: root.tab === "audio"
+                    x: 32; y: 28
+                    width: scroller.pageWidth - 64
+                }
+                SettingsZoom {
+                    id: zoomPage
+                    visible: root.tab === "zoom"
                     x: 32; y: 28
                     width: scroller.pageWidth - 64
                 }

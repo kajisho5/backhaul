@@ -76,10 +76,12 @@ void AppState::assignToSelected(int participantRow) {
   if (participantRow < 0 || participantRow >= people.size()) return;
   const int slot = selected_;
   const QString name = people[participantRow].name;
+  const quint32 id = people[participantRow].id;
   participants_.clearSlot(slot);
   participants_.setSlotOf(participantRow, slot);
-  slots_.update(slot, [&name](SlotRow& r) {
+  slots_.update(slot, [&name, id](SlotRow& r) {
     r.zoomName = name;
+    r.userId = id;
     r.situation.assigned = true;
     // Until the first picture and sound arrive, treat the person as present but silent and dark.
     r.situation.connected = true;
@@ -89,6 +91,8 @@ void AppState::assignToSelected(int participantRow) {
     r.width = r.height = r.fps = 0;
     r.level = 0.0;
   });
+  emit settingsEdited();  // the Zoom name of the slot is kept for next time
+  emit assignmentsChanged();
 }
 
 QString AppState::audioDevice() const {
@@ -214,6 +218,11 @@ QJsonObject AppState::settingsJson() const {
   }
   root[QStringLiteral("outputs")] = outputs;
   root[QStringLiteral("gridScreen")] = gridScreen_;
+  QJsonObject zoom;
+  zoom[QStringLiteral("meetingId")] = meetingId_;
+  zoom[QStringLiteral("name")] = joinName_;
+  zoom[QStringLiteral("size")] = qualityAuto_ ? QStringLiteral("auto") : QStringLiteral("720");
+  root[QStringLiteral("zoom")] = zoom;
   return root;
 }
 
@@ -293,6 +302,22 @@ bool AppState::applySettings(const QJsonObject& settings) {
   }
   const QJsonValue gridValue = settings.value(QStringLiteral("gridScreen"));
   if (!gridValue.isUndefined() && !gridValue.isString()) return false;
+  // Zoom page: absent in older files.
+  QString meetingId = meetingId_, joinName = joinName_;
+  bool qualityAuto = qualityAuto_;
+  const QJsonValue zoomValue = settings.value(QStringLiteral("zoom"));
+  if (!zoomValue.isUndefined()) {
+    const QJsonObject zoom = zoomValue.toObject();
+    const QString size = zoom.value(QStringLiteral("size")).toString();
+    if (!zoomValue.isObject() || !zoom.value(QStringLiteral("meetingId")).isString() ||
+        !zoom.value(QStringLiteral("name")).isString() ||
+        (size != QStringLiteral("auto") && size != QStringLiteral("720"))) {
+      return false;
+    }
+    meetingId = zoom.value(QStringLiteral("meetingId")).toString().left(kMaxLabelLength);
+    joinName = zoom.value(QStringLiteral("name")).toString().left(kMaxLabelLength);
+    qualityAuto = size == QStringLiteral("auto");
+  }
 
   // People first, then slides, numbered in order.
   QVector<SlotRow> rows;
@@ -308,6 +333,9 @@ bool AppState::applySettings(const QJsonObject& settings) {
   participants_.setRows({}, slotNumbers());
   slotByScreen_ = slotByScreen;
   gridScreen_ = gridValue.toString().left(kMaxZoomNameLength);
+  meetingId_ = meetingId;
+  joinName_ = joinName;
+  qualityAuto_ = qualityAuto;
   refreshDisplays();
   audioAsio_ = method == QStringLiteral("asio");
   audioDeviceName_ = audio.value(QStringLiteral("device")).toString().left(kMaxZoomNameLength);
@@ -436,6 +464,29 @@ void AppState::setGridChoice(int choice) {
   const QString key = choice == 0 ? QString() : screens_[rows[choice - 1]].key;
   if (key == gridScreen_) return;
   gridScreen_ = key;
+  emit changed();
+  emit settingsEdited();
+}
+
+void AppState::setMeetingId(const QString& text) {
+  const QString value = text.left(kMaxLabelLength);
+  if (value == meetingId_) return;
+  meetingId_ = value;
+  emit changed();
+  emit settingsEdited();
+}
+
+void AppState::setJoinName(const QString& text) {
+  const QString value = text.left(kMaxLabelLength);
+  if (value == joinName_) return;
+  joinName_ = value;
+  emit changed();
+  emit settingsEdited();
+}
+
+void AppState::setQualityAuto(bool on) {
+  if (on == qualityAuto_) return;
+  qualityAuto_ = on;
   emit changed();
   emit settingsEdited();
 }
