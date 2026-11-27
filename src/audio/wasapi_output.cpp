@@ -13,8 +13,15 @@
 #include <ksmedia.h>
 
 #include <audioclient.h>
-#include <functiondiscoverykeys_devpkey.h>
 #include <mmdeviceapi.h>
+
+#include <propidl.h>
+
+#include <propkeydef.h>
+
+#include <propsys.h>
+
+#include <functiondiscoverykeys_devpkey.h>
 
 #include <atomic>
 #include <cstdio>
