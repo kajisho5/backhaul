@@ -402,6 +402,10 @@ QJsonObject AppState::settingsJson() const {
   zoom[QStringLiteral("name")] = joinName_;
   zoom[QStringLiteral("size")] = qualityAuto_ ? QStringLiteral("auto") : QStringLiteral("720");
   root[QStringLiteral("zoom")] = zoom;
+  QJsonObject returning;
+  returning[QStringLiteral("device")] = videoDeviceName_;
+  returning[QStringLiteral("as")] = returnAsShare_ ? QStringLiteral("share") : QStringLiteral("camera");
+  root[QStringLiteral("return")] = returning;
   root[QStringLiteral("role")] = role();
   root[QStringLiteral("roleScreen")] = roleScreen_;
   QJsonObject twoShot;
@@ -541,6 +545,21 @@ bool AppState::applySettings(const QJsonObject& settings) {
   }
   if (role == backhaul::Role::TwoShot && people.size() < 2) return false;
 
+  // Return picture: absent in files written before that role existed.
+  QString videoDevice;
+  bool returnAsShare = false;
+  const QJsonValue returnValue = settings.value(QStringLiteral("return"));
+  if (!returnValue.isUndefined()) {
+    const QJsonObject returning = returnValue.toObject();
+    const QString as = returning.value(QStringLiteral("as")).toString();
+    if (!returnValue.isObject() || !returning.value(QStringLiteral("device")).isString() ||
+        (as != QStringLiteral("camera") && as != QStringLiteral("share"))) {
+      return false;
+    }
+    videoDevice = returning.value(QStringLiteral("device")).toString().left(kMaxZoomNameLength);
+    returnAsShare = as == QStringLiteral("share");
+  }
+
   // People first, then slides, numbered in order.
   QVector<SlotRow> rows;
   for (int i = 0; i < people.size(); ++i) {
@@ -558,6 +577,8 @@ bool AppState::applySettings(const QJsonObject& settings) {
   meetingId_ = meetingId;
   joinName_ = joinName;
   qualityAuto_ = qualityAuto;
+  videoDeviceName_ = videoDevice;
+  returnAsShare_ = returnAsShare;
   role_ = role;
   roleScreen_ = roleScreen;
   twoShotFill_ = fill;
@@ -598,6 +619,8 @@ void AppState::loadDefaults() {
   participants_.setRows({}, slotNumbers());
   slotByScreen_.clear();
   gridScreen_.clear();
+  videoDeviceName_.clear();
+  returnAsShare_ = false;
   role_ = backhaul::Role::Unset;
   roleScreen_.clear();
   twoShotFill_ = true;
@@ -732,6 +755,21 @@ void AppState::setJoinName(const QString& text) {
 void AppState::setQualityAuto(bool on) {
   if (on == qualityAuto_) return;
   qualityAuto_ = on;
+  emit changed();
+  emit settingsEdited();
+}
+
+void AppState::setVideoDeviceName(const QString& name) {
+  const QString value = name.left(kMaxZoomNameLength);
+  if (value == videoDeviceName_) return;
+  videoDeviceName_ = value;
+  emit changed();
+  emit settingsEdited();
+}
+
+void AppState::setReturnAsShare(bool share) {
+  if (share == returnAsShare_) return;
+  returnAsShare_ = share;
   emit changed();
   emit settingsEdited();
 }

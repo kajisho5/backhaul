@@ -3,6 +3,7 @@ add_library(backhaul_core STATIC
   audio_mixer.cpp
   delay_line.cpp
   mic_feed.cpp
+  nv12.cpp
   quality_policy.cpp
   resampler.cpp
   role.cpp

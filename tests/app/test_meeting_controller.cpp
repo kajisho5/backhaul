@@ -14,6 +14,7 @@
 #include "check.h"
 #include "frame_store.h"
 #include "meeting_controller.h"
+#include "return_controller.h"
 
 namespace {
 
@@ -46,6 +47,17 @@ class ScriptedClient final : public backhaul::MeetingClient {
     sentChannels = channels;
     return true;
   }
+  bool sendVideo(const std::uint8_t* i420, int width, int height) override {
+    if (!taking || i420 == nullptr) return false;
+    ++pictures;
+    pictureWidth = width;
+    pictureHeight = height;
+    firstByte = i420[0];
+    return true;
+  }
+  bool sendingVideo() const override { return taking; }
+  std::string sendVideoNote() const override { return note; }
+  int pictures = 0, pictureWidth = 0, pictureHeight = 0, firstByte = -1;
   bool sendingAudio() const override { return taking; }
   std::string sendAudioNote() const override { return note; }
 
@@ -448,6 +460,128 @@ static void testSlides() {
   CHECK(slotData(a, row, SlotModel::VideoOutRole).toString() == QStringLiteral("black"));
 }
 
+// the return PC: a capture device's picture goes into the meeting, as camera or as shared screen
+static void testReturnRole() {
+  struct FakeCapture final : backhaul::VideoInput {
+    bool alive = false, refuse = false;
+    backhaul::VideoSink* sink = nullptr;
+    std::vector<backhaul::VideoDevice> devices() override { return {{"cap-a", "サンプルキャプチャーA"}, {"cap-b", "サンプルキャプチャーB"}}; }
+    bool start(const std::string&, backhaul::VideoSink* s, std::string* error) override {
+      if (refuse) {
+        *error = "in use";
+        return alive = false;
+      }
+      sink = s;
+      return alive = true;
+    }
+    void stop() override { alive = false; }
+    bool running() const override { return alive; }
+    int width() const override { return alive ? 1920 : 0; }
+    int height() const override { return alive ? 1080 : 0; }
+    int milliFps() const override { return alive ? 59940 : 0; }
+  };
+
+  AppState a;
+  a.loadDefaults();
+  a.setRole(QStringLiteral("return"));
+  CHECK(a.sendsVideo() && a.sendsAudio() && a.handlesAudio() && !a.playsAudio() && !a.receivesAnything());
+  CHECK(!a.slotActive(0) && !a.slotActive(4));
+  a.setMeetingId(QStringLiteral("123 4567 8901"));
+  FrameStore frames;
+  ZoomCredentials saved{QStringLiteral("SampleClientId_01"), QStringLiteral("sample-secret")};
+  auto* client = new ScriptedClient;
+  MeetingController m(a, frames, std::unique_ptr<backhaul::MeetingClient>(client),
+                      std::make_unique<MemoryCredentials>(&saved));
+  auto* capture = new FakeCapture;
+  ReturnController returning(a, frames, std::unique_ptr<backhaul::VideoInput>(capture));
+  returning.setSender([&m](const std::uint8_t* i420, int w, int h) { return m.sendVideo(i420, w, h); });
+
+  // Nothing chosen: the PC joins but sends no picture, and asks for nothing from the meeting.
+  m.join();
+  CHECK(client->lastRequest.sendVideo == backhaul::SendVideo::None && !client->lastRequest.receive);
+  CHECK(client->lastRequest.audio && !client->lastRequest.sendAudio);
+  m.leave();
+
+  CHECK(returning.available());
+  CHECK(returning.deviceNames() == (QStringList{QStringLiteral("使わない"), QStringLiteral("サンプルキャプチャーA"),
+                                                QStringLiteral("サンプルキャプチャーB")}));
+  capture->refuse = true;
+  returning.chooseDevice(2);
+  CHECK(returning.deviceIndex() == 0 && !returning.problem().isEmpty());
+  CHECK(a.videoDeviceName() == QStringLiteral("サンプルキャプチャーB"));  // the wish is kept
+  capture->refuse = false;
+  returning.chooseDevice(2);
+  CHECK(capture->alive && returning.deviceIndex() == 2 && returning.problem().isEmpty());
+  CHECK(returning.inputText() == QStringLiteral("1920×1080・59.94コマ"));
+  returning.chooseDevice(5);  // not in the list
+  CHECK(returning.deviceIndex() == 2);
+
+  // As this PC's camera, or as a shared screen.
+  m.join();
+  CHECK(client->lastRequest.sendVideo == backhaul::SendVideo::Camera);
+  client->events->onMeetingState(MeetingState::Receiving, {});
+  client->events->onParticipants({person(10, "Kakuu Ichiro")});
+  CHECK(client->wants.empty());
+  CHECK(slotData(a, 0, SlotModel::StateRole).toString() == QStringLiteral("unassigned"));  // nobody is shown here
+  client->events->onShares({{501, 10}});
+  CHECK(client->shareWant == 0);  // and no shared screen is taken
+
+  // Pictures from the device: a small NV12 picture with padded rows, at 59.94 per second.
+  const int w = 4, h = 2, stride = 8;
+  std::vector<std::uint8_t> y(static_cast<std::size_t>(stride * h), 200), uv(static_cast<std::size_t>(stride), 128);
+  y[0] = 77;
+  client->taking = false;
+  capture->sink->onFrame(y.data(), stride, uv.data(), stride, w, h, 0);
+  CHECK(client->pictures == 0);                       // the meeting is not taking pictures yet
+  CHECK(frames.latest(ReturnController::kPreviewSlot).width() == 4);  // but the operator sees the input
+  client->taking = true;
+  for (int i = 1; i <= 120; ++i) capture->sink->onFrame(y.data(), stride, uv.data(), stride, w, h, i * 16683LL);
+  CHECK(client->pictures >= 58 && client->pictures <= 62);  // two seconds of input, 30 per second out
+  CHECK(client->pictureWidth == 4 && client->pictureHeight == 2 && client->firstByte == 77);
+
+  // "Stop sending" keeps the PC in the meeting and the pictures here.
+  const int before = client->pictures;
+  returning.setPaused(true);
+  for (int i = 121; i <= 180; ++i) capture->sink->onFrame(y.data(), stride, uv.data(), stride, w, h, i * 16683LL);
+  CHECK(client->pictures == before);
+  returning.setPaused(false);
+  for (int i = 181; i <= 240; ++i) capture->sink->onFrame(y.data(), stride, uv.data(), stride, w, h, i * 16683LL);
+  CHECK(client->pictures > before + 25);
+  // A broken picture is dropped, not sent.
+  const int sane = client->pictures;
+  capture->sink->onFrame(y.data(), 2, uv.data(), stride, w, h, 99999999LL);
+  CHECK(client->pictures == sane);
+  m.leave();
+
+  a.setReturnAsShare(true);
+  m.join();
+  CHECK(client->lastRequest.sendVideo == backhaul::SendVideo::Share && !client->lastRequest.receive);
+  m.leave();
+
+  // Another job: the capture device is let go, and comes back with the role.
+  a.setRole(QStringLiteral("camera"));
+  CHECK(!capture->alive && returning.deviceIndex() == 0);
+  CHECK(frames.latest(ReturnController::kPreviewSlot).isNull());
+  returning.chooseDevice(1);
+  CHECK(!capture->alive && !returning.problem().isEmpty());
+  m.join();
+  CHECK(client->lastRequest.sendVideo == backhaul::SendVideo::None && client->lastRequest.receive);
+  m.leave();
+  a.setRole(QStringLiteral("return"));
+  CHECK(capture->alive && returning.deviceIndex() == 1);  // chooseDevice(1) was remembered as the wish
+
+  // The choices survive a restart; older files have none; damaged ones are refused.
+  AppState b;
+  CHECK(b.applySettings(a.settingsJson()));
+  CHECK(b.role() == QStringLiteral("return") && b.returnAsShare() && b.videoDeviceName() == QStringLiteral("サンプルキャプチャーA"));
+  QJsonObject old = a.settingsJson();
+  old.remove(QStringLiteral("return"));
+  CHECK(b.applySettings(old));
+  CHECK(!b.returnAsShare() && b.videoDeviceName().isEmpty());
+  old[QStringLiteral("return")] = QJsonObject{{QStringLiteral("device"), QStringLiteral("x")}, {QStringLiteral("as"), QStringLiteral("window")}};
+  CHECK(!b.applySettings(old));
+}
+
 int main(int argc, char* argv[]) {
   QGuiApplication qtApp(argc, argv);
 
@@ -817,6 +951,7 @@ int main(int argc, char* argv[]) {
   testTwoShotRole();
   testAudioRole();
   testSlides();
+  testReturnRole();
 
   if (testing::failures() == 0) {
     std::printf("all meeting controller tests passed\n");

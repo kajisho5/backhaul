@@ -13,7 +13,7 @@ Rectangle {
         { key: "twoshot", title: "2ショット", text: "2人を左右に並べて、1枚の映像で出す", a: "受け取り：2人・各720p", b: "音声：扱わない", ready: true },
         { key: "slide", title: "スライド", text: "共有されている画面を全画面で出す", a: "受け取り：共有画面", b: "音声：扱わない", ready: true },
         { key: "audio", title: "音声", text: "Zoomの声を卓へ出し、卓のマイナスワンをZoomへ送る", a: "映像：扱わない", b: "音声：受けはこのPCだけ", ready: true },
-        { key: "return", title: "返し（映像・音声）", text: "スイッチャーの出力をZoomへ送る。カメラとしても、画面共有としても送れる", a: "送り：カメラ／画面共有", b: "音声：送りだけ（選べる）", ready: false },
+        { key: "return", title: "返し（映像・音声）", text: "スイッチャーの出力をZoomへ送る。カメラとしても、画面共有としても送れる", a: "送り：カメラ／画面共有", b: "音声：送りだけ（選べる）", ready: true },
         { key: "all", title: "1台でぜんぶ", text: "枠を並べて、映像も音もこの1台で扱う", a: "受け取り：人数に合わせて自動", b: "音声：扱う", ready: true }
     ]
 

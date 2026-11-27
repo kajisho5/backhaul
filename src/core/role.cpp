@@ -9,22 +9,29 @@ int personSlotsOf(Role role) {
     case Role::Unset:
     case Role::All:
     case Role::Slide:
-    case Role::Audio: break;
+    case Role::Audio:
+    case Role::Return: break;
   }
   return 0;
 }
 
-bool usesPeople(Role role) { return role != Role::Slide; }
+bool usesPeople(Role role) { return role != Role::Slide && role != Role::Return; }
 
 bool usesShare(Role role) { return role == Role::All || role == Role::Slide; }
 
 bool singleOutput(Role role) { return role == Role::Camera || role == Role::TwoShot || role == Role::Slide; }
 
-bool handlesAudio(Role role) { return role == Role::All || role == Role::Audio; }
+bool playsAudio(Role role) { return role == Role::All || role == Role::Audio; }
 
-bool receivesVideo(Role role) { return role != Role::Audio && role != Role::Unset; }
+bool handlesAudio(Role role) { return playsAudio(role) || sendsAudio(role); }
 
-bool sendsAudio(Role role) { return role == Role::Audio; }
+bool receivesVideo(Role role) { return role != Role::Audio && role != Role::Return && role != Role::Unset; }
+
+bool sendsAudio(Role role) { return role == Role::Audio || role == Role::Return; }
+
+bool sendsVideo(Role role) { return role == Role::Return; }
+
+bool receivesAnything(Role role) { return receivesVideo(role) || playsAudio(role); }
 
 const char* keyOf(Role role) {
   switch (role) {
@@ -33,13 +40,14 @@ const char* keyOf(Role role) {
     case Role::TwoShot: return "twoshot";
     case Role::Slide: return "slide";
     case Role::Audio: return "audio";
+    case Role::Return: return "return";
     case Role::Unset: break;
   }
   return "";
 }
 
 bool roleFromKey(std::string_view key, Role* out) {
-  for (const Role r : {Role::Unset, Role::All, Role::Camera, Role::TwoShot, Role::Slide, Role::Audio}) {
+  for (const Role r : {Role::Unset, Role::All, Role::Camera, Role::TwoShot, Role::Slide, Role::Audio, Role::Return}) {
     if (key == keyOf(r)) {
       *out = r;
       return true;

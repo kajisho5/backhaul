@@ -94,6 +94,12 @@ Window {
             Layout.fillHeight: true
         }
 
+        RoleReturn {
+            visible: app.role === "return"
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+        }
+
         RowLayout {
             visible: app.role === "all" || app.role === "audio"
             Layout.fillWidth: true

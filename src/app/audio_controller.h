@@ -90,6 +90,7 @@ class AudioController : public QObject {
   void syncSlots();
   void tick();
   bool startDevice(int index);
+  bool wantsOutput() const;
   bool startMic(int index);
   void stopMic();
   void startSavedMic();
