@@ -89,6 +89,89 @@ void sendFrame(backhaul::MeetingEvents* events, std::uint32_t user, int w, int h
 
 }  // namespace
 
+// a PC that shows one person: one slot, the largest picture, and no sound at all
+static void testCameraRole() {
+  AppState a;
+  a.loadDefaults();
+  a.setRole(QStringLiteral("camera"));
+  a.setZoomName(0, QStringLiteral("Kakuu Ichiro"));
+  a.setZoomName(1, QStringLiteral("Mihon Hanako"));
+  a.setMeetingId(QStringLiteral("123 4567 8901"));
+  FrameStore frames;
+  ZoomCredentials saved{QStringLiteral("SampleClientId_01"), QStringLiteral("sample-secret")};
+  auto* client = new ScriptedClient;
+  MeetingController m(a, frames, std::unique_ptr<backhaul::MeetingClient>(client),
+                      std::make_unique<MemoryCredentials>(&saved));
+  backhaul::AudioMixer mixer(4);
+  mixer.setChannels(0, 1);
+  m.setMixer(&mixer);
+  m.join();
+  CHECK(client->joins == 1 && !client->lastRequest.audio);
+  client->events->onMeetingState(MeetingState::Receiving, {});
+  Participant self = person(1, "会場 カメラ1");
+  self.isSelf = true;
+  client->events->onParticipants({self, person(10, "Kakuu Ichiro"), person(11, "Mihon Hanako")});
+  CHECK(slotData(a, 0, SlotModel::StateRole).toString() == QStringLiteral("ok"));
+  CHECK(slotData(a, 1, SlotModel::StateRole).toString() == QStringLiteral("unassigned"));  // not this PC's job
+  CHECK(client->wants.size() == 1 && client->wants[0].userId == 10 && client->wants[0].size == VideoSize::P1080);
+  a.setQualityAuto(false);
+  CHECK(client->wants.size() == 1 && client->wants[0].size == VideoSize::P720);
+  a.setQualityAuto(true);
+
+  // Sound that arrives anyway is dropped.
+  std::vector<std::int16_t> loud(480, 20000);
+  client->events->onAudio(10, loud.data(), loud.size(), 48000, 1);
+  std::vector<float> out(480, 0.0f);
+  mixer.render(out.data(), 480, 1);
+  CHECK(mixer.takePeak(0) == 0.0f);
+
+  // Someone else is put on: the first person leaves the picture.
+  a.assignTo(0, 2);
+  CHECK(client->wants.size() == 1 && client->wants[0].userId == 11);
+  a.assignTo(1, 1);  // slot 2 is not in use in this role
+  CHECK(slotData(a, 1, SlotModel::StateRole).toString() == QStringLiteral("unassigned"));
+  m.leave();
+}
+
+// two people side by side: two slots at 720p; the do-everything role joins with sound
+static void testTwoShotRole() {
+  AppState a;
+  a.loadDefaults();
+  a.setRole(QStringLiteral("twoshot"));
+  a.setZoomName(0, QStringLiteral("Kakuu Ichiro"));
+  a.setZoomName(1, QStringLiteral("Mihon Hanako"));
+  a.setZoomName(2, QStringLiteral("Shiken Goro"));
+  a.setMeetingId(QStringLiteral("123 4567 8901"));
+  FrameStore frames;
+  ZoomCredentials saved{QStringLiteral("SampleClientId_01"), QStringLiteral("sample-secret")};
+  auto* client = new ScriptedClient;
+  MeetingController m(a, frames, std::unique_ptr<backhaul::MeetingClient>(client),
+                      std::make_unique<MemoryCredentials>(&saved));
+  m.join();
+  CHECK(!client->lastRequest.audio);
+  client->events->onMeetingState(MeetingState::Receiving, {});
+  client->events->onParticipants({person(10, "Kakuu Ichiro"), person(11, "Mihon Hanako", false), person(12, "Shiken Goro")});
+  CHECK(client->wants.size() == 2);
+  CHECK(client->wants[0].userId == 10 && client->wants[0].size == VideoSize::P720);
+  CHECK(client->wants[1].userId == 11 && client->wants[1].size == VideoSize::P720);
+  CHECK(slotData(a, 2, SlotModel::StateRole).toString() == QStringLiteral("unassigned"));
+  // The second person's camera is off: with "the other one full screen" only the left half is drawn.
+  CHECK(a.twoShotSplit() == 0);
+  a.setTwoShotSolo(true);
+  CHECK(a.twoShotSplit() == 1);
+  client->events->onParticipants({person(10, "Kakuu Ichiro"), person(11, "Mihon Hanako", true), person(12, "Shiken Goro")});
+  CHECK(a.twoShotSplit() == 0);
+  m.leave();
+
+  a.setRole(QStringLiteral("all"));
+  m.join();
+  CHECK(client->joins == 2 && client->lastRequest.audio);
+  client->events->onMeetingState(MeetingState::Receiving, {});
+  client->events->onParticipants({person(10, "Kakuu Ichiro"), person(11, "Mihon Hanako"), person(12, "Shiken Goro")});
+  CHECK(client->wants.size() == 3);  // every slot is in use again
+  m.leave();
+}
+
 int main(int argc, char* argv[]) {
   QGuiApplication qtApp(argc, argv);
 
@@ -454,86 +537,8 @@ int main(int argc, char* argv[]) {
 #endif
 
 
-  {  // a PC that shows one person: one slot, the largest picture, and no sound at all
-    AppState a;
-    a.loadDefaults();
-    a.setRole(QStringLiteral("camera"));
-    a.setZoomName(0, QStringLiteral("Kakuu Ichiro"));
-    a.setZoomName(1, QStringLiteral("Mihon Hanako"));
-    a.setMeetingId(QStringLiteral("123 4567 8901"));
-    FrameStore frames;
-    ZoomCredentials saved{QStringLiteral("SampleClientId_01"), QStringLiteral("sample-secret")};
-    auto* client = new ScriptedClient;
-    MeetingController m(a, frames, std::unique_ptr<backhaul::MeetingClient>(client),
-                        std::make_unique<MemoryCredentials>(&saved));
-    backhaul::AudioMixer mixer(4);
-    mixer.setChannels(0, 1);
-    m.setMixer(&mixer);
-    m.join();
-    CHECK(client->joins == 1 && !client->lastRequest.audio);
-    client->events->onMeetingState(MeetingState::Receiving, {});
-    Participant self = person(1, "会場 カメラ1");
-    self.isSelf = true;
-    client->events->onParticipants({self, person(10, "Kakuu Ichiro"), person(11, "Mihon Hanako")});
-    CHECK(slotData(a, 0, SlotModel::StateRole).toString() == QStringLiteral("ok"));
-    CHECK(slotData(a, 1, SlotModel::StateRole).toString() == QStringLiteral("unassigned"));  // not this PC's job
-    CHECK(client->wants.size() == 1 && client->wants[0].userId == 10 && client->wants[0].size == VideoSize::P1080);
-    a.setQualityAuto(false);
-    CHECK(client->wants.size() == 1 && client->wants[0].size == VideoSize::P720);
-    a.setQualityAuto(true);
-
-    // Sound that arrives anyway is dropped.
-    std::vector<std::int16_t> loud(480, 20000);
-    client->events->onAudio(10, loud.data(), loud.size(), 48000, 1);
-    std::vector<float> out(480, 0.0f);
-    mixer.render(out.data(), 480, 1);
-    CHECK(mixer.takePeak(0) == 0.0f);
-
-    // Someone else is put on: the first person leaves the picture.
-    a.assignTo(0, 2);
-    CHECK(client->wants.size() == 1 && client->wants[0].userId == 11);
-    a.assignTo(1, 1);  // slot 2 is not in use in this role
-    CHECK(slotData(a, 1, SlotModel::StateRole).toString() == QStringLiteral("unassigned"));
-    m.leave();
-  }
-
-  {  // two people side by side: two slots at 720p; the do-everything role joins with sound
-    AppState a;
-    a.loadDefaults();
-    a.setRole(QStringLiteral("twoshot"));
-    a.setZoomName(0, QStringLiteral("Kakuu Ichiro"));
-    a.setZoomName(1, QStringLiteral("Mihon Hanako"));
-    a.setZoomName(2, QStringLiteral("Shiken Goro"));
-    a.setMeetingId(QStringLiteral("123 4567 8901"));
-    FrameStore frames;
-    ZoomCredentials saved{QStringLiteral("SampleClientId_01"), QStringLiteral("sample-secret")};
-    auto* client = new ScriptedClient;
-    MeetingController m(a, frames, std::unique_ptr<backhaul::MeetingClient>(client),
-                        std::make_unique<MemoryCredentials>(&saved));
-    m.join();
-    CHECK(!client->lastRequest.audio);
-    client->events->onMeetingState(MeetingState::Receiving, {});
-    client->events->onParticipants({person(10, "Kakuu Ichiro"), person(11, "Mihon Hanako", false), person(12, "Shiken Goro")});
-    CHECK(client->wants.size() == 2);
-    CHECK(client->wants[0].userId == 10 && client->wants[0].size == VideoSize::P720);
-    CHECK(client->wants[1].userId == 11 && client->wants[1].size == VideoSize::P720);
-    CHECK(slotData(a, 2, SlotModel::StateRole).toString() == QStringLiteral("unassigned"));
-    // The second person's camera is off: with "the other one full screen" only the left half is drawn.
-    CHECK(a.twoShotSplit() == 0);
-    a.setTwoShotSolo(true);
-    CHECK(a.twoShotSplit() == 1);
-    client->events->onParticipants({person(10, "Kakuu Ichiro"), person(11, "Mihon Hanako", true), person(12, "Shiken Goro")});
-    CHECK(a.twoShotSplit() == 0);
-    m.leave();
-
-    a.setRole(QStringLiteral("all"));
-    m.join();
-    CHECK(client->joins == 2 && client->lastRequest.audio);
-    client->events->onMeetingState(MeetingState::Receiving, {});
-    client->events->onParticipants({person(10, "Kakuu Ichiro"), person(11, "Mihon Hanako"), person(12, "Shiken Goro")});
-    CHECK(client->wants.size() == 3);  // every slot is in use again
-    m.leave();
-  }
+  testCameraRole();
+  testTwoShotRole();
 
   if (testing::failures() == 0) {
     std::printf("all meeting controller tests passed\n");
