@@ -6,6 +6,12 @@ import Backhaul.Video
 Rectangle {
     id: root
     property int slotRow: -1
+    // Fill the area and cut what does not fit (two-shot halves); slides keep their own setting.
+    property bool fill: false
+    // Output windows hide the mouse pointer; previews on the operator screen do not.
+    property bool hideCursor: true
+    // Shown where the picture will be while none has arrived (previews only).
+    property string placeholder: ""
     color: "black"
 
     Repeater {
@@ -19,11 +25,18 @@ Rectangle {
             anchors.fill: parent
             visible: index === root.slotRow
 
+            Text {
+                visible: root.placeholder.length > 0 && (one.videoOut === "live" || one.videoOut === "freeze")
+                anchors.centerIn: parent
+                text: one.videoOut === "freeze" ? "静止" : root.placeholder
+                color: "#6f757d"
+                font.family: app.sansFamily; font.pixelSize: 13; font.letterSpacing: 1.5
+            }
             FrameItem {
                 anchors.fill: parent
                 visible: one.videoOut === "live" || one.videoOut === "freeze"
                 slot: one.index
-                crop: one.crop
+                crop: one.crop || root.fill
             }
             Rectangle {
                 anchors.fill: parent
@@ -53,5 +66,5 @@ Rectangle {
             }
         }
     }
-    MouseArea { anchors.fill: parent; cursorShape: Qt.BlankCursor; acceptedButtons: Qt.NoButton }
+    MouseArea { anchors.fill: parent; visible: root.hideCursor; cursorShape: Qt.BlankCursor; acceptedButtons: Qt.NoButton }
 }

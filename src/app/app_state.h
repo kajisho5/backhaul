@@ -7,6 +7,7 @@
 #include <QObject>
 #include <QString>
 
+#include "core/role.h"
 #include "display_model.h"
 #include "participant_model.h"
 #include "slot_model.h"
@@ -42,6 +43,22 @@ class AppState : public QObject {
   Q_PROPERTY(int selected READ selected WRITE setSelected NOTIFY selectedChanged)
   Q_PROPERTY(int participantCount READ participantCount NOTIFY changed)
   Q_PROPERTY(int returnRow READ returnRow NOTIFY changed)
+  // What this PC is used for: "" (not chosen yet), "all", "camera" or "twoshot".
+  Q_PROPERTY(QString role READ role WRITE setRole NOTIFY roleChanged)
+  Q_PROPERTY(bool handlesAudio READ handlesAudio NOTIFY roleChanged)
+  // Single-output roles: the monitor the role's picture goes to (0 = none).
+  Q_PROPERTY(QStringList roleOutputChoices READ gridChoices NOTIFY changed)
+  Q_PROPERTY(int roleOutputChoice READ roleOutputChoice NOTIFY changed)
+  // Two-shot: slot rows shown left and right, how they are fitted, and which halves are drawn.
+  Q_PROPERTY(int twoShotLeft READ twoShotLeft NOTIFY changed)
+  Q_PROPERTY(int twoShotRight READ twoShotRight NOTIFY changed)
+  Q_PROPERTY(bool twoShotFill READ twoShotFill WRITE setTwoShotFill NOTIFY changed)
+  Q_PROPERTY(bool twoShotSolo READ twoShotSolo WRITE setTwoShotSolo NOTIFY changed)
+  // For the two pickers: entry 0 is "nobody", then everyone in the meeting except this PC.
+  Q_PROPERTY(QStringList pickNames READ pickNames NOTIFY changed)
+  Q_PROPERTY(int twoShotLeftPick READ twoShotLeftPick NOTIFY changed)
+  Q_PROPERTY(int twoShotRightPick READ twoShotRightPick NOTIFY changed)
+  Q_PROPERTY(int twoShotSplit READ twoShotSplit NOTIFY changed)  // 0 both, 1 left only, 2 right only
   Q_PROPERTY(QString sansFamily READ sansFamily CONSTANT)
   Q_PROPERTY(QString monoFamily READ monoFamily CONSTANT)
 
@@ -78,6 +95,33 @@ class AppState : public QObject {
   void setQualityAuto(bool on);
   QStringList slotNumbers() const;
   QString monoFamily() const { return mono_; }
+
+  QString role() const { return QString::fromLatin1(backhaul::keyOf(role_)); }
+  // Unknown names are ignored. A two-shot needs two person slots: one is added when there is only one.
+  void setRole(const QString& key);
+  backhaul::Role roleValue() const { return role_; }
+  bool handlesAudio() const { return backhaul::handlesAudio(role_); }
+  // Whether the current role uses this slot row.
+  bool slotActive(int row) const;
+  int roleOutputChoice() const;
+  int twoShotLeft() const { return twoShotSwapped_ ? 1 : 0; }
+  int twoShotRight() const { return twoShotSwapped_ ? 0 : 1; }
+  bool twoShotFill() const { return twoShotFill_; }
+  void setTwoShotFill(bool fill);
+  bool twoShotSolo() const { return twoShotSolo_; }
+  void setTwoShotSolo(bool solo);
+  int twoShotSplit() const { return twoShotSplit_; }
+
+  // Puts participant `participantRow` into slot `slotRow` (replacing whoever was there).
+  Q_INVOKABLE void assignTo(int slotRow, int participantRow);
+  // `choice` 0 means none; choice n is the n-th monitor that can be an output.
+  Q_INVOKABLE void setRoleOutputChoice(int choice);
+  Q_INVOKABLE void swapTwoShot();
+  QStringList pickNames() const;
+  int twoShotLeftPick() const { return pickOfSlot(twoShotLeft()); }
+  int twoShotRightPick() const { return pickOfSlot(twoShotRight()); }
+  // `pick` is an index into pickNames(); 0 empties the slot.
+  Q_INVOKABLE void pickForSlot(int slotRow, int pick);
 
   // Level steps of 0.5 dB within -60..+12 dB; delay steps of 10 ms within 0..2000 ms.
   Q_INVOKABLE void nudgeGain(int row, int steps);
@@ -135,8 +179,17 @@ class AppState : public QObject {
   // Someone was put into a slot by hand.
   void assignmentsChanged();
   void selectedChanged();
+  void roleChanged();
 
  private:
+  backhaul::Role role_ = backhaul::Role::Unset;
+  QString roleScreen_;
+  bool twoShotSwapped_ = false, twoShotFill_ = true, twoShotSolo_ = false;
+  int twoShotSplit_ = 0;
+  void refreshTwoShotSplit();
+  int pickOfSlot(int slotRow) const;
+  QVector<int> pickRows() const;  // participant rows behind pickNames(), without entry 0
+
   SlotModel slots_;
   ParticipantModel participants_;
   bool gridMode_ = false;

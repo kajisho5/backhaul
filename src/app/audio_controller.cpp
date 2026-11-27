@@ -17,6 +17,20 @@ AudioController::AudioController(AppState& app, std::unique_ptr<backhaul::AudioO
   connect(&timer_, &QTimer::timeout, this, [this] { tick(); });
   timer_.start();
   refreshDevices();
+  connect(&app_, &AppState::roleChanged, this, [this] {
+    if (app_.handlesAudio()) {
+      if (deviceIndex_ == 0) startSaved();
+      return;
+    }
+    // This PC's role leaves the sound to another PC: nothing may come out here.
+    if (output_ != nullptr) output_->stop();
+    if (asio_ != nullptr) asio_->stop();
+    deviceIndex_ = 0;
+    problem_.clear();
+    app_.audioOk_ = false;
+    app_.notifyChanged();
+    emit changed();
+  });
 }
 
 AudioController::~AudioController() {
@@ -64,6 +78,11 @@ void AudioController::refreshDevices() {
 
 bool AudioController::startDevice(int index) {
   if (active() == nullptr || index < 1 || index > static_cast<int>(devices_.size())) return false;
+  if (!app_.handlesAudio()) {
+    problem_ = QStringLiteral("このPCの役割では音を出しません（役割を「1台でぜんぶ」にすると出せます）");
+    emit changed();
+    return false;
+  }
   const backhaul::AudioDevice& device = devices_[static_cast<std::size_t>(index - 1)];
   std::string error;
   if (!active()->start(device.id, &mixer_, &error)) {
@@ -102,7 +121,7 @@ void AudioController::chooseDevice(int index) {
 }
 
 void AudioController::startSaved() {
-  if (app_.audioDeviceName_.isEmpty()) return;
+  if (app_.audioDeviceName_.isEmpty() || !app_.handlesAudio()) return;
   if (active() == nullptr) {
     problem_ = app_.audioAsio() ? QStringLiteral("このプログラムにはASIOが入っていません。方式を選び直してください")
                                 : QStringLiteral("このPCでは音を出せません");

@@ -4,6 +4,7 @@ add_library(backhaul_core STATIC
   delay_line.cpp
   quality_policy.cpp
   resampler.cpp
+  role.cpp
   route_matrix.cpp
   sdk_token.cpp
   sha256.cpp

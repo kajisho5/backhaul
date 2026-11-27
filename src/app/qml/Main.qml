@@ -16,6 +16,15 @@ Window {
     // Set from the command line for pictures of the settings pages.
     property bool settingsOpen: false
     property string settingsTab: "slots"
+    // The role question: always while no role is chosen, otherwise when asked for.
+    property bool roleOpen: false
+    readonly property bool roleAsked: !settingsOpen && (roleOpen || app.role.length === 0)
+
+    RoleSelect {
+        anchors.fill: parent
+        visible: roleAsked
+        onClosed: roleOpen = false
+    }
 
     SettingsScreen {
         id: settings
@@ -41,7 +50,8 @@ Window {
             color: "black"
             title: "backhaul 出力"
             visibility: slot >= 0 && !isOperator ? Window.FullScreen : Window.Hidden
-            OutputView { anchors.fill: parent; slotRow: slot }
+            OutputView { anchors.fill: parent; visible: app.role !== "twoshot"; slotRow: slot }
+            TwoShotView { anchors.fill: parent; visible: app.role === "twoshot" }
         }
     }
 
@@ -74,11 +84,18 @@ Window {
     ColumnLayout {
         anchors.fill: parent
         spacing: 0
-        visible: !settingsOpen
+        visible: !settingsOpen && !roleAsked
 
-        TopBar { Layout.fillWidth: true; onSettingsRequested: settingsOpen = true }
+        TopBar { Layout.fillWidth: true; onSettingsRequested: settingsOpen = true; onRoleRequested: roleOpen = true }
+
+        RoleScreen {
+            visible: app.role === "camera" || app.role === "twoshot"
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+        }
 
         RowLayout {
+            visible: app.role === "all"
             Layout.fillWidth: true
             Layout.fillHeight: true
             spacing: 0

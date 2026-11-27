@@ -16,7 +16,7 @@ struct ParticipantRow {
 class ParticipantModel : public QAbstractListModel {
   Q_OBJECT
  public:
-  enum Role { NameRole = Qt::UserRole + 1, TagRole, CanAssignRole };
+  enum Role { NameRole = Qt::UserRole + 1, TagRole, CanAssignRole, InSlotRole, IsSelfRole };
 
   explicit ParticipantModel(QObject* parent = nullptr);
 

@@ -55,6 +55,10 @@ qt_add_qml_module(backhaul
     qml/SettingsZoom.qml
     qml/OutputView.qml
     qml/Dropdown.qml
+    qml/RoleSelect.qml
+    qml/RoleScreen.qml
+    qml/RoleTile.qml
+    qml/TwoShotView.qml
 )
 
 target_link_libraries(backhaul PRIVATE backhaul_app_state Qt6::Qml Qt6::Quick)

@@ -331,6 +331,122 @@ int main(int argc, char* argv[]) {
     CHECK(!c.applySettings(bad));
   }
 
+
+  {  // roles: what this PC is for
+    AppState a;
+    a.loadDefaults();
+    CHECK(a.role().isEmpty());          // a fresh PC has to be told
+    CHECK(!a.handlesAudio());           // and stays silent until then
+    a.setRole(QStringLiteral("slide")); // unknown names change nothing
+    CHECK(a.role().isEmpty());
+    a.setRole(QStringLiteral("all"));
+    CHECK(a.role() == QStringLiteral("all") && a.handlesAudio());
+    CHECK(a.slotActive(0) && a.slotActive(3) && a.slotActive(4) && !a.slotActive(5) && !a.slotActive(-1));
+
+    a.setRole(QStringLiteral("camera"));
+    CHECK(!a.handlesAudio());
+    CHECK(a.slotActive(0) && !a.slotActive(1) && !a.slotActive(4));
+    a.setRole(QStringLiteral("twoshot"));
+    CHECK(a.slotActive(0) && a.slotActive(1) && !a.slotActive(2) && !a.slotActive(4));
+
+    // The role's one picture goes to one monitor; the operator's own monitor is never offered.
+    a.setScreens({{QStringLiteral("op"), QStringLiteral("サンプルモニターA"), QString()},
+                  {QStringLiteral("out-a"), QStringLiteral("HDMI 2"), QString()},
+                  {QStringLiteral("out-b"), QStringLiteral("HDMI 3"), QString()}},
+                 QStringLiteral("op"));
+    CHECK(a.gridChoices().size() == 3 && a.roleOutputChoice() == 0);
+    a.setRoleOutputChoice(2);
+    CHECK(a.roleOutputChoice() == 2);
+    CHECK(a.displays()->rows()[0].slot == -1 && a.displays()->rows()[1].slot == -1 && a.displays()->rows()[2].slot == 0);
+    a.setRoleOutputChoice(7);  // not a monitor: ignored
+    CHECK(a.roleOutputChoice() == 2);
+
+    // Two-shot options and the role survive a restart.
+    a.setTwoShotFill(false);
+    a.setTwoShotSolo(true);
+    a.swapTwoShot();
+    CHECK(a.twoShotLeft() == 1 && a.twoShotRight() == 0);
+    AppState b;
+    CHECK(b.applySettings(a.settingsJson()));
+    CHECK(b.role() == QStringLiteral("twoshot") && !b.twoShotFill() && b.twoShotSolo() && b.twoShotLeft() == 1);
+    b.setScreens({{QStringLiteral("out-b"), QStringLiteral("HDMI 3"), QString()}}, QString());
+    CHECK(b.roleOutputChoice() == 1);
+
+    // The slot-by-monitor table of the do-everything role is untouched by all this.
+    a.setRole(QStringLiteral("all"));
+    CHECK(a.displays()->rows()[2].slot == -1);
+
+    // Files from before roles existed belong to PCs that did everything.
+    QJsonObject old = a.settingsJson();
+    old.remove(QStringLiteral("role"));
+    old.remove(QStringLiteral("roleScreen"));
+    old.remove(QStringLiteral("twoShot"));
+    AppState c;
+    CHECK(c.applySettings(old));
+    CHECK(c.role() == QStringLiteral("all"));
+    // Damaged role entries are refused as a whole.
+    QJsonObject bad = a.settingsJson();
+    bad[QStringLiteral("role")] = QStringLiteral("everything");
+    CHECK(!c.applySettings(bad));
+    bad = a.settingsJson();
+    bad[QStringLiteral("twoShot")] = QStringLiteral("yes");
+    CHECK(!c.applySettings(bad));
+    // A two-shot needs two person slots.
+    bad = a.settingsJson();
+    bad[QStringLiteral("role")] = QStringLiteral("twoshot");
+    QJsonArray one;
+    one.push_back(bad.value(QStringLiteral("slots")).toArray().at(0));
+    bad[QStringLiteral("slots")] = one;
+    bad[QStringLiteral("outputs")] = QJsonArray{};
+    CHECK(!c.applySettings(bad));
+    bad[QStringLiteral("role")] = QStringLiteral("camera");
+    CHECK(c.applySettings(bad));
+    c.setRole(QStringLiteral("twoshot"));  // chosen by hand: the second slot is added
+    CHECK(c.slotList()->rowCount() == 2 && c.slotActive(1));
+  }
+
+  {  // two-shot: which halves are drawn, and who is where
+    AppState a;
+    loadDemo(a);  // slot 1 has a picture, slot 2's camera is off (name card)
+    a.setRole(QStringLiteral("twoshot"));
+    CHECK(a.twoShotSplit() == 0);
+    a.setTwoShotSolo(true);
+    CHECK(a.twoShotSplit() == 1);   // the left person alone
+    a.swapTwoShot();
+    CHECK(a.twoShotSplit() == 2);   // the same person, now on the right
+    a.swapTwoShot();
+
+    // Pickers: entry 0 is nobody; this PC itself is not offered.
+    const QStringList names = a.pickNames();
+    CHECK(names.size() == a.participantCount());  // everyone but self, plus "nobody"
+    const int left = a.twoShotLeftPick();
+    const int right = a.twoShotRightPick();
+    CHECK(left > 0 && right > 0 && left != right);
+    // Picking the right-hand person for the left side moves them: nobody is in two slots.
+    a.pickForSlot(0, right);
+    CHECK(a.twoShotLeftPick() == right && a.twoShotRightPick() == 0);
+    CHECK(slotData(a, 1, SlotModel::StateRole).toString() == QStringLiteral("unassigned"));
+    CHECK(slotData(a, 1, SlotModel::ZoomNameRole).toString().isEmpty());
+    a.pickForSlot(0, 0);  // nobody
+    CHECK(a.twoShotLeftPick() == 0);
+    CHECK(slotData(a, 0, SlotModel::StateRole).toString() == QStringLiteral("unassigned"));
+    a.pickForSlot(3, 1);  // a slot the role does not use: refused
+    CHECK(slotData(a, 3, SlotModel::ZoomNameRole).toString() == QStringLiteral("Reida Mina"));
+    a.pickForSlot(0, 99);
+    CHECK(a.twoShotLeftPick() == 0);
+
+    // A role that does not use a slot empties it but keeps its Zoom name for later.
+    AppState b;
+    loadDemo(b);
+    b.setRole(QStringLiteral("camera"));
+    CHECK(b.twoShotSplit() == 0);
+    CHECK(slotData(b, 0, SlotModel::StateRole).toString() == QStringLiteral("ok"));
+    CHECK(slotData(b, 1, SlotModel::StateRole).toString() == QStringLiteral("unassigned"));
+    CHECK(slotData(b, 1, SlotModel::ZoomNameRole).toString() == QStringLiteral("Mihon Hanako"));
+    CHECK(personData(b, 1, ParticipantModel::InSlotRole).toBool() == false);
+    CHECK(personData(b, 0, ParticipantModel::InSlotRole).toBool());
+  }
+
   if (testing::failures() == 0) {
     std::printf("all app state tests passed\n");
     return 0;

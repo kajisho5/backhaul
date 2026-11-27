@@ -17,6 +17,7 @@ struct JoinRequest {
   std::string displayName;
   std::string passcode;      // may be empty
   std::string zak;           // may be empty; needed for meetings of other accounts
+  bool audio = true;         // false: do not join the meeting's sound at all (another PC handles it)
 };
 
 enum class MeetingState {

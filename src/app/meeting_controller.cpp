@@ -47,6 +47,11 @@ MeetingController::MeetingController(AppState& app, FrameStore& frames, std::uni
   secondTimer_.setInterval(1000);
   connect(&secondTimer_, &QTimer::timeout, this, [this] { everySecond(); });
   connect(&app_, &AppState::assignmentsChanged, this, [this] { applyParticipants(); });
+  audio_ = app_.handlesAudio();
+  connect(&app_, &AppState::roleChanged, this, [this] {
+    audio_ = app_.handlesAudio();
+    applyParticipants();  // the role decides which slots are in use
+  });
   connect(&app_, &AppState::changed, this, [this] {
     emit changed();  // canJoin depends on what is typed
     updateWants();   // the size limit may have changed
@@ -117,6 +122,7 @@ void MeetingController::join() {
   request.displayName = app_.joinName().trimmed().toStdString();
   request.passcode = passcode_.toStdString();
   request.zak = zak_.trimmed().toStdString();
+  request.audio = app_.handlesAudio();
   authenticated_ = false;
   detail_.clear();
   client_->join(request, this);  // reports through onMeetingState, also when it cannot start
@@ -219,9 +225,23 @@ void MeetingController::applyParticipants() {
 
   QHash<quint32, int> slotByUser;
   QVector<int> personOfSlot(slotRows.size(), -1);
+  // Slots the current role does not use hold nobody.
+  for (int i = 0; i < slotRows.size(); ++i) {
+    if (!isPerson(slotRows[i]) || app_.slotActive(i)) continue;
+    if (slotRows[i].userId == 0 && !slotRows[i].situation.assigned) continue;
+    app_.slotList()->update(i, [](SlotRow& r) {
+      r.userId = 0;
+      r.situation.assigned = r.situation.connected = false;
+      r.situation.videoOn = r.situation.audioOn = r.situation.hasLastFrame = r.situation.unstable = false;
+      r.width = r.height = r.fps = 0;
+      r.level = 0.0;
+    });
+    frames_.clear(i);
+    if (mixer_ != nullptr) mixer_->flush(i);
+  }
   // 1) People who are already in a slot stay there.
   for (int i = 0; i < slotRows.size(); ++i) {
-    if (!isPerson(slotRows[i]) || slotRows[i].userId == 0) continue;
+    if (!isPerson(slotRows[i]) || !app_.slotActive(i) || slotRows[i].userId == 0) continue;
     for (int k = 0; k < people.size(); ++k) {
       if (people[k].id == slotRows[i].userId && people[k].slot < 0) {
         people[k].slot = i;
@@ -232,7 +252,10 @@ void MeetingController::applyParticipants() {
   }
   // 2) Empty slots take the person whose Zoom name they are set up for (first join and return).
   for (int i = 0; i < slotRows.size(); ++i) {
-    if (!isPerson(slotRows[i]) || personOfSlot[i] >= 0 || slotRows[i].zoomName.trimmed().isEmpty()) continue;
+    if (!isPerson(slotRows[i]) || !app_.slotActive(i) || personOfSlot[i] >= 0 ||
+        slotRows[i].zoomName.trimmed().isEmpty()) {
+      continue;
+    }
     for (int k = 0; k < people.size(); ++k) {
       if (people[k].slot < 0 && !people[k].isSelf && people[k].name == slotRows[i].zoomName.trimmed()) {
         people[k].slot = i;
@@ -242,7 +265,7 @@ void MeetingController::applyParticipants() {
     }
   }
   for (int i = 0; i < slotRows.size(); ++i) {
-    if (!isPerson(slotRows[i])) continue;
+    if (!isPerson(slotRows[i]) || !app_.slotActive(i)) continue;
     const int k = personOfSlot[i];
     if (k >= 0) {
       const backhaul::Participant& p = everyone_[static_cast<std::size_t>(k)];
@@ -323,7 +346,7 @@ void MeetingController::everySecond() {
   }
   const auto& slotRows = app_.slotList()->rows();
   for (int i = 0; i < slotRows.size(); ++i) {
-    if (!isPerson(slotRows[i])) continue;
+    if (!isPerson(slotRows[i]) || !app_.slotActive(i)) continue;
     const int fps = frames_.takeCount(i);
     const QImage image = frames_.latest(i);
     const bool has = !image.isNull();
@@ -343,7 +366,7 @@ void MeetingController::everySecond() {
 
 void MeetingController::onAudio(std::uint32_t userId, const std::int16_t* samples, std::size_t frames, int sampleRate,
                                 int channels) {
-  if (mixer_ == nullptr) return;
+  if (mixer_ == nullptr || !audio_.load()) return;
   int slot = -1;
   {
     const QMutexLocker lock(&routeMutex_);

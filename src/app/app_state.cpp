@@ -34,6 +34,147 @@ AppState::AppState(QObject* parent) : QObject(parent) {
   mono_ = pickFamily({QStringLiteral("JetBrains Mono"), QStringLiteral("Cascadia Mono"), QStringLiteral("Consolas"),
                       QStringLiteral("DejaVu Sans Mono")},
                      QFontDatabase::FixedFont);
+  connect(&slots_, &QAbstractItemModel::dataChanged, this, [this] { refreshTwoShotSplit(); });
+  connect(&slots_, &QAbstractItemModel::modelReset, this, [this] { refreshTwoShotSplit(); });
+}
+
+void AppState::setRole(const QString& key) {
+  backhaul::Role role = role_;
+  if (!backhaul::roleFromKey(key.toStdString(), &role) || role == role_) return;
+  role_ = role;
+  if (role_ == backhaul::Role::TwoShot && slots_.rows().size() - slots_.shareCount() < 2) addPersonSlot();
+  if (!slotActive(selected_)) setSelected(0);
+  // Slots the new role does not use hold nobody. Their Zoom names stay, so the people
+  // come back by name when the role uses those slots again.
+  for (int i = 0; i < slots_.rows().size(); ++i) {
+    const SlotRow& row = slots_.rows()[i];
+    if (isShare(row) || slotActive(i) || (!row.situation.assigned && row.userId == 0)) continue;
+    participants_.clearSlot(i);
+    slots_.update(i, [](SlotRow& r) {
+      r.userId = 0;
+      r.situation.assigned = r.situation.connected = false;
+      r.situation.videoOn = r.situation.audioOn = r.situation.hasLastFrame = r.situation.unstable = false;
+      r.width = r.height = r.fps = 0;
+      r.level = 0.0;
+    });
+  }
+  refreshDisplays();
+  refreshTwoShotSplit();
+  emit roleChanged();
+  emit changed();
+  emit settingsEdited();
+}
+
+bool AppState::slotActive(int row) const {
+  if (row < 0 || row >= slots_.rows().size()) return false;
+  const int people = backhaul::personSlotsOf(role_);
+  if (people == 0) return true;
+  // People come first in the list, so the role's slots are simply the first rows.
+  return row < people && !isShare(slots_.rows()[row]);
+}
+
+void AppState::setTwoShotFill(bool fill) {
+  if (fill == twoShotFill_) return;
+  twoShotFill_ = fill;
+  emit changed();
+  emit settingsEdited();
+}
+
+void AppState::setTwoShotSolo(bool solo) {
+  if (solo == twoShotSolo_) return;
+  twoShotSolo_ = solo;
+  refreshTwoShotSplit();
+  emit changed();
+  emit settingsEdited();
+}
+
+void AppState::swapTwoShot() {
+  twoShotSwapped_ = !twoShotSwapped_;
+  refreshTwoShotSplit();
+  emit changed();
+  emit settingsEdited();
+}
+
+void AppState::refreshTwoShotSplit() {
+  auto hasPicture = [this](int row) {
+    if (row < 0 || row >= slots_.rows().size()) return false;
+    const QString out = slots_.data(slots_.index(row), SlotModel::VideoOutRole).toString();
+    return out == QStringLiteral("live") || out == QStringLiteral("freeze");
+  };
+  int split = 0;
+  if (role_ == backhaul::Role::TwoShot) {
+    switch (backhaul::twoShotSplit(hasPicture(twoShotLeft()), hasPicture(twoShotRight()), twoShotSolo_)) {
+      case backhaul::TwoShotSplit::Both: split = 0; break;
+      case backhaul::TwoShotSplit::LeftOnly: split = 1; break;
+      case backhaul::TwoShotSplit::RightOnly: split = 2; break;
+    }
+  }
+  if (split == twoShotSplit_) return;
+  twoShotSplit_ = split;
+  emit changed();
+}
+
+QVector<int> AppState::pickRows() const {
+  QVector<int> rows;
+  const auto& people = participants_.rows();
+  for (int i = 0; i < people.size(); ++i) {
+    if (!people[i].isSelf) rows.push_back(i);
+  }
+  return rows;
+}
+
+QStringList AppState::pickNames() const {
+  QStringList names{QStringLiteral("（だれも出さない）")};
+  for (const int row : pickRows()) names.push_back(participants_.rows()[row].name);
+  return names;
+}
+
+int AppState::pickOfSlot(int slotRow) const {
+  const QVector<int> rows = pickRows();
+  for (int i = 0; i < rows.size(); ++i) {
+    if (participants_.rows()[rows[i]].slot == slotRow) return i + 1;
+  }
+  return 0;
+}
+
+void AppState::pickForSlot(int slotRow, int pick) {
+  const QVector<int> rows = pickRows();
+  if (pick < 0 || pick > rows.size() || !slotActive(slotRow) || isShare(slots_.rows()[slotRow])) return;
+  if (pick > 0) {
+    assignTo(slotRow, rows[pick - 1]);
+    return;
+  }
+  participants_.clearSlot(slotRow);
+  slots_.update(slotRow, [](SlotRow& r) {
+    r.zoomName.clear();
+    r.userId = 0;
+    r.situation.assigned = r.situation.connected = false;
+    r.situation.videoOn = r.situation.audioOn = r.situation.hasLastFrame = false;
+    r.width = r.height = r.fps = 0;
+    r.level = 0.0;
+  });
+  emit changed();
+  emit settingsEdited();
+  emit assignmentsChanged();
+}
+
+int AppState::roleOutputChoice() const {
+  const QVector<int> rows = outputRows();
+  for (int i = 0; i < rows.size(); ++i) {
+    if (screens_[rows[i]].key == roleScreen_) return i + 1;
+  }
+  return 0;
+}
+
+void AppState::setRoleOutputChoice(int choice) {
+  const QVector<int> rows = outputRows();
+  if (choice < 0 || choice > rows.size()) return;
+  const QString key = choice == 0 ? QString() : screens_[rows[choice - 1]].key;
+  if (key == roleScreen_) return;
+  roleScreen_ = key;
+  refreshDisplays();
+  emit changed();
+  emit settingsEdited();
 }
 
 void AppState::setGridMode(bool on) {
@@ -71,12 +212,26 @@ void AppState::setFreezeOnLoss(int row, bool freeze) {
   edited(row);
 }
 
-void AppState::assignToSelected(int participantRow) {
+void AppState::assignToSelected(int participantRow) { assignTo(selected_, participantRow); }
+
+void AppState::assignTo(int slot, int participantRow) {
   const auto& people = participants_.rows();
-  if (participantRow < 0 || participantRow >= people.size()) return;
-  const int slot = selected_;
+  if (participantRow < 0 || participantRow >= people.size() || !slotActive(slot) || isShare(slots_.rows()[slot])) return;
+  if (people[participantRow].isSelf || people[participantRow].slot == slot) return;
   const QString name = people[participantRow].name;
   const quint32 id = people[participantRow].id;
+  // The person leaves the slot they were in: one person is never in two slots.
+  const int previous = people[participantRow].slot;
+  if (previous >= 0 && previous != slot) {
+    slots_.update(previous, [](SlotRow& r) {
+      r.zoomName.clear();
+      r.userId = 0;
+      r.situation.assigned = r.situation.connected = false;
+      r.situation.videoOn = r.situation.audioOn = r.situation.hasLastFrame = false;
+      r.width = r.height = r.fps = 0;
+      r.level = 0.0;
+    });
+  }
   participants_.clearSlot(slot);
   participants_.setSlotOf(participantRow, slot);
   slots_.update(slot, [&name, id](SlotRow& r) {
@@ -91,6 +246,7 @@ void AppState::assignToSelected(int participantRow) {
     r.width = r.height = r.fps = 0;
     r.level = 0.0;
   });
+  emit changed();
   emit settingsEdited();  // the Zoom name of the slot is kept for next time
   emit assignmentsChanged();
 }
@@ -223,6 +379,13 @@ QJsonObject AppState::settingsJson() const {
   zoom[QStringLiteral("name")] = joinName_;
   zoom[QStringLiteral("size")] = qualityAuto_ ? QStringLiteral("auto") : QStringLiteral("720");
   root[QStringLiteral("zoom")] = zoom;
+  root[QStringLiteral("role")] = role();
+  root[QStringLiteral("roleScreen")] = roleScreen_;
+  QJsonObject twoShot;
+  twoShot[QStringLiteral("fill")] = twoShotFill_;
+  twoShot[QStringLiteral("solo")] = twoShotSolo_;
+  twoShot[QStringLiteral("swapped")] = twoShotSwapped_;
+  root[QStringLiteral("twoShot")] = twoShot;
   return root;
 }
 
@@ -319,6 +482,27 @@ bool AppState::applySettings(const QJsonObject& settings) {
     qualityAuto = size == QStringLiteral("auto");
   }
 
+  // Role: absent in files written before roles existed (those PCs did everything).
+  backhaul::Role role = backhaul::Role::All;
+  QString roleScreen;
+  bool fill = true, solo = false, swapped = false;
+  const QJsonValue roleValue = settings.value(QStringLiteral("role"));
+  if (!roleValue.isUndefined()) {
+    const QJsonValue screen = settings.value(QStringLiteral("roleScreen"));
+    const QJsonValue twoShotValue = settings.value(QStringLiteral("twoShot"));
+    const QJsonObject twoShot = twoShotValue.toObject();
+    if (!roleValue.isString() || !backhaul::roleFromKey(roleValue.toString().toStdString(), &role) ||
+        !screen.isString() || !twoShotValue.isObject() || !twoShot.value(QStringLiteral("fill")).isBool() ||
+        !twoShot.value(QStringLiteral("solo")).isBool() || !twoShot.value(QStringLiteral("swapped")).isBool()) {
+      return false;
+    }
+    roleScreen = screen.toString().left(kMaxZoomNameLength);
+    fill = twoShot.value(QStringLiteral("fill")).toBool();
+    solo = twoShot.value(QStringLiteral("solo")).toBool();
+    swapped = twoShot.value(QStringLiteral("swapped")).toBool();
+  }
+  if (role == backhaul::Role::TwoShot && people.size() < 2) return false;
+
   // People first, then slides, numbered in order.
   QVector<SlotRow> rows;
   for (int i = 0; i < people.size(); ++i) {
@@ -336,7 +520,14 @@ bool AppState::applySettings(const QJsonObject& settings) {
   meetingId_ = meetingId;
   joinName_ = joinName;
   qualityAuto_ = qualityAuto;
+  role_ = role;
+  roleScreen_ = roleScreen;
+  twoShotFill_ = fill;
+  twoShotSolo_ = solo;
+  twoShotSwapped_ = swapped;
   refreshDisplays();
+  refreshTwoShotSplit();
+  emit roleChanged();
   audioAsio_ = method == QStringLiteral("asio");
   audioDeviceName_ = audio.value(QStringLiteral("device")).toString().left(kMaxZoomNameLength);
   selected_ = 0;
@@ -366,7 +557,13 @@ void AppState::loadDefaults() {
   participants_.setRows({}, slotNumbers());
   slotByScreen_.clear();
   gridScreen_.clear();
+  role_ = backhaul::Role::Unset;
+  roleScreen_.clear();
+  twoShotFill_ = true;
+  twoShotSolo_ = twoShotSwapped_ = false;
   refreshDisplays();
+  refreshTwoShotSplit();
+  emit roleChanged();
   audioAsio_ = false;
   audioDeviceName_.clear();
   selected_ = 0;
@@ -399,7 +596,10 @@ void AppState::refreshDisplays() {
     r.title = s.title;
     r.mode = s.mode;
     r.isOperator = s.key == operatorKey_;
-    const int slot = slotByScreen_.value(s.key, -1);
+    // Single-output roles send their one picture to one monitor; the slot-by-monitor
+    // table belongs to the "everything" role and is left alone meanwhile.
+    const bool single = backhaul::personSlotsOf(role_) > 0;
+    const int slot = single ? (s.key == roleScreen_ && !slotRows.isEmpty() ? 0 : -1) : slotByScreen_.value(s.key, -1);
     if (r.isOperator) {
       r.slotText = QStringLiteral("操作画面（このPCの画面）");
     } else if (slot >= 0 && slot < slotRows.size()) {

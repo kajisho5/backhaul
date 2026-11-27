@@ -62,6 +62,11 @@ jobs:
             if ($p.ExitCode -ne 0) { throw "backhaul --settings $page exited with $($p.ExitCode)" }
             if (-not (Test-Path "settings-$page-windows.png")) { throw "no picture of the $page settings was written" }
           }
+          foreach ($role in 'ask','camera','twoshot') {
+            $p = Start-Process -FilePath $exe.FullName -ArgumentList '--demo','--role',$role,'--screenshot',"$PWD\role-$role-windows.png" -Wait -PassThru
+            if ($p.ExitCode -ne 0) { throw "backhaul --role $role exited with $($p.ExitCode)" }
+            if (-not (Test-Path "role-$role-windows.png")) { throw "no picture of the $role role was written" }
+          }
       - uses: actions/upload-artifact@v4
         with:
           name: operator-screen-windows-qt${{ matrix.qt }}
@@ -70,6 +75,7 @@ jobs:
             settings-slots-windows.png
             settings-audio-windows.png
             settings-video-windows.png
+            role-*-windows.png
             settings-zoom-windows.png
 
   app-linux:
@@ -97,6 +103,9 @@ jobs:
           ./build/src/app/backhaul --demo --settings audio --screenshot settings-audio-linux.png
           ./build/src/app/backhaul --demo --settings video --screenshot settings-video-linux.png
           ./build/src/app/backhaul --demo --settings zoom --screenshot settings-zoom-linux.png
+          ./build/src/app/backhaul --demo --role ask --screenshot role-ask-linux.png
+          ./build/src/app/backhaul --demo --role camera --screenshot role-camera-linux.png
+          ./build/src/app/backhaul --demo --role twoshot --screenshot role-twoshot-linux.png
       - uses: actions/upload-artifact@v4
         with:
           name: operator-screen-linux
@@ -106,3 +115,4 @@ jobs:
             settings-audio-linux.png
             settings-video-linux.png
             settings-zoom-linux.png
+            role-*-linux.png
