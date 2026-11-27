@@ -1,5 +1,7 @@
 #include "core/yuv.h"
 
+#include <cstddef>
+
 namespace backhaul {
 namespace {
 
