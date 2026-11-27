@@ -24,15 +24,23 @@ void testRole() {
   CHECK(sendsAudio(Role::Audio));
   CHECK(!sendsAudio(Role::All) && !sendsAudio(Role::Camera) && !sendsAudio(Role::TwoShot) && !sendsAudio(Role::Unset));
 
+  // The return PC only sends: picture and sound into the meeting, nothing out of it.
+  CHECK(sendsVideo(Role::Return) && sendsAudio(Role::Return) && handlesAudio(Role::Return));
+  CHECK(!playsAudio(Role::Return) && !receivesVideo(Role::Return) && !receivesAnything(Role::Return));
+  CHECK(!usesPeople(Role::Return) && !usesShare(Role::Return) && !singleOutput(Role::Return));
+  CHECK(playsAudio(Role::All) && playsAudio(Role::Audio) && !playsAudio(Role::Camera) && !playsAudio(Role::Slide));
+  CHECK(receivesAnything(Role::Audio) && receivesAnything(Role::Camera) && receivesAnything(Role::All));
+  CHECK(!sendsVideo(Role::All) && !sendsVideo(Role::Audio) && !sendsVideo(Role::Camera));
+
   // Settings names go both ways; unknown names are refused and leave the value alone.
-  for (const Role r : {Role::Unset, Role::All, Role::Camera, Role::TwoShot, Role::Slide, Role::Audio}) {
+  for (const Role r : {Role::Unset, Role::All, Role::Camera, Role::TwoShot, Role::Slide, Role::Audio, Role::Return}) {
     Role back = r == Role::All ? Role::Camera : Role::All;
     CHECK(roleFromKey(keyOf(r), &back));
     CHECK(back == r);
   }
   Role kept = Role::TwoShot;
   CHECK(!roleFromKey("Camera", &kept));
-  CHECK(!roleFromKey("return", &kept));
+  CHECK(!roleFromKey("everything", &kept));
   CHECK(roleFromKey("audio", &kept) && kept == Role::Audio);
   kept = Role::TwoShot;
   CHECK(kept == Role::TwoShot);

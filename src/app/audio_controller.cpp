@@ -30,7 +30,7 @@ AudioController::AudioController(AppState& app, std::unique_ptr<backhaul::AudioO
   refreshMics();
   connect(&app_, &AppState::roleChanged, this, [this] {
     if (!app_.sendsAudio()) stopMic();
-    if (app_.handlesAudio()) {
+    if (wantsOutput()) {
       if (deviceIndex_ == 0) startSaved();
       if (app_.sendsAudio() && micIndex_ == 0) startSavedMic();
       return;
@@ -53,6 +53,12 @@ AudioController::~AudioController() {
   if (input_ != nullptr) input_->stop();
   if (output_ != nullptr) output_->stop();
   if (asio_ != nullptr) asio_->stop();
+}
+
+// The output device runs on a PC that plays the meeting's voices, and also on a PC that
+// only sends when its inputs are ASIO inputs (they belong to the running ASIO device).
+bool AudioController::wantsOutput() const {
+  return app_.playsAudio() || (app_.sendsAudio() && app_.audioAsio());
 }
 
 backhaul::AudioOutput* AudioController::active() const {
@@ -98,8 +104,8 @@ void AudioController::refreshDevices() {
 
 bool AudioController::startDevice(int index) {
   if (active() == nullptr || index < 1 || index > static_cast<int>(devices_.size())) return false;
-  if (!app_.handlesAudio()) {
-    problem_ = QStringLiteral("このPCの役割では音を出しません（役割を「1台でぜんぶ」にすると出せます）");
+  if (!wantsOutput()) {
+    problem_ = QStringLiteral("このPCの役割では音を出しません（役割を「音声」か「1台でぜんぶ」にすると出せます）");
     emit changed();
     return false;
   }
@@ -147,7 +153,7 @@ void AudioController::chooseDevice(int index) {
 
 void AudioController::startSaved() {
   if (!app_.audioAsio() && app_.sendsAudio() && micIndex_ == 0) startSavedMic();
-  if (app_.audioDeviceName_.isEmpty() || !app_.handlesAudio()) return;
+  if (app_.audioDeviceName_.isEmpty() || !wantsOutput()) return;
   if (active() == nullptr) {
     problem_ = app_.audioAsio() ? QStringLiteral("このプログラムにはASIOが入っていません。方式を選び直してください")
                                 : QStringLiteral("このPCでは音を出せません");

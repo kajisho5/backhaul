@@ -7,6 +7,7 @@
 #include <QQuickWindow>
 #include <QScreen>
 #include <QTimer>
+#include <atomic>
 #include <cstdio>
 #include <memory>
 
@@ -16,6 +17,7 @@
 #include "frame_item.h"
 #include "frame_store.h"
 #include "meeting_controller.h"
+#include "return_controller.h"
 #include "settings_saver.h"
 
 int main(int argc, char* argv[]) {
@@ -41,15 +43,16 @@ int main(int argc, char* argv[]) {
                                    QStringLiteral("Start on a settings page: zoom, slots, audio or video."), QStringLiteral("page"));
   args.addOption(pageOpt);
   const QCommandLineOption roleOpt(QStringLiteral("role"),
-                                   QStringLiteral("Start in a role: all, camera, twoshot, slide or audio; \"ask\" shows the role question."),
+                                   QStringLiteral("Start in a role: all, camera, twoshot, slide, audio or return; \"ask\" shows the role question."),
                                    QStringLiteral("role"));
   args.addOption(roleOpt);
   args.process(qtApp);
   if (args.isSet(roleOpt)) {
     const QString role = args.value(roleOpt);
     if (role != QStringLiteral("all") && role != QStringLiteral("camera") && role != QStringLiteral("twoshot") &&
-        role != QStringLiteral("slide") && role != QStringLiteral("audio") && role != QStringLiteral("ask")) {
-      std::fprintf(stderr, "--role wants all, camera, twoshot, slide, audio or ask\n");
+        role != QStringLiteral("slide") && role != QStringLiteral("audio") && role != QStringLiteral("return") &&
+        role != QStringLiteral("ask")) {
+      std::fprintf(stderr, "--role wants all, camera, twoshot, slide, audio, return or ask\n");
       return 5;
     }
   }
@@ -88,15 +91,26 @@ int main(int argc, char* argv[]) {
   AudioController audio(state, demo ? nullptr : backhaul::makeAudioOutput(),
                         demo ? nullptr : backhaul::makeAsioOutput(), demo ? nullptr : backhaul::makeAudioInput());
   // `meeting` is created before `audio` and so outlives it and its sending thread.
-  audio.setSender([&meeting](const std::int16_t* samples, std::size_t frames, int channels) {
-    return meeting.sendAudio(samples, frames, channels);
+  // While the operator has paused sending, the sound stays here too.
+  std::atomic<bool> sendPaused{false};
+  audio.setSender([&meeting, &sendPaused](const std::int16_t* samples, std::size_t frames, int channels) {
+    return !sendPaused.load(std::memory_order_relaxed) && meeting.sendAudio(samples, frames, channels);
   });
   if (!demo) audio.startSaved();
+
+  ReturnController returning(state, frames, demo ? nullptr : backhaul::makeVideoInput());
+  returning.setSender([&meeting](const std::uint8_t* i420, int width, int height) {
+    return meeting.sendVideo(i420, width, height);
+  });
+  if (!demo) returning.startSaved();
+  QObject::connect(&returning, &ReturnController::changed, &qtApp,
+                   [&returning, &sendPaused] { sendPaused = returning.paused(); });
   meeting.setMixer(audio.mixer());
 
   QQmlApplicationEngine engine;
   engine.rootContext()->setContextProperty(QStringLiteral("meeting"), &meeting);
   engine.rootContext()->setContextProperty(QStringLiteral("audio"), &audio);
+  engine.rootContext()->setContextProperty(QStringLiteral("returning"), &returning);
   engine.rootContext()->setContextProperty(QStringLiteral("app"), &state);
   QObject::connect(&engine, &QQmlApplicationEngine::objectCreationFailed, &qtApp,
                    [] { QCoreApplication::exit(2); }, Qt::QueuedConnection);

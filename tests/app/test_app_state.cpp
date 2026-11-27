@@ -337,7 +337,7 @@ int main(int argc, char* argv[]) {
     a.loadDefaults();
     CHECK(a.role().isEmpty());          // a fresh PC has to be told
     CHECK(!a.handlesAudio());           // and stays silent until then
-    a.setRole(QStringLiteral("return")); // unknown names change nothing
+    a.setRole(QStringLiteral("everything")); // unknown names change nothing
     CHECK(a.role().isEmpty());
     a.setRole(QStringLiteral("all"));
     CHECK(a.role() == QStringLiteral("all") && a.handlesAudio());

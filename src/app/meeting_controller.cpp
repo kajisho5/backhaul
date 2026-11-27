@@ -47,9 +47,9 @@ MeetingController::MeetingController(AppState& app, FrameStore& frames, std::uni
   secondTimer_.setInterval(1000);
   connect(&secondTimer_, &QTimer::timeout, this, [this] { everySecond(); });
   connect(&app_, &AppState::assignmentsChanged, this, [this] { applyParticipants(); });
-  audio_ = app_.handlesAudio();
+  audio_ = app_.playsAudio();
   connect(&app_, &AppState::roleChanged, this, [this] {
-    audio_ = app_.handlesAudio();
+    audio_ = app_.playsAudio();
     applyParticipants();  // the role decides which slots are in use
     applyShares();
   });
@@ -129,6 +129,10 @@ void MeetingController::join() {
                         : app_.sendQuality() == 1 ? backhaul::SendQuality::Original
                                                   : backhaul::SendQuality::Speech;
   request.sendStereo = app_.sendStereo();
+  request.sendVideo = !app_.sendsVideo() || app_.videoDeviceName().isEmpty() ? backhaul::SendVideo::None
+                      : app_.returnAsShare()                                  ? backhaul::SendVideo::Share
+                                                                              : backhaul::SendVideo::Camera;
+  request.receive = app_.receivesAnything();
   authenticated_ = false;
   detail_.clear();
   client_->join(request, this);  // reports through onMeetingState, also when it cannot start
@@ -137,6 +141,10 @@ void MeetingController::join() {
 bool MeetingController::sendAudio(const std::int16_t* samples, std::size_t frames, int channels) {
   // client_ is set once in the constructor and outlives every caller.
   return client_ != nullptr && client_->sendAudio(samples, frames, channels);
+}
+
+bool MeetingController::sendVideo(const std::uint8_t* i420, int width, int height) {
+  return client_ != nullptr && client_->sendVideo(i420, width, height);
 }
 
 void MeetingController::leave() {
@@ -171,8 +179,9 @@ void MeetingController::onMeetingState(MeetingState state, const std::string& de
     secondTimer_.start();
   }
   if (!live) {
-    sendingAudio_ = false;
+    sendingAudio_ = sendingVideo_ = false;
     sendNote_.clear();
+    sendVideoNote_.clear();
     pollTimer_.stop();
     secondTimer_.stop();
     everyone_.clear();
@@ -422,9 +431,13 @@ void MeetingController::everySecond() {
   if (client_ != nullptr) {
     const bool sending = client_->sendingAudio();
     const QString note = QString::fromStdString(client_->sendAudioNote());
-    if (sending != sendingAudio_ || note != sendNote_) {
+    const bool picture = client_->sendingVideo();
+    const QString pictureNote = QString::fromStdString(client_->sendVideoNote());
+    if (sending != sendingAudio_ || note != sendNote_ || picture != sendingVideo_ || pictureNote != sendVideoNote_) {
       sendingAudio_ = sending;
       sendNote_ = note;
+      sendingVideo_ = picture;
+      sendVideoNote_ = pictureNote;
       emit changed();
     }
   }

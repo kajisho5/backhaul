@@ -17,6 +17,13 @@ enum class SendQuality {
   Music,     // no processing, higher quality for music
 };
 
+// How a capture device's picture goes into the meeting.
+enum class SendVideo {
+  None,
+  Camera,  // as this participant's camera picture
+  Share,   // as a shared screen (what Zoom calls content from a second camera)
+};
+
 struct JoinRequest {
   std::string clientId;      // Zoom app credentials (UTF-8)
   std::string clientSecret;
@@ -28,6 +35,9 @@ struct JoinRequest {
   bool sendAudio = false;    // this PC sends a device's sound into the meeting (needs `audio`)
   SendQuality sendQuality = SendQuality::Speech;
   bool sendStereo = false;   // only with Original or Music
+  SendVideo sendVideo = SendVideo::None;
+  // false: this PC only sends. It then asks for no permission to take pictures and sound.
+  bool receive = true;
 };
 
 enum class MeetingState {
@@ -112,6 +122,11 @@ class MeetingClient {
   // (empty when there is nothing to say).
   virtual bool sendingAudio() const = 0;
   virtual std::string sendAudioNote() const = 0;
+  // A picture for the meeting: I420, the three planes one after another without padding.
+  // May be called from any one thread. False when it cannot be sent right now.
+  virtual bool sendVideo(const std::uint8_t* i420, int width, int height) = 0;
+  virtual bool sendingVideo() const = 0;
+  virtual std::string sendVideoNote() const = 0;
   // Call a few times per second from the thread that called join(): reports
   // changes in the participant list (camera, mute, names, roles).
   virtual void poll() = 0;

@@ -1,0 +1,10 @@
+# Picture capture devices. Windows: Media Foundation. Elsewhere there are none.
+if(WIN32)
+  add_library(backhaul_video STATIC mf_video_input.cpp video_input.h)
+  target_link_libraries(backhaul_video PRIVATE mf mfplat mfreadwrite mfuuid ole32)
+  target_compile_definitions(backhaul_video PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+else()
+  add_library(backhaul_video STATIC video_input_none.cpp video_input.h)
+endif()
+target_include_directories(backhaul_video PUBLIC ${CMAKE_SOURCE_DIR}/src)
+backhaul_warnings(backhaul_video strict)

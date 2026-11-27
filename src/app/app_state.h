@@ -32,6 +32,11 @@ class AppState : public QObject {
   Q_PROPERTY(int sendQuality READ sendQuality WRITE setSendQuality NOTIFY changed)
   Q_PROPERTY(bool sendStereo READ sendStereo WRITE setSendStereo NOTIFY changed)
   Q_PROPERTY(bool sendsAudio READ sendsAudio NOTIFY roleChanged)
+  Q_PROPERTY(bool playsAudio READ playsAudio NOTIFY roleChanged)
+  // Picture sent into the meeting (the return role): the capture device by name, and
+  // whether it goes out as a shared screen instead of as this PC's camera.
+  Q_PROPERTY(QString videoDeviceName READ videoDeviceName NOTIFY changed)
+  Q_PROPERTY(bool returnAsShare READ returnAsShare WRITE setReturnAsShare NOTIFY changed)
   Q_PROPERTY(bool receivesVideo READ receivesVideo NOTIFY roleChanged)
   Q_PROPERTY(int audioChannels MEMBER audioChannels_ NOTIFY changed)
   Q_PROPERTY(int audioSampleRate MEMBER audioSampleRate_ NOTIFY changed)
@@ -98,6 +103,13 @@ class AppState : public QObject {
   bool sendStereo() const { return sendStereo_ && sendQuality_ != 0; }
   void setSendStereo(bool stereo);
   bool sendsAudio() const { return backhaul::sendsAudio(role_); }
+  bool playsAudio() const { return backhaul::playsAudio(role_); }
+  bool sendsVideo() const { return backhaul::sendsVideo(role_); }
+  bool receivesAnything() const { return backhaul::receivesAnything(role_); }
+  QString videoDeviceName() const { return videoDeviceName_; }
+  void setVideoDeviceName(const QString& name);
+  bool returnAsShare() const { return returnAsShare_; }
+  void setReturnAsShare(bool share);
   bool receivesVideo() const { return backhaul::receivesVideo(role_); }
   // Slides that are not 16:9: true cuts them to 16:9, false shows all with black bars.
   bool cropSlides() const;
@@ -207,6 +219,8 @@ class AppState : public QObject {
   QString micDeviceName_;
   int sendQuality_ = 0;
   bool sendStereo_ = false;
+  QString videoDeviceName_;
+  bool returnAsShare_ = false;
   QString roleScreen_;
   bool twoShotSwapped_ = false, twoShotFill_ = true, twoShotSolo_ = false;
   int twoShotSplit_ = 0;

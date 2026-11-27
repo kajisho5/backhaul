@@ -13,6 +13,7 @@ enum class Role {
   TwoShot,  // two people side by side in one picture
   Slide,    // the shared screen, full screen
   Audio,    // the meeting's voices to the sound desk, and the venue's sound to the meeting
+  Return,   // the venue's programme picture (and sound) into the meeting
 };
 
 // How many person slots the role uses, counted from the first; 0 means all of them
@@ -25,14 +26,20 @@ bool usesShare(Role role);
 // Roles whose whole job is one picture on one monitor.
 bool singleOutput(Role role);
 
-// Whether this PC takes the meeting's sound. Only one PC per meeting should.
+// Whether this PC joins the meeting's sound at all (to play it, to send into it, or both).
 bool handlesAudio(Role role);
+// Whether this PC plays the meeting's voices. Only one PC per meeting should.
+bool playsAudio(Role role);
 
 // Whether this PC shows anyone's picture. A sound-only PC receives no video at all.
 bool receivesVideo(Role role);
 
 // Whether this PC sends a device's sound into the meeting (the venue's mix-minus).
 bool sendsAudio(Role role);
+// Whether this PC sends a capture device's picture into the meeting.
+bool sendsVideo(Role role);
+// False for a PC that only sends: it takes neither pictures nor voices from the meeting.
+bool receivesAnything(Role role);
 
 // Name used in the settings file ("" for Unset).
 const char* keyOf(Role role);

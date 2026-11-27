@@ -8,6 +8,7 @@ add_library(backhaul_app_state STATIC
   credential_store.cpp credential_store.h
   frame_store.cpp frame_store.h
   meeting_controller.cpp meeting_controller.h
+  return_controller.cpp return_controller.h
   demo_source.cpp demo_source.h
   display_model.cpp display_model.h
   participant_model.cpp participant_model.h
@@ -15,7 +16,7 @@ add_library(backhaul_app_state STATIC
   slot_model.cpp slot_model.h
 )
 target_include_directories(backhaul_app_state PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(backhaul_app_state PUBLIC backhaul_core backhaul_audio Qt6::Gui)
+target_link_libraries(backhaul_app_state PUBLIC backhaul_core backhaul_audio backhaul_video Qt6::Gui)
 target_include_directories(backhaul_app_state PUBLIC ${CMAKE_SOURCE_DIR}/src)
 if(WIN32)
   target_link_libraries(backhaul_app_state PRIVATE advapi32)
@@ -57,6 +58,7 @@ qt_add_qml_module(backhaul
     qml/Dropdown.qml
     qml/RoleSelect.qml
     qml/RoleAudio.qml
+    qml/RoleReturn.qml
     qml/LevelBar.qml
     qml/RoleScreen.qml
     qml/RoleTile.qml

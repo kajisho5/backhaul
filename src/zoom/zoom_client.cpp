@@ -16,13 +16,17 @@
 
 // Needs types from meeting_service_interface.h, so it comes after it.
 #include "meeting_service_components/meeting_sharing_interface.h"
+#include "meeting_service_components/meeting_video_interface.h"
 #include "rawdata/rawdata_audio_helper_interface.h"
 #include "rawdata/rawdata_renderer_interface.h"
+#include "rawdata/rawdata_share_source_helper_interface.h"
+#include "rawdata/rawdata_video_source_helper_interface.h"
 #include "rawdata/zoom_rawdata_api.h"
 #include "setting_service_interface.h"
 #include "zoom_sdk.h"
 #include "zoom_sdk_raw_data_def.h"
 
+#include "core/nv12.h"
 #include "core/sdk_token.h"
 #include "meeting/meeting_client.h"
 
@@ -170,6 +174,64 @@ class MicSource final : public sdk::IZoomSDKVirtualAudioMicEvent {
   std::atomic<bool> sending_{false};
 };
 
+// This PC's "camera" when it sends a capture device's picture as a participant.
+class CameraSource final : public sdk::IZoomSDKVideoSource {
+ public:
+  void onInitialize(sdk::IZoomSDKVideoSender* sender, sdk::IList<sdk::VideoSourceCapability>*,
+                    sdk::VideoSourceCapability&) override {
+    const std::lock_guard<std::mutex> lock(mutex_);
+    sender_ = sender;
+  }
+  void onPropertyChange(sdk::IList<sdk::VideoSourceCapability>*, sdk::VideoSourceCapability) override {}
+  void onStartSend() override { sending_ = true; }
+  void onStopSend() override { sending_ = false; }
+  void onUninitialized() override {
+    const std::lock_guard<std::mutex> lock(mutex_);
+    sender_ = nullptr;
+    sending_ = false;
+  }
+  bool sending() const { return sending_; }
+  bool send(const std::uint8_t* i420, int width, int height) {
+    const std::lock_guard<std::mutex> lock(mutex_);
+    if (sender_ == nullptr || !sending_) return false;
+    return sender_->sendVideoFrame(const_cast<char*>(reinterpret_cast<const char*>(i420)), width, height,
+                                   static_cast<int>(i420Size(width, height)), 0) == sdk::SDKERR_SUCCESS;
+  }
+
+ private:
+  std::mutex mutex_;
+  sdk::IZoomSDKVideoSender* sender_ = nullptr;
+  std::atomic<bool> sending_{false};
+};
+
+// The same picture sent as a shared screen.
+class ScreenSource final : public sdk::IZoomSDKShareSource {
+ public:
+  void onStartSend(sdk::IZoomSDKShareSender* sender) override {
+    const std::lock_guard<std::mutex> lock(mutex_);
+    sender_ = sender;
+    sending_ = sender != nullptr;
+  }
+  void onStopSend() override {
+    const std::lock_guard<std::mutex> lock(mutex_);
+    sender_ = nullptr;
+    sending_ = false;
+  }
+  bool sending() const { return sending_; }
+  bool send(const std::uint8_t* i420, int width, int height) {
+    const std::lock_guard<std::mutex> lock(mutex_);
+    if (sender_ == nullptr) return false;
+    return sender_->sendShareFrame(const_cast<char*>(reinterpret_cast<const char*>(i420)), width, height,
+                                   static_cast<int>(i420Size(width, height)),
+                                   sdk::FrameDataFormat_I420_LIMITED) == sdk::SDKERR_SUCCESS;
+  }
+
+ private:
+  std::mutex mutex_;
+  sdk::IZoomSDKShareSender* sender_ = nullptr;
+  std::atomic<bool> sending_{false};
+};
+
 struct Subscription {
   std::unique_ptr<VideoTap> tap;
   sdk::IZoomSDKRenderer* renderer = nullptr;
@@ -245,6 +307,22 @@ class ZoomClient final : public MeetingClient,
     applyWants();
   }
 
+  bool sendVideo(const std::uint8_t* i420, int width, int height) override {
+    if (i420 == nullptr || width <= 0 || height <= 0 || width > 4096 || height > 4096) return false;
+    // Set before joining and unchanged during the meeting, so safe to read from the sending thread.
+    switch (request_.sendVideo) {
+      case SendVideo::Camera: return camera_.send(i420, width, height);
+      case SendVideo::Share: return screen_.send(i420, width, height);
+      case SendVideo::None: break;
+    }
+    return false;
+  }
+  bool sendingVideo() const override { return camera_.sending() || screen_.sending(); }
+  std::string sendVideoNote() const override {
+    const std::lock_guard<std::mutex> lock(noteMutex_);
+    return videoNote_;
+  }
+
   void setShareWant(std::uint32_t sourceId) override {
     shareWant_ = sourceId;
     applyShareWant();
@@ -279,6 +357,7 @@ class ZoomClient final : public MeetingClient,
       }
     }
     if (inMeeting_ && request_.audio && request_.sendAudio) keepSending(everyone);
+    if (inMeeting_ && request_.sendVideo != SendVideo::None) keepSendingVideo();
     if (everyone != lastParticipants_) {
       lastParticipants_ = everyone;
       events_->onParticipants(everyone);
@@ -286,7 +365,7 @@ class ZoomClient final : public MeetingClient,
     }
     pollShares();
     // Permission can arrive without a notice (for example when made co-host).
-    if (inMeeting_ && !rawStarted_) tryStartRaw();
+    if (inMeeting_ && !rawStarted_ && request_.receive) tryStartRaw();
   }
 
   // IAuthServiceEvent
@@ -401,7 +480,8 @@ class ZoomClient final : public MeetingClient,
 
   void enterMeeting() {
     if (inMeeting_) {  // back from a reconnect
-      if (!rawStarted_) state(MeetingState::WaitingForPermission, {});
+      if (!rawStarted_ && request_.receive) state(MeetingState::WaitingForPermission, {});
+      if (!request_.receive) state(MeetingState::Receiving, {});
       return;
     }
     inMeeting_ = true;
@@ -417,8 +497,13 @@ class ZoomClient final : public MeetingClient,
     sdk::IMeetingAudioController* audio = meeting_->GetMeetingAudioController();
     if (request_.audio && audio != nullptr) audio->JoinVoip();
     if (request_.audio && request_.sendAudio) applySendQuality();
-    state(MeetingState::WaitingForPermission, {});
-    tryStartRaw();
+    if (request_.receive) {
+      state(MeetingState::WaitingForPermission, {});
+      tryStartRaw();
+    } else {
+      // A PC that only sends needs no permission to take pictures and sound from the meeting.
+      state(MeetingState::Receiving, {});
+    }
     poll();
   }
 
@@ -535,6 +620,61 @@ class ZoomClient final : public MeetingClient,
     setSendNote(mutedNow ? std::string("ミュートされています（ホストに解除を頼んでください）") : qualityNote_);
   }
 
+  void setVideoNote(const std::string& note) {
+    const std::lock_guard<std::mutex> lock(noteMutex_);
+    videoNote_ = note;
+  }
+
+  // Registers this PC as the source of its camera picture or of a shared screen.
+  // Called from poll() until it has worked.
+  void keepSendingVideo() {
+    if (videoSet_) {
+      setVideoNote(sendingVideo() ? std::string() : std::string("Zoomがまだ映像を受け取っていません"));
+      return;
+    }
+    if (request_.sendVideo == SendVideo::Camera) {
+      sdk::IZoomSDKVideoSourceHelper* helper = sdk::GetRawdataVideoSourceHelper();
+      const sdk::SDKError result = helper != nullptr
+                                       ? helper->setExternalVideoSource(&camera_, sdk::FrameDataFormat_I420_LIMITED)
+                                       : sdk::SDKERR_UNINITIALIZE;
+      if (result != sdk::SDKERR_SUCCESS) {
+        setVideoNote(code("Zoomへ映像を送る準備ができていません", static_cast<int>(result)));
+        return;
+      }
+      sdk::IMeetingVideoController* video = meeting_->GetMeetingVideoController();
+      const sdk::SDKError on = video != nullptr ? video->UnmuteVideo() : sdk::SDKERR_UNINITIALIZE;
+      if (on != sdk::SDKERR_SUCCESS) {
+        setVideoNote(code("カメラをオンにできていません（ホストに止められていませんか）", static_cast<int>(on)));
+        return;  // the source stays registered; only the unmute is tried again
+      }
+    } else {
+      sdk::IZoomSDKShareSourceHelper* helper = sdk::GetRawdataShareSourceHelper();
+      const sdk::SDKError result =
+          helper != nullptr ? helper->setExternalShareSource(&screen_) : sdk::SDKERR_UNINITIALIZE;
+      if (result != sdk::SDKERR_SUCCESS) {
+        setVideoNote(code("画面共有を始められていません（ほかの人が共有中か、共有が許可されていません）",
+                          static_cast<int>(result)));
+        return;
+      }
+    }
+    videoSet_ = true;
+    setVideoNote({});
+  }
+
+  void stopSendingVideo() {
+    if (videoSet_ && inMeeting_ && meeting_ != nullptr) {
+      if (request_.sendVideo == SendVideo::Share) {
+        sdk::IMeetingShareController* sharing = meeting_->GetMeetingShareController();
+        if (sharing != nullptr) sharing->StopShare();
+      } else {
+        sdk::IMeetingVideoController* video = meeting_->GetMeetingVideoController();
+        if (video != nullptr) video->MuteVideo();
+      }
+    }
+    videoSet_ = false;
+    setVideoNote({});
+  }
+
   void stopSending() {
     if (micSet_) {
       sdk::IZoomSDKAudioRawDataHelper* helper = sdk::GetAudioRawdataHelper();
@@ -626,6 +766,7 @@ class ZoomClient final : public MeetingClient,
 
   void endOfMeeting() {
     stopSending();
+    stopSendingVideo();
     inMeeting_ = false;
     busy_ = false;
     askedPermission_ = false;
@@ -690,6 +831,10 @@ class ZoomClient final : public MeetingClient,
   std::uint32_t shareWant_ = 0;
   std::uint32_t shareGot_ = 0;
   MicSource mic_;
+  CameraSource camera_;
+  ScreenSource screen_;
+  bool videoSet_ = false;
+  std::string videoNote_;
   sdk::ISettingService* settings_ = nullptr;
   bool micSet_ = false;
   bool unmuted_ = false;
