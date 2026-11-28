@@ -32,7 +32,7 @@ backhaul_warnings(backhaul_app_state app)
 
 set(BACKHAUL_GATE_URL "https://backhaul-gate.seventh-well.com" CACHE STRING "The licence server this build talks to")
 qt_add_executable(backhaul main.cpp frame_item.cpp frame_item.h)
-set(BACKHAUL_UPDATE_LATEST_URL "https://github.com/kajisho5/backhaul-sdk/releases/download/updates/latest.json"
+set(BACKHAUL_UPDATE_LATEST_URL "https://backhaul.seventh-well.com/updates/latest.json"
     CACHE STRING "The small file that says which version is the newest")
 target_compile_definitions(backhaul PRIVATE BACKHAUL_GATE_URL="${BACKHAUL_GATE_URL}"
   BACKHAUL_VERSION="${PROJECT_VERSION}" BACKHAUL_UPDATE_LATEST_URL="${BACKHAUL_UPDATE_LATEST_URL}")

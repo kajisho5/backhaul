@@ -1,7 +1,7 @@
 # Updating the program itself. Windows: WinSparkle, when its unpacked release folder is
 # given to the build (BACKHAUL_WINSPARKLE_DIR, the folder with include/ and x64/Release/).
 # Everywhere else, and without that folder, the program is built without an updater.
-set(BACKHAUL_UPDATE_FEED_URL "https://github.com/kajisho5/backhaul-sdk/releases/download/updates/appcast.xml"
+set(BACKHAUL_UPDATE_FEED_URL "https://backhaul.seventh-well.com/updates/appcast.xml"
     CACHE STRING "The list of versions the updater reads")
 # The public half of the key that signs installers (see packaging/README.md). Not a secret.
 file(STRINGS "${CMAKE_SOURCE_DIR}/packaging/update_public_key.txt" BACKHAUL_UPDATE_PUBLIC_KEY LIMIT_COUNT 1)

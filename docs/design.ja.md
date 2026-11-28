@@ -288,6 +288,7 @@
 | 署名 | Ed25519。公開してよいほうの鍵は `packaging/update_public_key.txt` にあり、プログラムに組み込む。秘密のほうは backhaul-sdk の GitHub の「秘密の値」`UPDATE_SIGNING_KEY` だけ |
 | インストーラー | Inno Setup 7.1.1（https://jrsoftware.org/isdl.php 。7.2.0 は 2026-11-28 時点でまだ試作のバージョンだったので使わない）。`packaging/backhaul.iss`。ユーザーごとに入れる形で、管理者権限を求めない |
 | 置き場所 | backhaul-sdk のリリース `updates` に、インストーラー・`appcast.xml`・`latest.json` を置く |
+| アプリが見に行く先 | `https://backhaul.seventh-well.com/updates/latest.json` と `…/updates/appcast.xml`。販売ページの `site/public/_redirects` がリリースのファイルへ転送する。アプリに組み込まれる住所なので、置き場所を変えるときは転送先だけを変える |
 | 作る人 | backhaul-sdk のビルド。ASIO なしで作り、署名し、インストーラーを置いてから一覧を置く（一覧が、まだ無いファイルを指さないように） |
 
 設計案からの変更：一覧の置き場所は入場券サーバーではなくリリースにした（サーバーに手を入れずに済む）。「このバージョンを飛ばす」は、選ばれなかったC案のものなので入れていない。
