@@ -327,7 +327,7 @@ ColumnLayout {
                 Text {
                     Layout.fillWidth: true
                     wrapMode: Text.WordWrap
-                    text: "サインインしておくと、ほかのアカウントが開いた会議に入るための許可（ZAK）を、入るたびにアプリが自動で取ります。自分のアカウントの会議だけなら、サインインは要りません。"
+                    text: "どれか1台でサインインすれば、同じライセンスのPCすべてに効きます。ほかのアカウントが開いた会議に入るための許可（ZAK）を、入るたびにアプリが自動で取ります。自分のアカウントの会議だけなら、サインインは要りません。"
                     color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 13
                 }
                 Rectangle {
@@ -351,7 +351,7 @@ ColumnLayout {
                         Text {
                             Layout.fillWidth: true
                             elide: Text.ElideRight
-                            text: "許可（ZAK）は、会議に入るたびに取り直します"
+                            text: "このライセンスのPCすべてで有効です。サインアウトも全PCに効きます"
                             color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 12
                         }
                     }

@@ -99,9 +99,9 @@ QJsonObject licenceJson(int used = 1, double expiresAt = 1830000000.0) {
 }
 
 struct Rig {
-  QByteArray licenceSaved, zoomSaved;
+  QByteArray licenceSaved;
   FakeGate* gate = new FakeGate;
-  MemorySecret* zoomStore = nullptr;
+  MemorySecret* licenceStore = nullptr;
   QList<QUrl> opened;
   bool browserWorks = true;
   qint64 now = 1800000000;
@@ -110,10 +110,9 @@ struct Rig {
   // A fresh controller over the same saved secrets, as after a restart.
   void make() {
     gate = new FakeGate;
-    zoomStore = new MemorySecret(&zoomSaved);
+    licenceStore = new MemorySecret(&licenceSaved);
     licence = std::make_unique<LicenceController>(
-        std::unique_ptr<GateClient>(gate), std::make_unique<MemorySecret>(&licenceSaved), std::unique_ptr<SecretStore>(zoomStore),
-        QStringLiteral("  SAMPLE-PC-02  "),
+        std::unique_ptr<GateClient>(gate), std::unique_ptr<SecretStore>(licenceStore), QStringLiteral("  SAMPLE-PC-02  "),
         [this](const QUrl& url) {
           opened.push_back(url);
           return browserWorks;
@@ -132,7 +131,7 @@ struct Rig {
                   {QStringLiteral("url"), QStringLiteral("https://zoom.us/oauth/authorize?state=sample-state")}});
     licence->signIn();
     gate->flush();
-    gate->answer(QStringLiteral("/v1/zoom/collect"), 200, {{QStringLiteral("refreshToken"), QStringLiteral("sample-refresh-1")}});
+    gate->answer(QStringLiteral("/v1/zoom/collect"), 200, {{QStringLiteral("signedIn"), true}});
     licence->pollSignIn();
     gate->flush();
   }
@@ -140,7 +139,7 @@ struct Rig {
 
 void testLicence() {
   {  // nowhere to keep secrets, or no server: switched off, and nothing is asked
-    LicenceController off(nullptr, nullptr, nullptr, QStringLiteral("x"), {});
+    LicenceController off(nullptr, nullptr, QStringLiteral("x"), {});
     CHECK(!off.available() && !off.active());
     off.activate(QStringLiteral("BH-AAAAA-BBBBB-CCCCC-DDDDD"));
     off.signIn();
@@ -316,7 +315,7 @@ void testZoomSignIn() {
   l.pollSignIn();
   rig.gate->flush();
   CHECK(l.zoomWaiting());
-  rig.gate->answer(collect, 200, {{QStringLiteral("refreshToken"), QStringLiteral("sample-refresh-1")}});
+  rig.gate->answer(collect, 200, {{QStringLiteral("signedIn"), true}});
   l.pollSignIn();
   rig.gate->flush();
   const FakeGate::Asked& collected = rig.gate->last(collect);
@@ -324,35 +323,47 @@ void testZoomSignIn() {
   // The verifier matches the challenge that went out first (PKCE), and it never went out before.
   const QString verifier = collected.body.value(QStringLiteral("verifier")).toString();
   CHECK(verifier.size() == 64 && !rig.gate->last(begin).body.contains(QStringLiteral("verifier")));
-  CHECK(l.zoomSignedIn() && !l.zoomWaiting() && l.zoomMessage().isEmpty() && rig.zoomSaved == "sample-refresh-1");
+  CHECK(l.zoomSignedIn() && !l.zoomWaiting() && l.zoomMessage().isEmpty());
+  // Nothing of the sign-in itself is on this PC: only that there is one.
+  CHECK(rig.licenceSaved.contains("\"zoomSignedIn\":true") && !rig.licenceSaved.contains("refresh"));
 
-  // Joining now brings the ZAK, and the sign-in token Zoom renewed is the one that is kept.
+  // Joining now brings the ZAK; the PC sends nothing but its own token for it.
   rig.gate->answer(QStringLiteral("/v1/sdk-token"), 200, {{QStringLiteral("token"), QStringLiteral("sample.sdk.token")}, {QStringLiteral("expiresAt"), 1800086400.0}});
-  rig.gate->answer(zakPath, 200, {{QStringLiteral("zak"), QStringLiteral("sample-zak")}, {QStringLiteral("refreshToken"), QStringLiteral("sample-refresh-2")}});
+  rig.gate->answer(zakPath, 200, {{QStringLiteral("zak"), QStringLiteral("sample-zak")}});
   LicenceController::Entry entry;
   l.prepareJoin([&](const LicenceController::Entry& e) { entry = e; });
   rig.gate->flush();
   CHECK(entry.ok && entry.zak == QStringLiteral("sample-zak") && entry.notice.isEmpty());
-  CHECK(rig.gate->last(zakPath).body.value(QStringLiteral("refreshToken")).toString() == QStringLiteral("sample-refresh-1"));
-  CHECK(rig.zoomSaved == "sample-refresh-2");
+  CHECK(rig.gate->last(zakPath).body.isEmpty() && rig.gate->last(zakPath).bearer == QStringLiteral("sample-device-token"));
 
-  // No ZAK this time (Zoom is down): the join goes ahead and says so; a renewed token is still kept.
-  rig.gate->answer(zakPath, 502, {{QStringLiteral("error"), QStringLiteral("zoom_failed")}, {QStringLiteral("detail"), QStringLiteral("Zoom did not give a ZAK (503)")},
-                                  {QStringLiteral("refreshToken"), QStringLiteral("sample-refresh-3")}});
+  // No ZAK this time (Zoom is down): the join goes ahead and says so; the sign-in stays.
+  rig.gate->answer(zakPath, 502, {{QStringLiteral("error"), QStringLiteral("zoom_failed")}, {QStringLiteral("detail"), QStringLiteral("Zoom did not give a ZAK (503)")}});
   l.prepareJoin([&](const LicenceController::Entry& e) { entry = e; });
   rig.gate->flush();
-  CHECK(entry.ok && entry.zak.isEmpty() && entry.notice.contains(QStringLiteral("503")) && l.zoomSignedIn() && rig.zoomSaved == "sample-refresh-3");
+  CHECK(entry.ok && entry.zak.isEmpty() && entry.notice.contains(QStringLiteral("503")) && l.zoomSignedIn());
 
-  // After a restart the sign-in is still there.
+  // Another PC of the licence (here: after a restart) learns of the sign-in from the server.
+  rig.licenceSaved.replace("\"zoomSignedIn\":true", "\"zoomSignedIn\":false");
   rig.make();
+  CHECK(!rig.licence->zoomSignedIn());
+  QJsonObject withSignIn = licenceJson();
+  withSignIn[QStringLiteral("zoomSignedIn")] = true;
+  rig.gate->answer(QStringLiteral("/v1/status"), 200, {{QStringLiteral("problem"), QJsonValue::Null}, {QStringLiteral("licence"), withSignIn}});
+  rig.licence->refresh();
+  rig.gate->flush();
   CHECK(rig.licence->zoomSignedIn());
-  // The sign-in is no longer good at Zoom: forgotten here too, and said.
+  // The sign-in is no longer good at Zoom: said, and no longer shown as signed in.
   rig.gate->answer(QStringLiteral("/v1/sdk-token"), 200, {{QStringLiteral("token"), QStringLiteral("t")}, {QStringLiteral("expiresAt"), 1800086400.0}});
   rig.gate->answer(zakPath, 401, {{QStringLiteral("error"), QStringLiteral("signed_out")}});
   rig.licence->prepareJoin([&](const LicenceController::Entry& e) { entry = e; });
   rig.gate->flush();
   CHECK(entry.ok && entry.zak.isEmpty() && entry.notice.contains(QStringLiteral("サインインが切れました")));
-  CHECK(!rig.licence->zoomSignedIn() && rig.zoomSaved.isEmpty());
+  CHECK(!rig.licence->zoomSignedIn());
+  // Not signed in: Zoom is not asked for a ZAK at all.
+  const int zakAsked = rig.gate->count(zakPath);
+  rig.licence->prepareJoin([&](const LicenceController::Entry& e) { entry = e; });
+  rig.gate->flush();
+  CHECK(entry.ok && entry.notice.isEmpty() && rig.gate->count(zakPath) == zakAsked);
 
   // "No" in the browser, running out of time, giving up, and signing out.
   LicenceController& m = *rig.licence;
@@ -376,16 +387,20 @@ void testZoomSignIn() {
   CHECK(!m.zoomWaiting() && m.zoomMessage().isEmpty());
   rig.signIn();
   CHECK(m.zoomSignedIn());
+  // Signing out counts once the server said so (it is for every PC of the licence).
+  rig.gate->unreachable(QStringLiteral("/v1/zoom/signout"));
+  m.signOut();
+  rig.gate->flush();
+  CHECK(m.zoomSignedIn() && m.zoomMessage().contains(QStringLiteral("そのまま")));
   rig.gate->answer(QStringLiteral("/v1/zoom/signout"), 200, {{QStringLiteral("revoked"), false}});
   m.signOut();
-  CHECK(!m.zoomSignedIn() && rig.zoomSaved.isEmpty());  // gone from this PC at once
   rig.gate->flush();
-  CHECK(m.zoomMessage().contains(QStringLiteral("確認できませんでした")));
-
-  // The protected store refuses: said, not hidden.
-  rig.zoomStore->refuse = true;
+  CHECK(!m.zoomSignedIn() && m.zoomMessage().contains(QStringLiteral("確認できませんでした")));
   rig.signIn();
-  CHECK(!m.zoomSignedIn() && m.zoomMessage().contains(QStringLiteral("保存できません")));
+  rig.gate->answer(QStringLiteral("/v1/zoom/signout"), 200, {{QStringLiteral("revoked"), true}});
+  m.signOut();
+  rig.gate->flush();
+  CHECK(!m.zoomSignedIn() && m.zoomMessage().contains(QStringLiteral("PCすべて")));
 }
 
 // A meeting client that only notes what it was asked to join with.
@@ -448,7 +463,7 @@ void testJoining() {
 
   // The join waits for the server, then starts with the token and the ZAK from there.
   rig.gate->answer(QStringLiteral("/v1/sdk-token"), 200, {{QStringLiteral("token"), QStringLiteral("sample.sdk.token")}, {QStringLiteral("expiresAt"), 1800086400.0}});
-  rig.gate->answer(QStringLiteral("/v1/zoom/zak"), 200, {{QStringLiteral("zak"), QStringLiteral("sample-zak")}, {QStringLiteral("refreshToken"), QStringLiteral("sample-refresh-2")}});
+  rig.gate->answer(QStringLiteral("/v1/zoom/zak"), 200, {{QStringLiteral("zak"), QStringLiteral("sample-zak")}});
   m.setProperty("zak", QStringLiteral("typed-by-hand"));
   m.join();
   CHECK(m.busy() && !m.canJoin() && client->joins == 0 && m.statusText().contains(QStringLiteral("入場券")));

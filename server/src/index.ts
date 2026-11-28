@@ -5,7 +5,9 @@ import { Hono } from "hono";
 import type { Context } from "hono";
 import { newLicenceKey, normaliseKey, problemOf, randomToken, sameText, sha256Hex } from "./licence";
 import type { Licence } from "./licence";
+import { adminPage } from "./admin_page";
 import { Store } from "./store";
+import { Vault } from "./vault";
 import type { Device } from "./store";
 import { ZoomError, authoriseUrl, exchangeCode, fetchZak, makeSdkToken, refresh, revoke } from "./zoom";
 import type { Fetcher, ZoomKeys } from "./zoom";
@@ -16,25 +18,30 @@ export interface Env {
   ZOOM_CLIENT_ID?: string;
   ZOOM_CLIENT_SECRET?: string;
   ADMIN_TOKEN?: string;
+  SIGNIN_KEY?: string; // 32 random bytes, base64: seals the licences' Zoom sign-ins
 }
 
 /** The outside world, so that tests can set the time and stand in for Zoom. */
 export interface Outside {
   now: () => number; // unix seconds
   fetcher: Fetcher;
+  sleep: (ms: number) => Promise<void>;
 }
 
 type App = { Bindings: Env; Variables: { device: Device; licence: Licence } };
 
 const MAX_SEATS = 100;
+const ZAK_KEEP_SECONDS = 600; // PCs joining within ten minutes share one ZAK (it lasts two hours at Zoom)
+const LOCK_SECONDS = 20;
 
 function zoomKeys(env: Env): ZoomKeys | null {
   if (!env.ZOOM_CLIENT_ID || !env.ZOOM_CLIENT_SECRET) return null;
   return { clientId: env.ZOOM_CLIENT_ID, clientSecret: env.ZOOM_CLIENT_SECRET };
 }
 
-function licenceView(licence: Licence, devices: Device[], own: Device | null) {
+function licenceView(licence: Licence, devices: Device[], own: Device | null, zoomSignedIn: boolean) {
   return {
+    zoomSignedIn,
     keyTail: licence.keyTail,
     seats: licence.seats,
     used: devices.length,
@@ -69,7 +76,9 @@ export function createApp(outside: Outside) {
     return c.json({ error: "server_error" }, 500);
   });
 
-  app.get("/", (c) => c.json({ service: "backhaul-gate", zoomConfigured: zoomKeys(c.env) !== null }));
+  app.get("/", async (c) =>
+    c.json({ service: "backhaul-gate", zoomConfigured: zoomKeys(c.env) !== null, signInConfigured: (await Vault.open(c.env.SIGNIN_KEY)) !== null }),
+  );
 
   // ---- registering a PC ----
 
@@ -98,7 +107,8 @@ export function createApp(outside: Outside) {
     }
     const devices = await store.devicesOf(licence.id);
     const own = devices.find((d) => d.deviceId === deviceId) ?? null;
-    return c.json({ deviceToken: token, licence: licenceView(licence, devices, own) });
+    const signedIn = (await store.signinOf(licence.id)) !== null;
+    return c.json({ deviceToken: token, licence: licenceView(licence, devices, own, signedIn) });
   });
 
   // ---- everything below /v1 needs the PC's token ----
@@ -128,7 +138,8 @@ export function createApp(outside: Outside) {
     const store = new Store(c.env.DB);
     const licence = c.get("licence");
     const devices = await store.devicesOf(licence.id);
-    return c.json({ problem: problemOf(licence, outside.now()), licence: licenceView(licence, devices, c.get("device")) });
+    const signedIn = (await store.signinOf(licence.id)) !== null;
+    return c.json({ problem: problemOf(licence, outside.now()), licence: licenceView(licence, devices, c.get("device"), signedIn) });
   });
 
   pc.post("/deactivate", async (c) => {
@@ -148,12 +159,13 @@ export function createApp(outside: Outside) {
   });
 
   // ---- signing in to Zoom ----
-  // The PC makes a PKCE verifier and keeps it. What Zoom sends back to this service is
-  // useless without that verifier, and the tokens go straight to the PC: none are stored here.
+  // One sign-in serves every PC of the licence. The PC that starts it makes a PKCE verifier
+  // and keeps it: what Zoom sends back to this service is useless without that verifier.
+  // What comes out of the sign-in is kept here, sealed, and never handed to a PC; PCs get the ZAK.
 
   pc.post("/zoom/begin", async (c) => {
     const keys = zoomKeys(c.env);
-    if (keys === null) return c.json({ error: "not_configured" }, 503);
+    if (keys === null || (await Vault.open(c.env.SIGNIN_KEY)) === null) return c.json({ error: "not_configured" }, 503);
     const body = await readJson(c);
     const challenge = text(body?.challenge, 43, 128);
     if (challenge === null || !/^[A-Za-z0-9_-]+$/.test(challenge)) return c.json({ error: "bad_request" }, 400);
@@ -164,13 +176,15 @@ export function createApp(outside: Outside) {
 
   pc.post("/zoom/collect", async (c) => {
     const keys = zoomKeys(c.env);
-    if (keys === null) return c.json({ error: "not_configured" }, 503);
+    const vault = await Vault.open(c.env.SIGNIN_KEY);
+    if (keys === null || vault === null) return c.json({ error: "not_configured" }, 503);
     const body = await readJson(c);
     const state = text(body?.state, 10, 100);
     const verifier = text(body?.verifier, 43, 128);
     if (state === null || verifier === null) return c.json({ error: "bad_request" }, 400);
     const store = new Store(c.env.DB);
-    const login = await store.loginByState(state, outside.now());
+    const now = outside.now();
+    const login = await store.loginByState(state, now);
     if (login === null || login.deviceRow !== c.get("device").row) return c.json({ error: "unknown_login" }, 404);
     if (login.denied) {
       await store.endLogin(state);
@@ -180,7 +194,14 @@ export function createApp(outside: Outside) {
     await store.endLogin(state); // a code works once
     try {
       const tokens = await exchangeCode(keys, outside.fetcher, login.code, verifier, `${c.env.PUBLIC_URL}/v1/zoom/callback`);
-      return c.json({ refreshToken: tokens.refreshToken });
+      await store.saveSignin(
+        c.get("licence").id,
+        await vault.seal(tokens.refreshToken),
+        tokens.expiresIn > 0 ? await vault.seal(tokens.accessToken) : null,
+        now + tokens.expiresIn,
+        now,
+      );
+      return c.json({ signedIn: true });
     } catch (error) {
       if (!(error instanceof ZoomError)) throw error;
       return c.json({ error: "zoom_failed", detail: error.message }, 502);
@@ -189,33 +210,74 @@ export function createApp(outside: Outside) {
 
   pc.post("/zoom/zak", async (c) => {
     const keys = zoomKeys(c.env);
-    if (keys === null) return c.json({ error: "not_configured" }, 503);
-    const body = await readJson(c);
-    const refreshToken = text(body?.refreshToken, 10, 4000);
-    if (refreshToken === null) return c.json({ error: "bad_request" }, 400);
-    try {
-      const tokens = await refresh(keys, outside.fetcher, refreshToken);
+    const vault = await Vault.open(c.env.SIGNIN_KEY);
+    if (keys === null || vault === null) return c.json({ error: "not_configured" }, 503);
+    const store = new Store(c.env.DB);
+    const licenceId = c.get("licence").id;
+    // Several PCs usually join within the same seconds. One of them talks to Zoom (a refresh
+    // token works once, so two at a time would break the sign-in); the others wait for its result.
+    for (let round = 0; round < 16; round++) {
+      const now = outside.now();
+      const signin = await store.signinOf(licenceId);
+      if (signin === null) return c.json({ error: "not_signed_in" }, 404);
+      if (signin.zakCipher !== null && now - signin.zakAt < ZAK_KEEP_SECONDS) {
+        const kept = await vault.unseal(signin.zakCipher);
+        if (kept !== null) return c.json({ zak: kept });
+      }
+      if (!(await store.lockSignin(licenceId, now, LOCK_SECONDS))) {
+        await outside.sleep(500);
+        continue;
+      }
       try {
-        const zak = await fetchZak(outside.fetcher, tokens.accessToken);
-        return c.json({ zak, refreshToken: tokens.refreshToken });
+        const access = signin.accessExpiresAt - now > 120 ? await vault.unseal(signin.accessCipher) : null;
+        let zak: string | null = null;
+        if (access !== null) {
+          try {
+            zak = await fetchZak(outside.fetcher, access);
+          } catch (error) {
+            // The remembered access token may simply have been withdrawn early: renew and try once more.
+            if (!(error instanceof ZoomError) || !error.signedOut) throw error;
+          }
+        }
+        if (zak === null) {
+          const refreshToken = await vault.unseal(signin.refreshCipher);
+          if (refreshToken === null) {
+            // Sealed with another key (the secret was replaced): nobody can use it any more.
+            await store.removeSignin(licenceId);
+            return c.json({ error: "signed_out" }, 401);
+          }
+          const tokens = await refresh(keys, outside.fetcher, refreshToken);
+          // Kept before anything else: the old refresh token is dead from here on.
+          await store.renewSignin(licenceId, await vault.seal(tokens.refreshToken), await vault.seal(tokens.accessToken), now + tokens.expiresIn, now);
+          zak = await fetchZak(outside.fetcher, tokens.accessToken);
+        }
+        await store.saveZak(licenceId, await vault.seal(zak), now);
+        return c.json({ zak });
       } catch (error) {
         if (!(error instanceof ZoomError)) throw error;
-        // The old refresh token is used up either way: the PC must get the new one.
-        return c.json({ error: error.signedOut ? "signed_out" : "zoom_failed", detail: error.message, refreshToken: tokens.refreshToken }, 502);
+        if (error.signedOut) {
+          await store.removeSignin(licenceId);
+          return c.json({ error: "signed_out", detail: error.message }, 401);
+        }
+        return c.json({ error: "zoom_failed", detail: error.message }, 502);
+      } finally {
+        await store.unlockSignin(licenceId);
       }
-    } catch (error) {
-      if (!(error instanceof ZoomError)) throw error;
-      return c.json({ error: error.signedOut ? "signed_out" : "zoom_failed", detail: error.message }, error.signedOut ? 401 : 502);
     }
+    return c.json({ error: "zoom_failed", detail: "another PC of this licence is still asking Zoom" }, 503);
   });
 
   pc.post("/zoom/signout", async (c) => {
     const keys = zoomKeys(c.env);
-    if (keys === null) return c.json({ error: "not_configured" }, 503);
-    const body = await readJson(c);
-    const refreshToken = text(body?.refreshToken, 10, 4000);
-    if (refreshToken === null) return c.json({ error: "bad_request" }, 400);
-    return c.json({ revoked: await revoke(keys, outside.fetcher, refreshToken) });
+    const vault = await Vault.open(c.env.SIGNIN_KEY);
+    if (keys === null || vault === null) return c.json({ error: "not_configured" }, 503);
+    const store = new Store(c.env.DB);
+    const licenceId = c.get("licence").id;
+    const signin = await store.signinOf(licenceId);
+    if (signin === null) return c.json({ revoked: false });
+    await store.removeSignin(licenceId); // gone here whatever Zoom answers
+    const refreshToken = await vault.unseal(signin.refreshCipher);
+    return c.json({ revoked: refreshToken !== null && (await revoke(keys, outside.fetcher, refreshToken)) });
   });
 
   // Zoom sends the browser here after the sign-in. No token of the PC is involved.
@@ -247,6 +309,9 @@ export function createApp(outside: Outside) {
     if (!header.startsWith("Bearer ") || !sameText(header.slice(7), expected)) return c.json({ error: "forbidden" }, 403);
     await next();
   });
+
+  // The page itself holds nothing secret; every request it makes needs the admin token.
+  app.get("/admin", (c) => c.html(adminPage(), 200, { "cache-control": "no-store", "x-frame-options": "DENY", "referrer-policy": "no-referrer" }));
 
   admin.post("/licences", async (c) => {
     const body = await readJson(c);
@@ -292,4 +357,8 @@ export function createApp(outside: Outside) {
   return app;
 }
 
-export default createApp({ now: () => Math.floor(Date.now() / 1000), fetcher: (input, init) => fetch(input, init) });
+export default createApp({
+  now: () => Math.floor(Date.now() / 1000),
+  fetcher: (input, init) => fetch(input, init),
+  sleep: (ms) => new Promise((done) => setTimeout(done, ms)),
+});

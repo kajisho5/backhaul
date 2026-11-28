@@ -1,6 +1,7 @@
-// The licence of this PC and the operator's Zoom sign-in. With both, joining a meeting
+// The licence of this PC and the licence's Zoom sign-in. With both, joining a meeting
 // needs no Zoom keys on the PC: the licence server signs the Meeting SDK token, and
-// turns the sign-in into the ZAK that meetings of other accounts ask for.
+// turns the sign-in (made once, on any PC of the licence) into the ZAK that meetings of
+// other accounts ask for. Nothing of the sign-in is kept on the PC.
 #pragma once
 
 #include <QObject>
@@ -35,12 +36,11 @@ class LicenceController : public QObject {
   using Opener = std::function<bool(const QUrl&)>;  // opens the browser
   using Clock = std::function<qint64()>;            // unix seconds
 
-  // Any of the first three may be null: the feature is then switched off (available() is false).
-  LicenceController(std::unique_ptr<GateClient> gate, std::unique_ptr<SecretStore> licenceStore,
-                    std::unique_ptr<SecretStore> zoomStore, QString deviceName, Opener openUrl, Clock clock = {},
-                    QObject* parent = nullptr);
+  // Either of the first two may be null: the feature is then switched off (available() is false).
+  LicenceController(std::unique_ptr<GateClient> gate, std::unique_ptr<SecretStore> licenceStore, QString deviceName,
+                    Opener openUrl, Clock clock = {}, QObject* parent = nullptr);
 
-  bool available() const { return gate_ != nullptr && licenceStore_ != nullptr && zoomStore_ != nullptr; }
+  bool available() const { return gate_ != nullptr && licenceStore_ != nullptr; }
   bool active() const { return !deviceToken_.isEmpty(); }
   bool busy() const { return pending_ > 0; }
   QString keyTail() const { return keyTail_; }
@@ -50,7 +50,8 @@ class LicenceController : public QObject {
   QString deviceName() const { return shownName_; }
   QString message() const { return message_; }
   bool messageBad() const { return messageBad_; }
-  bool zoomSignedIn() const { return !refreshToken_.isEmpty(); }
+  // One sign-in serves every PC of the licence; the server keeps it and says whether there is one.
+  bool zoomSignedIn() const { return zoomSignedIn_; }
   bool zoomWaiting() const { return !loginState_.isEmpty(); }
   QString zoomMessage() const { return zoomMessage_; }
   bool zoomMessageBad() const { return zoomMessageBad_; }
@@ -88,7 +89,7 @@ class LicenceController : public QObject {
   qint64 now() const;
 
   std::unique_ptr<GateClient> gate_;
-  std::unique_ptr<SecretStore> licenceStore_, zoomStore_;
+  std::unique_ptr<SecretStore> licenceStore_;
   QString machineName_;
   Opener openUrl_;
   Clock clock_;
@@ -103,7 +104,7 @@ class LicenceController : public QObject {
   QString sdkToken_;
   qint64 sdkTokenExpiresAt_ = 0;
 
-  QString refreshToken_;
+  bool zoomSignedIn_ = false;
   QString loginState_, loginVerifier_;
   qint64 loginDeadline_ = 0;
   QTimer loginTimer_;

@@ -1,6 +1,7 @@
 // backhaul gate: hands out what a PC needs to join a Zoom meeting, to PCs with a licence.
 // The Zoom keys and the admin token are Worker secrets (never in this file):
-//   ZOOM_CLIENT_ID, ZOOM_CLIENT_SECRET, ADMIN_TOKEN
+//   ZOOM_CLIENT_ID, ZOOM_CLIENT_SECRET, ADMIN_TOKEN,
+//   SIGNIN_KEY (32 random bytes as base64; seals the licences' Zoom sign-ins)
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "backhaul-gate",
