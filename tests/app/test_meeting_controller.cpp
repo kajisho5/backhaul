@@ -121,6 +121,283 @@ void sendFrame(backhaul::MeetingEvents* events, std::uint32_t user, int w, int h
 
 }  // namespace
 
+// thrown out of the meeting by the line: this PC comes back by itself, and only then
+static void testRejoin() {
+  using backhaul::EndCause;
+  AppState a;
+  a.loadDefaults();
+  a.setRole(QStringLiteral("all"));
+  a.setZoomName(0, QStringLiteral("Kakuu Ichiro"));
+  a.setMeetingId(QStringLiteral("123 4567 8901"));
+  FrameStore frames;
+  ZoomCredentials saved{QStringLiteral("SampleClientId_01"), QStringLiteral("sample-secret")};
+  auto* client = new ScriptedClient;
+  MeetingController m(a, frames, std::unique_ptr<backhaul::MeetingClient>(client),
+                      std::make_unique<MemoryCredentials>(&saved));
+  qint64 now = 1'000'000;
+  m.setClock([&now] { return now; });
+  CHECK(a.rejoins());
+  Participant self = person(1, "会場 PC");
+  self.isSelf = true;
+  // What the meeting library does when the meeting is over for this PC: everybody is gone,
+  // then the reason, then the state.
+  auto drop = [&](MeetingState state, EndCause cause) {
+    client->events->onParticipants({});
+    client->events->onEndCause(cause);
+    client->events->onMeetingState(state, "会議に入れませんでした (2)");
+  };
+  auto in = [&] {
+    client->events->onMeetingState(MeetingState::Receiving, {});
+    client->events->onParticipants({self, person(10, "Kakuu Ichiro")});
+  };
+
+  m.join();
+  in();
+  CHECK(client->joins == 1 && a.property("connected").toBool() && slotData(a, 0, SlotModel::StateRole).toString() == QStringLiteral("ok"));
+
+  // The line drops: the first try is set for 5 seconds from now, and the operator's wish
+  // to be in the meeting still stands (busy, no second "join", no update in between).
+  drop(MeetingState::Failed, EndCause::Connection);
+  CHECK(m.rejoining() && m.rejoinAttempt() == 1 && m.rejoinWaitSeconds() == 5);
+  CHECK(m.busy() && !m.canJoin() && !m.failed() && !a.property("connected").toBool() && client->joins == 1);
+  CHECK(m.statusText() == QStringLiteral("入り直し中"));
+  // The slot stays the person's, shown as lost.
+  CHECK(slotData(a, 0, SlotModel::StateRole).toString() == QStringLiteral("lost"));
+  CHECK(slotData(a, 0, SlotModel::ZoomNameRole).toString() == QStringLiteral("Kakuu Ichiro"));
+  now += 3000;
+  CHECK(m.rejoinWaitSeconds() == 2);
+
+  // The try (started here by hand, as "try now" does; the timer does the same).
+  m.rejoinNow();
+  CHECK(client->joins == 2 && m.rejoinWaitSeconds() == 0 && m.rejoining());
+  CHECK(client->lastRequest.meetingNumber == 12345678901ULL);
+  m.rejoinNow();  // not waiting: nothing happens
+  CHECK(client->joins == 2);
+  // Still no line: the next tries wait 10, 20, then 30 seconds.
+  drop(MeetingState::Failed, EndCause::Connection);
+  CHECK(m.rejoinAttempt() == 2 && m.rejoinWaitSeconds() == 10);
+  m.rejoinNow();
+  drop(MeetingState::Failed, EndCause::Connection);
+  CHECK(m.rejoinAttempt() == 3 && m.rejoinWaitSeconds() == 20);
+  m.rejoinNow();
+  drop(MeetingState::Failed, EndCause::Connection);
+  CHECK(m.rejoinAttempt() == 4 && m.rejoinWaitSeconds() == 30);
+  // Back in: the person returns to the slot by name, and coming back is over.
+  m.rejoinNow();
+  CHECK(client->joins == 5);
+  client->events->onMeetingState(MeetingState::Receiving, {});
+  client->events->onParticipants({self, person(27, "Kakuu Ichiro")});  // a new number, the same name
+  CHECK(!m.rejoining() && a.property("connected").toBool() && m.busy());
+  CHECK(slotData(a, 0, SlotModel::StateRole).toString() == QStringLiteral("ok"));
+
+  // The host ends the meeting, or takes this PC out: that is not undone.
+  drop(MeetingState::Ended, EndCause::Host);
+  CHECK(!m.rejoining() && !m.busy() && m.canJoin() && client->joins == 5);
+  // A meeting that does not take this PC (a wrong passcode) is not tried again either,
+  // also not in the middle of coming back.
+  m.join();
+  in();
+  drop(MeetingState::Failed, EndCause::Connection);
+  m.rejoinNow();
+  drop(MeetingState::Failed, EndCause::Refused);
+  CHECK(!m.rejoining() && m.failed() && !m.busy() && client->joins == 7);
+  // A join that never got in is not "coming back": the first failure is simply shown.
+  m.join();
+  drop(MeetingState::Failed, EndCause::Connection);
+  CHECK(!m.rejoining() && m.failed() && client->joins == 8);
+  // Nothing said about the reason: left alone.
+  m.join();
+  in();
+  drop(MeetingState::Ended, EndCause::None);
+  CHECK(!m.rejoining() && !m.busy());
+
+  // "Leave" (and "stop" on the strip) while waiting for a try ends it for good.
+  m.join();
+  in();
+  const int leaves = client->leaves;
+  drop(MeetingState::Failed, EndCause::Connection);
+  CHECK(m.rejoining());
+  m.leave();
+  CHECK(!m.rejoining() && !m.busy() && m.canJoin() && !m.failed() && client->leaves == leaves);
+  CHECK(m.statusText() == QStringLiteral("未接続"));
+  CHECK(slotData(a, 0, SlotModel::StateRole).toString() == QStringLiteral("unassigned"));
+  // ...and while a try is under way, it leaves at the meeting service too.
+  m.join();
+  in();
+  drop(MeetingState::Failed, EndCause::Connection);
+  m.rejoinNow();
+  m.leave();
+  CHECK(!m.rejoining() && !m.busy() && client->leaves == leaves + 1);
+  // Leaving by hand in the normal way is never followed by a try.
+  m.join();
+  in();
+  m.leave();
+  CHECK(!m.rejoining() && !m.busy());
+
+  // Ten minutes without getting back in: trying stops, and the screen says so.
+  m.join();
+  in();
+  const int before = client->joins;
+  drop(MeetingState::Failed, EndCause::Connection);
+  int tries = 0;
+  while (m.rejoining() && tries < 100) {
+    now += qint64{1000} * m.rejoinWaitSeconds();
+    m.rejoinNow();
+    ++tries;
+    drop(MeetingState::Failed, EndCause::Connection);
+  }
+  CHECK(tries >= 20 && tries < 30 && client->joins == before + tries);
+  CHECK(!m.rejoining() && m.failed() && !m.busy() && m.detail().contains(QStringLiteral("10分")));
+
+  // Switched off in the settings: a dropped line is just the end.
+  a.setRejoins(false);
+  m.join();
+  in();
+  drop(MeetingState::Failed, EndCause::Connection);
+  CHECK(!m.rejoining() && m.failed() && !m.busy());
+  a.setRejoins(true);
+}
+
+// devices that go away come back by themselves; what the operator switched off stays off
+static void testDevicesComeBack() {
+  struct Speaker final : backhaul::AudioOutput {
+    bool alive = false, present = true, refuse = false;
+    int starts = 0;
+    std::vector<backhaul::AudioDevice> devices() override {
+      return present ? std::vector<backhaul::AudioDevice>{{"spk", "サンプル卓出力"}} : std::vector<backhaul::AudioDevice>{};
+    }
+    bool start(const std::string&, backhaul::AudioMixer*, std::string* error) override {
+      if (refuse) {
+        *error = "not ready";
+        return alive = false;
+      }
+      ++starts;
+      return alive = true;
+    }
+    void stop() override { alive = false; }
+    bool running() const override { return alive; }
+    int channels() const override { return alive ? 8 : 0; }
+  };
+  struct Mic final : backhaul::AudioInput {
+    bool alive = false, present = true;
+    int starts = 0;
+    std::vector<backhaul::AudioDevice> devices() override {
+      return present ? std::vector<backhaul::AudioDevice>{{"mic-a", "サンプル卓入力A"}} : std::vector<backhaul::AudioDevice>{};
+    }
+    bool start(const std::string&, backhaul::AudioSink*, std::string*) override {
+      ++starts;
+      return alive = true;
+    }
+    void stop() override { alive = false; }
+    bool running() const override { return alive; }
+    int channels() const override { return alive ? 2 : 0; }
+  };
+  struct Capture final : backhaul::VideoInput {
+    bool alive = false, present = true;
+    int starts = 0;
+    std::vector<backhaul::VideoDevice> devices() override {
+      return present ? std::vector<backhaul::VideoDevice>{{"cap-a", "サンプルキャプチャーA"}} : std::vector<backhaul::VideoDevice>{};
+    }
+    bool start(const std::string&, backhaul::VideoSink*, std::string*) override {
+      ++starts;
+      return alive = true;
+    }
+    void stop() override { alive = false; }
+    bool running() const override { return alive; }
+    int width() const override { return alive ? 1920 : 0; }
+    int height() const override { return alive ? 1080 : 0; }
+    int milliFps() const override { return alive ? 59940 : 0; }
+  };
+
+  AppState a;
+  a.loadDefaults();
+  a.setRole(QStringLiteral("all"));
+  a.setReturnInAll(true);  // this PC also sends sound and picture back
+  CHECK(a.playsAudio() && a.sendsAudio() && a.sendsVideo());
+  FrameStore frames;
+  auto* speaker = new Speaker;
+  auto* mic = new Mic;
+  auto* capture = new Capture;
+  AudioController audio(a, std::unique_ptr<backhaul::AudioOutput>(speaker), nullptr, std::unique_ptr<backhaul::AudioInput>(mic));
+  audio.pumpByHand();
+  ReturnController returning(a, frames, std::unique_ptr<backhaul::VideoInput>(capture));
+
+  // Nothing chosen: nothing is looked for.
+  audio.watchDevices(true);
+  returning.watchDevice(true);
+  CHECK(!audio.outputSeeking() && !audio.micSeeking() && !returning.seeking());
+
+  audio.chooseDevice(1);
+  audio.chooseMic(1);
+  returning.chooseDevice(1);
+  CHECK(audio.deviceIndex() == 1 && audio.micIndex() == 1 && returning.deviceIndex() == 1 && a.property("audioOk").toBool());
+  CHECK(!audio.outputSeeking() && !audio.micSeeking() && !returning.seeking());
+
+  // The output device is pulled out: noticed, said, and looked for.
+  speaker->alive = false;
+  speaker->present = false;
+  audio.watchDevices(true);
+  CHECK(audio.deviceIndex() == 0 && !a.property("audioOk").toBool() && audio.outputSeeking() && audio.problem().contains(QStringLiteral("探しています")));
+  CHECK(a.property("audioDeviceName").toString() == QStringLiteral("サンプル卓出力"));  // the choice is kept
+  audio.watchDevices(true);
+  CHECK(audio.outputSeeking() && speaker->starts == 1);
+  // Plugged in again but not ready yet: the next look tries again, and the message stays.
+  speaker->present = true;
+  speaker->refuse = true;
+  audio.watchDevices(true);
+  CHECK(audio.outputSeeking() && audio.problem().contains(QStringLiteral("探しています")));
+  speaker->refuse = false;
+  audio.watchDevices(true);
+  CHECK(!audio.outputSeeking() && audio.deviceIndex() == 1 && a.property("audioOk").toBool() && audio.problem().isEmpty() && speaker->starts == 2);
+
+  // Looking keeps its pace: without "now", a second look right away does nothing.
+  speaker->alive = false;
+  audio.watchDevices(true);   // notices, and looks: the device is there, so it is back at once
+  CHECK(audio.deviceIndex() == 1 && speaker->starts == 3);
+  speaker->alive = false;
+  audio.watchDevices();       // notices; the last look was a moment ago
+  CHECK(audio.outputSeeking() && speaker->starts == 3);
+  audio.watchDevices(true);
+  CHECK(!audio.outputSeeking() && speaker->starts == 4);
+
+  // The same for the recording device...
+  mic->alive = false;
+  mic->present = false;
+  audio.watchDevices(true);
+  CHECK(audio.micIndex() == 0 && audio.micSeeking() && audio.micProblem().contains(QStringLiteral("探しています")));
+  mic->present = true;
+  audio.watchDevices(true);
+  CHECK(audio.micIndex() == 1 && !audio.micSeeking() && audio.micProblem().isEmpty() && mic->starts == 2);
+  // ...and for the capture device (also when only its signal changed: it stops and starts again).
+  capture->alive = false;
+  returning.watchDevice(true);
+  CHECK(returning.deviceIndex() == 1 && !returning.seeking() && capture->starts == 2);
+  capture->alive = false;
+  capture->present = false;
+  returning.watchDevice(true);
+  CHECK(returning.deviceIndex() == 0 && returning.seeking() && returning.problem().contains(QStringLiteral("探しています")));
+  capture->present = true;
+  returning.watchDevice(true);
+  CHECK(returning.deviceIndex() == 1 && !returning.seeking() && returning.problem().isEmpty() && capture->starts == 3);
+
+  // What the operator switches off is not brought back.
+  audio.chooseDevice(0);
+  audio.chooseMic(0);
+  returning.chooseDevice(0);
+  audio.watchDevices(true);
+  returning.watchDevice(true);
+  CHECK(!audio.outputSeeking() && !audio.micSeeking() && !returning.seeking());
+  CHECK(audio.deviceIndex() == 0 && audio.micIndex() == 0 && returning.deviceIndex() == 0 && speaker->starts == 4);
+
+  // A PC whose role leaves sound and picture to others looks for nothing, whatever is saved.
+  audio.chooseDevice(1);
+  returning.chooseDevice(1);
+  a.setRole(QStringLiteral("camera"));
+  audio.watchDevices(true);
+  returning.watchDevice(true);
+  CHECK(!audio.outputSeeking() && !audio.micSeeking() && !returning.seeking() && !speaker->alive && !capture->alive);
+}
+
 // a PC that shows one person: one slot, the largest picture, and no sound at all
 static void testCameraRole() {
   AppState a;
@@ -1170,6 +1447,8 @@ int main(int argc, char* argv[]) {
 #endif
 
 
+  testRejoin();
+  testDevicesComeBack();
   testCameraRole();
   testTwoShotRole();
   testAudioRole();

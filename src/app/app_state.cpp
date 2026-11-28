@@ -417,6 +417,7 @@ QJsonObject AppState::settingsJson() const {
   zoom[QStringLiteral("meetingId")] = meetingId_;
   zoom[QStringLiteral("name")] = joinName_;
   zoom[QStringLiteral("size")] = qualityAuto_ ? QStringLiteral("auto") : QStringLiteral("720");
+  if (!rejoins_) zoom[QStringLiteral("rejoin")] = false;
   root[QStringLiteral("zoom")] = zoom;
   QJsonObject returning;
   returning[QStringLiteral("device")] = videoDeviceName_;
@@ -532,6 +533,7 @@ bool AppState::applySettings(const QJsonObject& settings) {
   // Zoom page: absent in older files.
   QString meetingId = meetingId_, joinName = joinName_;
   bool qualityAuto = qualityAuto_;
+  bool rejoins = true;  // absent in files written before this PC could come back by itself
   const QJsonValue zoomValue = settings.value(QStringLiteral("zoom"));
   if (!zoomValue.isUndefined()) {
     const QJsonObject zoom = zoomValue.toObject();
@@ -544,6 +546,11 @@ bool AppState::applySettings(const QJsonObject& settings) {
     meetingId = zoom.value(QStringLiteral("meetingId")).toString().left(kMaxLabelLength);
     joinName = zoom.value(QStringLiteral("name")).toString().left(kMaxLabelLength);
     qualityAuto = size == QStringLiteral("auto");
+    const QJsonValue rejoinValue = zoom.value(QStringLiteral("rejoin"));
+    if (!rejoinValue.isUndefined()) {
+      if (!rejoinValue.isBool()) return false;
+      rejoins = rejoinValue.toBool();
+    }
   }
 
   // Role: absent in files written before roles existed (those PCs did everything).
@@ -636,6 +643,7 @@ bool AppState::applySettings(const QJsonObject& settings) {
   returnAsShare_ = returnAsShare;
   returnInAll_ = returnInAll;
   checksUpdates_ = checksUpdates;
+  rejoins_ = rejoins;
   if (language != language_) {
     language_ = language;
     emit languageChanged();
@@ -853,6 +861,13 @@ void AppState::setLanguage(const QString& language) {
 void AppState::setChecksUpdates(bool on) {
   if (on == checksUpdates_) return;
   checksUpdates_ = on;
+  emit changed();
+  emit settingsEdited();
+}
+
+void AppState::setRejoins(bool on) {
+  if (on == rejoins_) return;
+  rejoins_ = on;
   emit changed();
   emit settingsEdited();
 }

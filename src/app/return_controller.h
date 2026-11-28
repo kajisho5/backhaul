@@ -5,6 +5,7 @@
 #include <QObject>
 #include <QString>
 #include <QStringList>
+#include <QElapsedTimer>
 #include <QTimer>
 #include <atomic>
 #include <functional>
@@ -31,6 +32,10 @@ class ReturnController : public QObject, public backhaul::VideoSink {
   Q_PROPERTY(int sentPerSecond READ sentPerSecond NOTIFY changed)
   // The operator's "stop sending" switch: picture and sound stay here until switched back.
   Q_PROPERTY(bool paused READ paused WRITE setPaused NOTIFY changed)
+  // The chosen device is not running (unplugged, signal changed, not there yet) and is
+  // looked for until it is back: whether that is going on, and for how many seconds by now.
+  Q_PROPERTY(bool seeking READ seeking NOTIFY changed)
+  Q_PROPERTY(int seekSeconds READ seekSeconds NOTIFY changed)
 
  public:
   static constexpr int kPreviewSlot = 1000;  // where the preview lives in the frame store
@@ -62,6 +67,13 @@ class ReturnController : public QObject, public backhaul::VideoSink {
   // After the settings were replaced as a whole (a project was opened).
   void reloadSaved();
 
+  bool seeking() const;
+  int seekSeconds() const { return seeking() && sought_.isValid() ? static_cast<int>(sought_.elapsed() / 1000) : 0; }
+  // Notices a device that stopped on its own and looks for the chosen one; it starts again
+  // as soon as it is back. Called once a second; looking happens every few seconds, or
+  // right away with `lookNow` (for tests).
+  void watchDevice(bool lookNow = false);
+
   // VideoSink (device thread)
   void onFrame(const std::uint8_t* y, int yStride, const std::uint8_t* uv, int uvStride, int width, int height,
                std::int64_t timeUs) override;
@@ -80,6 +92,7 @@ class ReturnController : public QObject, public backhaul::VideoSink {
   std::vector<backhaul::VideoDevice> devices_;
   int deviceIndex_ = 0;
   QString problem_;
+  QElapsedTimer sought_, lastLook_;  // since when the device is looked for; the last look
   int sentPerSecond_ = 0;
   QTimer timer_;
   Sender sender_;

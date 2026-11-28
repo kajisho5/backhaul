@@ -6,6 +6,7 @@ add_library(backhaul_core STATIC
   mic_feed.cpp
   nv12.cpp
   quality_policy.cpp
+  recovery.cpp
   resampler.cpp
   role.cpp
   route_matrix.cpp

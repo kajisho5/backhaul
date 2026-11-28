@@ -8,6 +8,8 @@
 #include <string>
 #include <vector>
 
+#include "core/recovery.h"
+
 namespace backhaul {
 
 // How the sound this PC sends is treated by the meeting service.
@@ -95,6 +97,9 @@ class MeetingEvents {
   virtual ~MeetingEvents() = default;
   // Called on the thread that called join() / poll().
   virtual void onMeetingState(MeetingState state, const std::string& detail) = 0;
+  // Why the meeting is over for this PC, said right before onMeetingState(Failed or Ended)
+  // when the meeting service gave a reason. Leaving by leave() says nothing.
+  virtual void onEndCause(EndCause) {}
   virtual void onParticipants(const std::vector<Participant>& everyone) = 0;
   virtual void onMeetingTopic(const std::string& topic) = 0;
   // The screens being shared right now by others (empty when nobody shares).

@@ -33,8 +33,8 @@ Rectangle {
         Row {
             spacing: 6
             Text {
-                text: app.connected ? qsTr("接続中") : qsTr("未接続")
-                color: app.connected ? Theme.ok : Theme.mute
+                text: app.connected ? qsTr("接続中") : meeting.rejoining ? qsTr("切断") : qsTr("未接続")
+                color: app.connected ? Theme.ok : meeting.rejoining ? Theme.unstable : Theme.mute
                 font.family: app.sansFamily; font.pixelSize: 13; font.bold: true
             }
             Text { text: app.elapsed; color: Theme.mute; font.family: app.monoFamily; font.pixelSize: 13; visible: app.connected }

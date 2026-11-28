@@ -81,6 +81,7 @@ qt_add_qml_module(backhaul
     qml/PickLine.qml
     qml/SettingsProject.qml
     qml/SettingsSoftware.qml
+    qml/RecoverStrip.qml
     qml/UpdateStrip.qml
 )
 

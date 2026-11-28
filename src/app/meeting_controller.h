@@ -8,6 +8,7 @@
 #include <QString>
 #include <QTimer>
 #include <atomic>
+#include <functional>
 #include <memory>
 
 #include "credential_store.h"
@@ -42,6 +43,11 @@ class MeetingController : public QObject, public backhaul::MeetingEvents {
   Q_PROPERTY(QString sendNote READ sendNote NOTIFY changed)
   Q_PROPERTY(bool sendingVideo READ sendingVideo NOTIFY changed)
   Q_PROPERTY(QString sendVideoNote READ sendVideoNote NOTIFY changed)
+  // Coming back after the line dropped: whether this PC is trying, which try it is on,
+  // and the seconds until the next one starts (0 while a try is under way).
+  Q_PROPERTY(bool rejoining READ rejoining NOTIFY changed)
+  Q_PROPERTY(int rejoinAttempt READ rejoinAttempt NOTIFY changed)
+  Q_PROPERTY(int rejoinWaitSeconds READ rejoinWaitSeconds NOTIFY changed)
 
  public:
   MeetingController(AppState& app, FrameStore& frames, std::unique_ptr<backhaul::MeetingClient> client,
@@ -54,7 +60,11 @@ class MeetingController : public QObject, public backhaul::MeetingEvents {
   QString credentialHint() const;
   int step() const;
   bool busy() const;
-  bool failed() const { return state_ == backhaul::MeetingState::Failed; }
+  // Not while coming back: a try that did not get in is followed by the next one.
+  bool failed() const { return state_ == backhaul::MeetingState::Failed && !rejoining(); }
+  bool rejoining() const { return rejoinAttempt_ > 0; }
+  int rejoinAttempt() const { return rejoinAttempt_; }
+  int rejoinWaitSeconds() const;
   QString statusText() const;
   QString detail() const { return detail_; }
   bool canJoin() const;
@@ -73,12 +83,18 @@ class MeetingController : public QObject, public backhaul::MeetingEvents {
   void setLicence(LicenceController* licence);
   // Something the operator should know about the join that is under way (may be empty).
   QString joinNotice() const { return joinNotice_; }
+  // Also ends coming back: the operator no longer wants to be in the meeting.
   Q_INVOKABLE void leave();
+  // While waiting for the next try: start it now.
+  Q_INVOKABLE void rejoinNow();
+  // For tests: the time in milliseconds, in place of the system's clock.
+  void setClock(std::function<qint64()> clock) { clock_ = std::move(clock); }
   Q_INVOKABLE bool saveCredentials(const QString& clientId, const QString& clientSecret);
   Q_INVOKABLE void clearCredentials();
 
   // MeetingEvents
   void onMeetingState(backhaul::MeetingState state, const std::string& detail) override;
+  void onEndCause(backhaul::EndCause cause) override { endCause_ = cause; }
   void onParticipants(const std::vector<backhaul::Participant>& everyone) override;
   void onMeetingTopic(const std::string& topic) override;
   void onShares(const std::vector<backhaul::ShareSource>& shares) override;
@@ -103,6 +119,10 @@ class MeetingController : public QObject, public backhaul::MeetingEvents {
   void updateWants();
   void everySecond();
   void resetSlots();
+  void startJoin();
+  void stopRejoining();
+  bool planRejoin();
+  qint64 nowMs() const;
 
   AppState& app_;
   FrameStore& frames_;
@@ -112,6 +132,14 @@ class MeetingController : public QObject, public backhaul::MeetingEvents {
   bool preparing_ = false;  // waiting for the licence server before the join starts
   int prepareRound_ = 0;    // which wait is the current one; "leave" ends it by moving on
   QString joinNotice_;
+  // Coming back after the line dropped.
+  bool wasIn_ = false;        // this join got into the meeting, so there is something to come back to
+  backhaul::EndCause endCause_ = backhaul::EndCause::None;  // said for the end that is about to be reported
+  int rejoinAttempt_ = 0;     // 0: not coming back
+  qint64 rejoinSinceMs_ = 0;  // when the line dropped
+  qint64 rejoinNextMs_ = 0;   // when the next try starts; 0 while a try is under way
+  QTimer rejoinTimer_;
+  std::function<qint64()> clock_;
   QString clientId_, clientSecret_, passcode_, zak_, detail_;
   backhaul::MeetingState state_ = backhaul::MeetingState::Idle;
   bool authenticated_ = false;

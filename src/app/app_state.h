@@ -42,6 +42,8 @@ class AppState : public QObject {
   Q_PROPERTY(bool returnInAll READ returnInAll WRITE setReturnInAll NOTIFY roleChanged)
   // Whether the program looks for a newer version when it starts.
   Q_PROPERTY(bool checksUpdates READ checksUpdates WRITE setChecksUpdates NOTIFY changed)
+  // Whether this PC joins the meeting again by itself after the line dropped.
+  Q_PROPERTY(bool rejoins READ rejoins WRITE setRejoins NOTIFY changed)
   Q_PROPERTY(bool sendsVideo READ sendsVideo NOTIFY roleChanged)
   Q_PROPERTY(bool receivesVideo READ receivesVideo NOTIFY roleChanged)
   Q_PROPERTY(int audioChannels MEMBER audioChannels_ NOTIFY changed)
@@ -127,6 +129,8 @@ class AppState : public QObject {
   bool returnInAll() const { return returnInAll_; }
   void setReturnInAll(bool on);
   bool checksUpdates() const { return checksUpdates_; }
+  bool rejoins() const { return rejoins_; }
+  void setRejoins(bool on);
   void setChecksUpdates(bool on);
   bool receivesVideo() const { return backhaul::receivesVideo(role_); }
   // Slides that are not 16:9: true cuts them to 16:9, false shows all with black bars.
@@ -251,6 +255,7 @@ class AppState : public QObject {
   QString language_ = QStringLiteral("en");
   bool returnInAll_ = false;
   bool checksUpdates_ = true;
+  bool rejoins_ = true;
   QString roleScreen_;
   bool twoShotSwapped_ = false, twoShotFill_ = true, twoShotSolo_ = false;
   int twoShotSplit_ = 0;

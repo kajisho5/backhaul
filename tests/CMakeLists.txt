@@ -8,6 +8,7 @@ add_executable(core_tests
   test_mic_feed.cpp
   test_nv12.cpp
   test_quality_policy.cpp
+  test_recovery.cpp
   test_resampler.cpp
   test_role.cpp
   test_route_matrix.cpp

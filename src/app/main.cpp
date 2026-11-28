@@ -62,6 +62,8 @@ int main(int argc, char* argv[]) {
                                      QStringLiteral("For pictures: show <version> as a newer version that was found."),
                                      QStringLiteral("version"));
   args.addOption(updateOpt);
+  const QCommandLineOption recoverOpt(QStringLiteral("recover"), QStringLiteral("For pictures: show the \"coming back\" strip with sample lines."));
+  args.addOption(recoverOpt);
   const QCommandLineOption roleOpt(QStringLiteral("role"),
                                    QStringLiteral("Start in a role: all, camera, twoshot, slide, audio or return; \"ask\" shows the role question."),
                                    QStringLiteral("role"));
@@ -252,6 +254,8 @@ int main(int argc, char* argv[]) {
     window->setProperty("settingsTab", page);
     window->setProperty("settingsOpen", true);
   }
+
+  if (args.isSet(recoverOpt)) window->setProperty("recoverSample", true);
 
   if (args.isSet(returnOpt)) {
     const QString send = args.value(returnOpt);

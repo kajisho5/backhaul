@@ -25,6 +25,8 @@ Window {
     // Set from the command line for pictures of the settings pages.
     property bool settingsOpen: false
     property string settingsTab: "slots"
+    // Set from the command line for pictures of the "coming back" strip.
+    property bool recoverSample: false
     // The role question: always while no role is chosen, otherwise when asked for.
     property bool roleOpen: false
     readonly property bool roleAsked: !settingsOpen && (roleOpen || app.role.length === 0)
@@ -96,6 +98,15 @@ Window {
         visible: !settingsOpen && !roleAsked
 
         TopBar { Layout.fillWidth: true; onSettingsRequested: settingsOpen = true; onRoleRequested: roleOpen = true }
+
+        // Something dropped out and is being brought back (the meeting, a device).
+        RecoverStrip {
+            sample: recoverSample
+            visible: shown
+            Layout.fillWidth: true
+            Layout.preferredHeight: visible ? implicitHeight : 0
+            onDeviceRequested: (page) => { settingsTab = page; settingsOpen = true }
+        }
 
         // A newer version is available (never shown during a meeting).
         UpdateStrip {

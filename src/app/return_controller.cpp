@@ -4,6 +4,7 @@
 #include <QImage>
 
 #include "app_state.h"
+#include "core/recovery.h"
 #include "core/yuv.h"
 #include "frame_store.h"
 
@@ -124,14 +125,42 @@ void ReturnController::tick() {
   const int sent = sentCount_.exchange(0);
   bool moved = sent != sentPerSecond_;
   sentPerSecond_ = sent;
+  const bool was = seeking();
+  const int before = seekSeconds();
+  watchDevice();
+  if (moved || was != seeking() || before != seekSeconds()) emit changed();
+}
+
+// The operator's choice stands while its name is kept: "not used" clears it.
+bool ReturnController::seeking() const {
+  return input_ != nullptr && deviceIndex_ == 0 && app_.sendsVideo() && !app_.videoDeviceName().isEmpty();
+}
+
+void ReturnController::watchDevice(bool lookNow) {
   // The device can disappear on its own (unplugged, signal lost and renegotiated).
   if (input_ != nullptr && deviceIndex_ > 0 && !input_->running()) {
     deviceIndex_ = 0;
-    problem_ = T("映像の機器が止まりました。機器を選び直してください");
+    problem_ = T("映像の機器が止まりました。同じ機器を探しています");
     frames_.clear(kPreviewSlot);
-    moved = true;
+    emit changed();
   }
-  if (moved) emit changed();
+  if (!seeking()) {
+    sought_.invalidate();
+    return;
+  }
+  if (!sought_.isValid()) sought_.start();
+  if (!lookNow && lastLook_.isValid() && lastLook_.elapsed() < qint64{1000} * backhaul::kDeviceSeekSeconds) return;
+  lastLook_.start();
+  // Looked for quietly: the list on the screen changes only when the device is there.
+  const std::vector<backhaul::VideoDevice> found = input_->devices();
+  for (std::size_t i = 0; i < found.size(); ++i) {
+    if (QString::fromStdString(found[i].name) != app_.videoDeviceName()) continue;
+    devices_ = found;
+    const QString before = problem_;
+    if (!startDevice(static_cast<int>(i) + 1)) problem_ = before;  // there, but not ready yet: the next look tries again
+    emit changed();
+    return;
+  }
 }
 
 void ReturnController::onFrame(const std::uint8_t* y, int yStride, const std::uint8_t* uv, int uvStride, int width,

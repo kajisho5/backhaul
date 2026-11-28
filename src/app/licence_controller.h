@@ -70,6 +70,7 @@ class LicenceController : public QObject {
   // operator should know although the join goes ahead (for example: no ZAK this time).
   struct Entry {
     bool ok = false;
+    bool unreachable = false;  // not ok because the licence server could not be reached
     QString sdkToken, zak, error, notice;
   };
   void prepareJoin(std::function<void(const Entry&)> done);
