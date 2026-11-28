@@ -2,7 +2,7 @@
 // Plain text in one layout; nothing here is secret and nothing is read from a request.
 
 const UPDATED = "November 28, 2026";
-const CONTACT = "info@seventh-well.com";
+const CONTACT = "backhaul@seventh-well.com";
 
 type Page = { path: string; title: string; lead: string; body: string };
 

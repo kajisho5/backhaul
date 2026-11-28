@@ -1,6 +1,7 @@
 // Everything that talks to Stripe. No Stripe library: the service makes five kinds of
 // request, and checks the signature of what Stripe sends, with what Workers already have.
 import { sameText } from "./licence";
+import type { MailOrder } from "./mail_content";
 import type { Fetcher } from "./zoom";
 
 /** The API version every request asks for, so that a change at Stripe cannot change the answers. */
@@ -181,7 +182,12 @@ export class Stripe {
   }
 
   async subscription(id: string): Promise<Subscription> {
-    const sub = await this.send("GET", `/v1/subscriptions/${encodeURIComponent(id)}`, [["expand[0]", "customer"]]);
+    const sub = await this.send("GET", `/v1/subscriptions/${encodeURIComponent(id)}`, [
+      ["expand[0]", "customer"],
+      // For the mail with the key: what was paid, and with which card.
+      ["expand[1]", "latest_invoice"],
+      ["expand[2]", "default_payment_method"],
+    ]);
     return readSubscription(sub);
   }
 }
@@ -196,6 +202,26 @@ export interface Subscription {
   periodEnd: number;
   email: string | null;
   lang: "en" | "ja";
+  interval: "month" | "year" | null;
+  /** The newest invoice, for the mail with the key; null when Stripe did not send one along. */
+  order: MailOrder | null;
+}
+
+/** The parts of an invoice the mail shows. Null unless it is an invoice with its amounts. */
+function readOrder(invoice: unknown, paymentMethod: unknown): MailOrder | null {
+  if (!isObject(invoice)) return null;
+  const { created, currency, subtotal, total } = invoice;
+  if (typeof created !== "number" || typeof currency !== "string" || typeof subtotal !== "number" || typeof total !== "number") return null;
+  const card = isObject(paymentMethod) && isObject(paymentMethod.card) ? paymentMethod.card : null;
+  return {
+    number: typeof invoice.number === "string" && invoice.number.length > 0 ? invoice.number : null,
+    created,
+    currency,
+    subtotal,
+    total,
+    receiptUrl: typeof invoice.hosted_invoice_url === "string" && invoice.hosted_invoice_url.startsWith("https://") ? invoice.hosted_invoice_url : null,
+    card: typeof card?.brand === "string" && typeof card.last4 === "string" && /^\d{4}$/.test(card.last4) ? { brand: card.brand, last4: card.last4 } : null,
+  };
 }
 
 export function readSubscription(sub: Json): Subscription {
@@ -203,6 +229,7 @@ export function readSubscription(sub: Json): Subscription {
   const item = isObject(items[0]) ? items[0] : null;
   const price = isObject(item?.price) ? item.price : null;
   const priceData = isObject(price?.metadata) ? price.metadata : null;
+  const recurring = isObject(price?.recurring) ? price.recurring : null;
   const perUnit = typeof priceData?.seats === "string" && /^\d{1,3}$/.test(priceData.seats) ? Number(priceData.seats) : null;
   const quantity = typeof item?.quantity === "number" && Number.isInteger(item.quantity) && item.quantity > 0 ? item.quantity : 1;
   const customer = isObject(sub.customer) ? sub.customer : null;
@@ -216,5 +243,7 @@ export function readSubscription(sub: Json): Subscription {
     periodEnd: typeof item?.current_period_end === "number" ? item.current_period_end : 0,
     email: typeof customer?.email === "string" ? customer.email : null,
     lang: data?.lang === "ja" ? "ja" : "en",
+    interval: recurring?.interval === "month" || recurring?.interval === "year" ? recurring.interval : null,
+    order: readOrder(sub.latest_invoice, sub.default_payment_method),
   };
 }

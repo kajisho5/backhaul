@@ -97,7 +97,7 @@ const en = {
     privacy: "We use the address once, to send the key, and keep only a one-way hash of it so that each address gets one trial.",
     errors: {
       bad_email: "That does not look like an email address.",
-      already_used: "This address has already had a trial. Write to info@seventh-well.com if you need more time.",
+      already_used: "This address has already had a trial. Write to backhaul@seventh-well.com if you need more time.",
       slow_down: "Too many requests. Please try again tomorrow.",
       mail_failed: "The email could not be sent. Check the address and try again.",
       not_configured: "Trials are not switched on yet. Please try again later.",
@@ -117,7 +117,7 @@ const en = {
     notMailed: "The email is delayed and will follow. Copy the key now.",
     shown: (tail: string, email: string) => `The key (ending in ${tail}) was already shown once. You will find it in the email sent to ${email}.`,
     next: "How to get started",
-    slow: "Stripe has not confirmed the payment yet. Leave this page open, or come back through the link in a minute. If you were charged and no key arrives, write to info@seventh-well.com.",
+    slow: "Stripe has not confirmed the payment yet. Leave this page open, or come back through the link in a minute. If you were charged and no key arrives, write to backhaul@seventh-well.com.",
     missing: "This page needs the link Stripe sends you to after paying.",
     errors: {
       unknown_order: "This order was not found.",
@@ -216,7 +216,7 @@ const ja: Texts = {
     privacy: "アドレスはキーを送るために1回だけ使います。同じアドレスに体験を1回だけにするため、元に戻せない形（ハッシュ）だけを残します。",
     errors: {
       bad_email: "メールアドレスの形になっていません。",
-      already_used: "このアドレスは体験を利用済みです。延長のご相談は info@seventh-well.com へどうぞ。",
+      already_used: "このアドレスは体験を利用済みです。延長のご相談は backhaul@seventh-well.com へどうぞ。",
       slow_down: "申し込みが続きすぎました。明日もう一度お試しください。",
       mail_failed: "メールを送れませんでした。アドレスを確かめて、もう一度お試しください。",
       not_configured: "体験の受け付けは、まだ始まっていません。時間をおいてお試しください。",
@@ -236,7 +236,7 @@ const ja: Texts = {
     notMailed: "メールは遅れて届きます。いまキーをコピーしておいてください。",
     shown: (tail: string, email: string) => `キー（末尾 ${tail}）は、すでに1回表示しました。${email} へお送りしたメールをご覧ください。`,
     next: "使い始め方",
-    slow: "Stripeでの支払いの確認が、まだ済んでいません。このページを開いたままにするか、1分ほどして同じリンクを開き直してください。請求があったのにキーが届かないときは info@seventh-well.com へご連絡ください。",
+    slow: "Stripeでの支払いの確認が、まだ済んでいません。このページを開いたままにするか、1分ほどして同じリンクを開き直してください。請求があったのにキーが届かないときは backhaul@seventh-well.com へご連絡ください。",
     missing: "このページは、支払いのあとにStripeから移ってくるリンクで開いてください。",
     errors: {
       unknown_order: "この注文は見つかりませんでした。",

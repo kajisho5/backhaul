@@ -25,6 +25,7 @@ export interface Env {
   SITE_URL?: string; // the sales site, the only origin that may call /v1/shop from a browser
   MAIL_FROM?: string; // "backhaul <address>", an address of a domain verified at Resend
   BILLING_URL?: string; // Stripe's sign-in page for subscribers (plan, card, cancel)
+  SELLER_TAX_ID?: string; // the seller's registration number for Japanese invoices, shown on mails of yen purchases
   STRIPE_SECRET_KEY?: string;
   STRIPE_WEBHOOK_SECRET?: string;
   RESEND_API_KEY?: string;

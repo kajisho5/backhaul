@@ -486,7 +486,7 @@ describe("the public pages", () => {
       expect(r.headers.get("content-type")).toContain("text/html");
       expect(r.headers.get("x-frame-options")).toBe("DENY");
       const html = await r.text();
-      expect(html).toContain("info@seventh-well.com");
+      expect(html).toContain("backhaul@seventh-well.com");
       for (const other of ["/privacy", "/terms", "/support", "/docs"]) {
         if (other !== path) expect(html).toContain(`href="${other}"`);
       }
