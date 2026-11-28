@@ -35,12 +35,10 @@ QString dayOf(qint64 seconds) {
 }  // namespace
 
 LicenceController::LicenceController(std::unique_ptr<GateClient> gate, std::unique_ptr<SecretStore> licenceStore,
-                                     std::unique_ptr<SecretStore> zoomStore, QString deviceName, Opener openUrl, Clock clock,
-                                     QObject* parent)
+                                     QString deviceName, Opener openUrl, Clock clock, QObject* parent)
     : QObject(parent),
       gate_(std::move(gate)),
       licenceStore_(std::move(licenceStore)),
-      zoomStore_(std::move(zoomStore)),
       machineName_(deviceName.trimmed().left(60)),
       openUrl_(std::move(openUrl)),
       clock_(std::move(clock)) {
@@ -61,8 +59,8 @@ LicenceController::LicenceController(std::unique_ptr<GateClient> gate, std::uniq
     seats_ = saved.value(QStringLiteral("seats")).toInt();
     used_ = saved.value(QStringLiteral("used")).toInt();
     expiresAt_ = static_cast<qint64>(saved.value(QStringLiteral("expiresAt")).toDouble());
+    zoomSignedIn_ = saved.value(QStringLiteral("zoomSignedIn")).toBool();  // as last seen; refresh() asks again
   }
-  refreshToken_ = QString::fromUtf8(zoomStore_->load());
 }
 
 qint64 LicenceController::now() const { return clock_ ? clock_() : QDateTime::currentSecsSinceEpoch(); }
@@ -129,6 +127,7 @@ void LicenceController::takeLicence(const QJsonObject& licence) {
   used_ = licence.value(QStringLiteral("used")).toInt();
   expiresAt_ = static_cast<qint64>(licence.value(QStringLiteral("expiresAt")).toDouble());
   shownName_ = licence.value(QStringLiteral("deviceName")).toString().left(60);
+  zoomSignedIn_ = licence.value(QStringLiteral("zoomSignedIn")).toBool();
   saveLicence();
 }
 
@@ -141,6 +140,7 @@ void LicenceController::saveLicence() {
   o[QStringLiteral("seats")] = seats_;
   o[QStringLiteral("used")] = used_;
   o[QStringLiteral("expiresAt")] = static_cast<double>(expiresAt_);
+  o[QStringLiteral("zoomSignedIn")] = zoomSignedIn_;
   if (!licenceStore_->save(QJsonDocument(o).toJson(QJsonDocument::Compact))) {
     say(QStringLiteral("ライセンスをこのPCに保存できませんでした。次に起動したとき、もう一度キーが必要です"), true);
   }
@@ -155,6 +155,7 @@ void LicenceController::forgetLicence() {
   expiresAt_ = 0;
   sdkToken_.clear();
   sdkTokenExpiresAt_ = 0;
+  zoomSignedIn_ = false;
   licenceStore_->clear();
 }
 
@@ -273,13 +274,9 @@ void LicenceController::pollSignIn() {
     loginTimer_.stop();
     loginState_.clear();
     loginVerifier_.clear();
-    const QString token = reply.body.value(QStringLiteral("refreshToken")).toString();
-    if (reply.status == 200 && !token.isEmpty()) {
-      if (!zoomStore_->save(token.toUtf8())) {
-        sayZoom(QStringLiteral("サインインをこのPCに保存できませんでした"), true);
-        return;
-      }
-      refreshToken_ = token;
+    if (reply.status == 200 && reply.body.value(QStringLiteral("signedIn")).toBool()) {
+      zoomSignedIn_ = true;
+      saveLicence();
       sayZoom(QString(), false);
     } else if (reply.status == 410) {
       sayZoom(QStringLiteral("許可されなかったため、サインインしていません"), true);
@@ -294,19 +291,19 @@ void LicenceController::pollSignIn() {
 }
 
 void LicenceController::signOut() {
-  if (!available() || !zoomSignedIn()) return;
-  const QString token = refreshToken_;
-  refreshToken_.clear();
-  zoomStore_->clear();
-  sayZoom(QStringLiteral("サインアウトしました"), false);
-  if (!active()) return;
-  QJsonObject body;
-  body[QStringLiteral("refreshToken")] = token;
-  post(QStringLiteral("/v1/zoom/signout"), body, [this](const GateReply& reply) {
-    // This PC has forgotten the sign-in either way; say so when Zoom could not be told.
-    if (reply.status != 200 || !reply.body.value(QStringLiteral("revoked")).toBool()) {
-      sayZoom(QStringLiteral("このPCからはサインアウトしました（Zoom側の取り消しは確認できませんでした）"), false);
+  if (!available() || !active() || !zoomSignedIn() || busy()) return;
+  post(QStringLiteral("/v1/zoom/signout"), {}, [this](const GateReply& reply) {
+    if (reply.status != 200) {
+      sayZoom(explain(reply) + QStringLiteral("　サインインはそのままです"), true);
+      return;
     }
+    zoomSignedIn_ = false;
+    saveLicence();
+    // Signed out for every PC of the licence either way; say so when Zoom could not be told.
+    sayZoom(reply.body.value(QStringLiteral("revoked")).toBool()
+                ? QStringLiteral("サインアウトしました（このライセンスのPCすべて）")
+                : QStringLiteral("サインアウトしました（Zoom側の取り消しは確認できませんでした）"),
+            false);
   });
 }
 
@@ -350,23 +347,14 @@ void LicenceController::addZak(Entry entry, std::function<void(const Entry&)> do
     done(entry);
     return;
   }
-  QJsonObject body;
-  body[QStringLiteral("refreshToken")] = refreshToken_;
-  post(QStringLiteral("/v1/zoom/zak"), body, [this, entry, done = std::move(done)](const GateReply& reply) mutable {
-    // Zoom hands out a new sign-in token with every use; the old one is dead from then on.
-    const QString next = reply.body.value(QStringLiteral("refreshToken")).toString();
-    if (!next.isEmpty()) {
-      refreshToken_ = next;
-      if (!zoomStore_->save(next.toUtf8())) {
-        sayZoom(QStringLiteral("サインインをこのPCに保存できませんでした。次に起動したとき、もう一度サインインが必要です"), true);
-      }
-    }
+  post(QStringLiteral("/v1/zoom/zak"), {}, [this, entry, done = std::move(done)](const GateReply& reply) mutable {
     const QString zak = reply.body.value(QStringLiteral("zak")).toString();
+    const QString error = reply.body.value(QStringLiteral("error")).toString();
     if (reply.status == 200 && !zak.isEmpty()) {
       entry.zak = zak;
-    } else if (reply.body.value(QStringLiteral("error")).toString() == QStringLiteral("signed_out")) {
-      refreshToken_.clear();
-      zoomStore_->clear();
+    } else if (error == QStringLiteral("signed_out") || error == QStringLiteral("not_signed_in")) {
+      zoomSignedIn_ = false;
+      saveLicence();
       entry.notice = QStringLiteral("Zoomのサインインが切れました。ほかのアカウントの会議に入るには、もう一度サインインしてください");
       sayZoom(entry.notice, true);
     } else {

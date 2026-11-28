@@ -52,6 +52,14 @@ function toDevice(r: DeviceRow): Device {
   return { row: r.id, licenceId: r.licence_id, deviceId: r.device_id, name: r.name, lastSeenAt: r.last_seen_at };
 }
 
+export interface Signin {
+  refreshCipher: string;
+  accessCipher: string | null;
+  accessExpiresAt: number;
+  zakCipher: string | null;
+  zakAt: number;
+}
+
 export class Store {
   constructor(private readonly db: D1Database) {}
 
@@ -173,5 +181,63 @@ export class Store {
       .first<{ count: number }>();
     if (window % 16 === 0) await this.db.prepare("DELETE FROM attempts WHERE expires_at < ?").bind(now).run();
     return row !== null && row.count <= limit;
+  }
+
+  // ---- the licence's Zoom sign-in ----
+
+  async signinOf(licenceId: number): Promise<Signin | null> {
+    const row = await this.db
+      .prepare("SELECT * FROM zoom_signins WHERE licence_id = ?")
+      .bind(licenceId)
+      .first<{ refresh_cipher: string; access_cipher: string | null; access_expires_at: number; zak_cipher: string | null; zak_at: number }>();
+    if (row === null) return null;
+    return {
+      refreshCipher: row.refresh_cipher,
+      accessCipher: row.access_cipher,
+      accessExpiresAt: row.access_expires_at,
+      zakCipher: row.zak_cipher,
+      zakAt: row.zak_at,
+    };
+  }
+
+  /** A new sign-in replaces the old one, and whatever was remembered from it. */
+  async saveSignin(licenceId: number, refreshCipher: string, accessCipher: string | null, accessExpiresAt: number, now: number) {
+    await this.db
+      .prepare(
+        `INSERT INTO zoom_signins (licence_id, refresh_cipher, access_cipher, access_expires_at, updated_at) VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT (licence_id) DO UPDATE SET refresh_cipher = excluded.refresh_cipher, access_cipher = excluded.access_cipher,
+           access_expires_at = excluded.access_expires_at, zak_cipher = NULL, zak_at = 0, busy_until = 0, updated_at = excluded.updated_at`,
+      )
+      .bind(licenceId, refreshCipher, accessCipher, accessExpiresAt, now)
+      .run();
+  }
+
+  /** After Zoom renewed the tokens (the old refresh token is dead from then on). The lock is kept. */
+  async renewSignin(licenceId: number, refreshCipher: string, accessCipher: string, accessExpiresAt: number, now: number) {
+    await this.db
+      .prepare("UPDATE zoom_signins SET refresh_cipher = ?, access_cipher = ?, access_expires_at = ?, updated_at = ? WHERE licence_id = ?")
+      .bind(refreshCipher, accessCipher, accessExpiresAt, now, licenceId)
+      .run();
+  }
+
+  async saveZak(licenceId: number, zakCipher: string, now: number) {
+    await this.db.prepare("UPDATE zoom_signins SET zak_cipher = ?, zak_at = ? WHERE licence_id = ?").bind(zakCipher, now, licenceId).run();
+  }
+
+  async removeSignin(licenceId: number) {
+    await this.db.prepare("DELETE FROM zoom_signins WHERE licence_id = ?").bind(licenceId).run();
+  }
+
+  /** True for exactly one caller at a time per licence; the others wait and look again. */
+  async lockSignin(licenceId: number, now: number, seconds: number): Promise<boolean> {
+    const done = await this.db
+      .prepare("UPDATE zoom_signins SET busy_until = ? WHERE licence_id = ? AND busy_until <= ?")
+      .bind(now + seconds, licenceId, now)
+      .run();
+    return done.meta.changes > 0;
+  }
+
+  async unlockSignin(licenceId: number) {
+    await this.db.prepare("UPDATE zoom_signins SET busy_until = 0 WHERE licence_id = ?").bind(licenceId).run();
   }
 }

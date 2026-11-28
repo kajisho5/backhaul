@@ -42,6 +42,7 @@ export function authoriseUrl(keys: ZoomKeys, redirectUri: string, state: string,
 export interface ZoomTokens {
   accessToken: string;
   refreshToken: string;
+  expiresIn: number; // seconds the access token lasts
 }
 
 /** Why a call to Zoom did not give what was asked for. `signedOut`: the user has to sign in again. */
@@ -72,7 +73,8 @@ async function tokenRequest(keys: ZoomKeys, fetcher: Fetcher, form: Record<strin
   if (typeof body.access_token !== "string" || typeof body.refresh_token !== "string") {
     throw new ZoomError("Zoom answered without tokens", false);
   }
-  return { accessToken: body.access_token, refreshToken: body.refresh_token };
+  const expiresIn = typeof body.expires_in === "number" && body.expires_in > 0 ? body.expires_in : 0;
+  return { accessToken: body.access_token, refreshToken: body.refresh_token, expiresIn };
 }
 
 export function exchangeCode(keys: ZoomKeys, fetcher: Fetcher, code: string, verifier: string, redirectUri: string) {

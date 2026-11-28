@@ -99,7 +99,6 @@ int main(int argc, char* argv[]) {
   const QString gateUrl = qEnvironmentVariable("BACKHAUL_GATE_URL", QStringLiteral(BACKHAUL_GATE_URL));
   LicenceController licence(demo ? nullptr : makeGateClient(gateUrl),
                             demo ? nullptr : makeSecretStore(QStringLiteral("backhaul/licence")),
-                            demo ? nullptr : makeSecretStore(QStringLiteral("backhaul/zoom-signin")),
                             QSysInfo::machineHostName(), [](const QUrl& url) { return QDesktopServices::openUrl(url); });
   meeting.setLicence(&licence);
   licence.refresh();

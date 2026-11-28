@@ -24,7 +24,14 @@ const app = createApp({
     zoomCalls.push({ url, body, auth });
     return zoomAnswer(url, body);
   },
+  // Waiting for another PC's request: time moves on instead of the test standing still.
+  sleep: async (ms) => {
+    slept += ms;
+    now += 1;
+  },
 });
+let slept = 0;
+const SIGNIN_KEY = btoa(String.fromCharCode(...new Uint8Array(32).fill(7)));
 
 function call(path: string, body?: unknown, token?: string, method = "POST") {
   const headers: Record<string, string> = { "content-type": "application/json", "cf-connecting-ip": "192.0.2.7" };
@@ -48,9 +55,32 @@ async function tokenFor(key: string, deviceId = PC_A, name = "SAMPLE-PC-01"): Pr
   return ((await r.json()) as { deviceToken: string }).deviceToken;
 }
 
+/** A second app over the same database whose Zoom is slow to renew tokens. */
+function createSlowApp(onRefresh: () => Promise<Response>) {
+  let reached: () => void = () => {};
+  const reachedZoom = new Promise<void>((resolve) => (reached = resolve));
+  const slowApp = createApp({
+    now: () => now,
+    fetcher: async (url, init) => {
+      if (url.includes("/oauth/token")) {
+        reached();
+        return onRefresh();
+      }
+      return zoomAnswer(url, typeof init?.body === "string" ? init.body : "");
+    },
+    sleep: () => new Promise((r) => setTimeout(r, 5)),
+  });
+  return {
+    reachedZoom,
+    call: (path: string, token: string) =>
+      slowApp.request(path, { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${token}` }, body: "{}" }, env),
+  };
+}
+
 beforeEach(() => {
   now = 1_800_000_000;
-  env = { DB: memoryD1(), PUBLIC_URL: "https://gate.example.invalid", ZOOM_CLIENT_ID: "SampleClientId", ZOOM_CLIENT_SECRET: "sample-secret", ADMIN_TOKEN: ADMIN };
+  env = { DB: memoryD1(), PUBLIC_URL: "https://gate.example.invalid", ZOOM_CLIENT_ID: "SampleClientId", ZOOM_CLIENT_SECRET: "sample-secret", ADMIN_TOKEN: ADMIN, SIGNIN_KEY };
+  slept = 0;
   zoomCalls = [];
   zoomAnswer = () => new Response("{}", { status: 500 });
 });
@@ -227,10 +257,16 @@ describe("signing in to Zoom", () => {
     expect(back.status).toBe(200);
     expect(await back.text()).toContain("サインインできました");
 
-    zoomAnswer = () => Response.json({ access_token: "sample-access", refresh_token: "sample-refresh-1" });
+    zoomAnswer = () => Response.json({ access_token: "sample-access", refresh_token: "sample-refresh-1", expires_in: 3600 });
     const done = await call("/v1/zoom/collect", { state, verifier: VERIFIER }, token);
     expect(done.status).toBe(200);
-    expect(await done.json()).toEqual({ refreshToken: "sample-refresh-1" });
+    // Nothing of Zoom's tokens goes to the PC, and nothing readable is in the database.
+    expect(await done.json()).toEqual({ signedIn: true });
+    const kept = JSON.stringify(await env.DB.prepare("SELECT * FROM zoom_signins").all());
+    expect(kept).not.toContain("sample-refresh-1");
+    expect(kept).not.toContain("sample-access");
+    const status = (await (await call("/v1/status", {}, token)).json()) as { licence: { zoomSignedIn: boolean } };
+    expect(status.licence.zoomSignedIn).toBe(true);
     expect(zoomCalls).toHaveLength(1);
     expect(zoomCalls[0]!.url).toBe("https://zoom.us/oauth/token");
     expect(zoomCalls[0]!.auth).toBe(`Basic ${btoa("SampleClientId:sample-secret")}`);
@@ -273,51 +309,159 @@ describe("signing in to Zoom", () => {
     expect((await call("/v1/zoom/begin", { challenge: "short" }, token)).status).toBe(400);
   });
 
-  it("turns the PC's sign-in into a ZAK, and passes on the new refresh token", async () => {
-    const { key } = await issue();
-    const token = await tokenFor(key);
+  /** Signs the licence in (through the PC with `token`) and forgets what Zoom was asked so far. */
+  async function signedIn(token: string) {
+    const { state } = await begin(token);
+    await app.request(`/v1/zoom/callback?state=${state}&code=sample-code`, {}, env);
+    zoomAnswer = () => Response.json({ access_token: "sample-access-1", refresh_token: "sample-refresh-1", expires_in: 3600 });
+    expect((await call("/v1/zoom/collect", { state, verifier: VERIFIER }, token)).status).toBe(200);
+    zoomCalls = [];
+  }
+  const zoomUrls = () => zoomCalls.map((c) => c.url.replace("https://", "").split("?")[0]);
+
+  it("serves every PC of the licence from one sign-in, and asks Zoom as little as it can", async () => {
+    const { key } = await issue(3);
+    const a = await tokenFor(key, PC_A);
+    const b = await tokenFor(key, PC_B, "SAMPLE-PC-02");
+    expect((await call("/v1/zoom/zak", {}, a)).status).toBe(404); // nobody signed in yet
+    await signedIn(a);
+    expect(((await (await call("/v1/status", {}, b)).json()) as { licence: { zoomSignedIn: boolean } }).licence.zoomSignedIn).toBe(true);
+
+    let zaks = 0;
+    zoomAnswer = (url) => (url.includes("/users/me/token") ? Response.json({ token: `sample-zak-${++zaks}` }) : new Response("{}", { status: 500 }));
+    // The other PC joins: the access token from the sign-in is still good, so only the ZAK is fetched.
+    expect(await (await call("/v1/zoom/zak", {}, b)).json()).toEqual({ zak: "sample-zak-1" });
+    expect(zoomUrls()).toEqual(["api.zoom.us/v2/users/me/token"]);
+    expect(zoomCalls[0]!.auth).toBe("Bearer sample-access-1");
+    // The rest of the PCs, seconds later: the same ZAK, without asking Zoom again.
+    now += 5;
+    expect(await (await call("/v1/zoom/zak", {}, a)).json()).toEqual({ zak: "sample-zak-1" });
+    expect(zoomCalls).toHaveLength(1);
+    // Later the same day: a fresh ZAK, and by then the access token has to be renewed first.
+    now += 2 * 3600;
     zoomAnswer = (url) =>
       url.includes("/oauth/token")
-        ? Response.json({ access_token: "sample-access-2", refresh_token: "sample-refresh-2" })
-        : Response.json({ token: "sample-zak" });
-    const r = await call("/v1/zoom/zak", { refreshToken: "sample-refresh-1" }, token);
-    expect(r.status).toBe(200);
-    expect(await r.json()).toEqual({ zak: "sample-zak", refreshToken: "sample-refresh-2" });
-    expect(Object.fromEntries(new URLSearchParams(zoomCalls[0]!.body))).toEqual({ grant_type: "refresh_token", refresh_token: "sample-refresh-1" });
-    expect(zoomCalls[1]).toMatchObject({ url: "https://api.zoom.us/v2/users/me/token?type=zak", auth: "Bearer sample-access-2" });
+        ? Response.json({ access_token: "sample-access-2", refresh_token: "sample-refresh-2", expires_in: 3600 })
+        : Response.json({ token: "sample-zak-later" });
+    expect(await (await call("/v1/zoom/zak", {}, a)).json()).toEqual({ zak: "sample-zak-later" });
+    expect(Object.fromEntries(new URLSearchParams(zoomCalls[1]!.body))).toEqual({ grant_type: "refresh_token", refresh_token: "sample-refresh-1" });
+    expect(zoomCalls[2]).toMatchObject({ url: "https://api.zoom.us/v2/users/me/token?type=zak", auth: "Bearer sample-access-2" });
+    // The renewed refresh token is the one used next time (the old one is dead at Zoom).
+    now += 2 * 3600;
+    await call("/v1/zoom/zak", {}, b);
+    expect(Object.fromEntries(new URLSearchParams(zoomCalls[3]!.body)).refresh_token).toBe("sample-refresh-2");
   });
 
-  it("says when the sign-in is no longer good, and never loses a new refresh token", async () => {
+  it("lets one PC at a time talk to Zoom; the others wait for its result", async () => {
+    const { key } = await issue(2);
+    const a = await tokenFor(key, PC_A);
+    const b = await tokenFor(key, PC_B, "SAMPLE-PC-02");
+    await signedIn(a);
+    now += 2 * 3600; // so that a refresh is needed: the dangerous case
+    let release: (r: Response) => void = () => {};
+    let refreshes = 0;
+    zoomAnswer = (url) => (url.includes("/users/me/token") ? Response.json({ token: "sample-zak" }) : new Response("{}", { status: 500 }));
+    const slow = createSlowApp(() => {
+      refreshes++;
+      return new Promise<Response>((resolve) => (release = resolve));
+    });
+    const first = slow.call("/v1/zoom/zak", a);
+    await slow.reachedZoom;
+    // The second PC asks while the first is still at Zoom: it must not use the refresh token too.
+    const second = slow.call("/v1/zoom/zak", b);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(refreshes).toBe(1);
+    release(Response.json({ access_token: "sample-access-2", refresh_token: "sample-refresh-2", expires_in: 3600 }));
+    expect(await (await first).json()).toEqual({ zak: "sample-zak" });
+    expect(await (await second).json()).toEqual({ zak: "sample-zak" });
+    expect(refreshes).toBe(1);
+  });
+
+  it("drops a sign-in Zoom no longer accepts, and keeps one through a hiccup", async () => {
     const { key } = await issue();
     const token = await tokenFor(key);
-    zoomAnswer = () => Response.json({ reason: "Invalid Token!" }, { status: 401 });
-    const gone = await call("/v1/zoom/zak", { refreshToken: "sample-refresh-old" }, token);
-    expect(gone.status).toBe(401);
-    expect(((await gone.json()) as { error: string }).error).toBe("signed_out");
-
+    await signedIn(token);
+    now += 2 * 3600;
     zoomAnswer = () => new Response("oops", { status: 503 });
-    const down = await call("/v1/zoom/zak", { refreshToken: "sample-refresh-1" }, token);
+    const down = await call("/v1/zoom/zak", {}, token);
     expect(down.status).toBe(502);
     expect(((await down.json()) as { error: string }).error).toBe("zoom_failed");
-
-    // Refreshed, but no ZAK (the permission is missing, say): the new refresh token still reaches the PC.
+    // Still signed in, and not left locked: the next try goes through.
     zoomAnswer = (url) =>
       url.includes("/oauth/token")
-        ? Response.json({ access_token: "a", refresh_token: "sample-refresh-3" })
+        ? Response.json({ access_token: "sample-access-2", refresh_token: "sample-refresh-2", expires_in: 3600 })
+        : Response.json({ token: "sample-zak" });
+    expect((await call("/v1/zoom/zak", {}, token)).status).toBe(200);
+
+    // Renewed, but no ZAK (the permission is missing, say): the renewed token is kept all the same.
+    now += 2 * 3600;
+    zoomAnswer = (url) =>
+      url.includes("/oauth/token")
+        ? Response.json({ access_token: "sample-access-3", refresh_token: "sample-refresh-3", expires_in: 3600 })
         : Response.json({ code: 4711, message: "Invalid access token, does not contain scopes" }, { status: 400 });
-    const noZak = await call("/v1/zoom/zak", { refreshToken: "sample-refresh-2" }, token);
+    const noZak = await call("/v1/zoom/zak", {}, token);
     expect(noZak.status).toBe(502);
-    expect(await noZak.json()).toMatchObject({ error: "zoom_failed", refreshToken: "sample-refresh-3" });
-    expect((await call("/v1/zoom/zak", {}, token)).status).toBe(400);
+    expect(((await noZak.json()) as { detail: string }).detail).toContain("does not contain scopes");
+    zoomCalls = [];
+    zoomAnswer = () => Response.json({ token: "sample-zak-3" });
+    expect(await (await call("/v1/zoom/zak", {}, token)).json()).toEqual({ zak: "sample-zak-3" });
+    expect(zoomCalls[0]!.auth).toBe("Bearer sample-access-3");
+
+    // An access token withdrawn early: renewed once and tried again.
+    now += 700;
+    zoomCalls = [];
+    zoomAnswer = (url, body) =>
+      url.includes("/oauth/token")
+        ? Response.json({ access_token: "sample-access-4", refresh_token: "sample-refresh-4", expires_in: 3600 })
+        : zoomCalls.length === 1
+          ? Response.json({ message: "Invalid access token" }, { status: 401 })
+          : Response.json({ token: `sample-zak-4${body}` });
+    expect(await (await call("/v1/zoom/zak", {}, token)).json()).toEqual({ zak: "sample-zak-4" });
+    expect(zoomUrls()).toEqual(["api.zoom.us/v2/users/me/token", "zoom.us/oauth/token", "api.zoom.us/v2/users/me/token"]);
+
+    // The user took the permission away at Zoom: signed out here too, for every PC.
+    now += 2 * 3600;
+    zoomAnswer = () => Response.json({ reason: "Invalid Token!" }, { status: 401 });
+    const gone = await call("/v1/zoom/zak", {}, token);
+    expect(gone.status).toBe(401);
+    expect(((await gone.json()) as { error: string }).error).toBe("signed_out");
+    expect((await call("/v1/zoom/zak", {}, token)).status).toBe(404);
+    expect(((await (await call("/v1/status", {}, token)).json()) as { licence: { zoomSignedIn: boolean } }).licence.zoomSignedIn).toBe(false);
   });
 
-  it("signs out at Zoom", async () => {
+  it("signs out at Zoom and here; needs its own key to be set", async () => {
     const { key } = await issue();
     const token = await tokenFor(key);
+    await signedIn(token);
     zoomAnswer = () => Response.json({ status: "success" });
-    expect(await (await call("/v1/zoom/signout", { refreshToken: "sample-refresh-1" }, token)).json()).toEqual({ revoked: true });
+    expect(await (await call("/v1/zoom/signout", {}, token)).json()).toEqual({ revoked: true });
     expect(zoomCalls[0]).toMatchObject({ url: "https://zoom.us/oauth/revoke", body: "token=sample-refresh-1" });
-    zoomAnswer = () => new Response("{}", { status: 400 });
-    expect(await (await call("/v1/zoom/signout", { refreshToken: "sample-refresh-1" }, token)).json()).toEqual({ revoked: false });
+    expect((await call("/v1/zoom/zak", {}, token)).status).toBe(404);
+    expect(await (await call("/v1/zoom/signout", {}, token)).json()).toEqual({ revoked: false });
+
+    // A sign-in sealed with a key that was replaced since is of no use to anyone.
+    await signedIn(token);
+    now += 2 * 3600;
+    env.SIGNIN_KEY = btoa(String.fromCharCode(...new Uint8Array(32).fill(9)));
+    expect((await call("/v1/zoom/zak", {}, token)).status).toBe(401);
+    for (const bad of [undefined, "too-short", "not base64 !!"]) {
+      env.SIGNIN_KEY = bad;
+      expect((await call("/v1/zoom/begin", { challenge: CHALLENGE }, token)).status).toBe(503);
+      expect((await call("/v1/zoom/zak", {}, token)).status).toBe(503);
+    }
+  });
+});
+
+describe("the owner's page", () => {
+  it("is served without secrets and may not be framed", async () => {
+    const r = await app.request("/admin", {}, env);
+    expect(r.status).toBe(200);
+    expect(r.headers.get("x-frame-options")).toBe("DENY");
+    expect(r.headers.get("cache-control")).toBe("no-store");
+    const html = await r.text();
+    expect(html).toContain("ライセンス");
+    expect(html).not.toContain(ADMIN);
+    expect(html).not.toContain("sample-secret");
+    expect(html).not.toMatch(/innerHTML|document\.write|\balert\(|\bconfirm\(/);
   });
 });
