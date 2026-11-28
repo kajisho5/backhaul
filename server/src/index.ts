@@ -49,9 +49,10 @@ function zoomKeys(env: Env): ZoomKeys | null {
   return { clientId: env.ZOOM_CLIENT_ID, clientSecret: env.ZOOM_CLIENT_SECRET };
 }
 
-function licenceView(licence: Licence, devices: Device[], own: Device | null, zoomSignedIn: boolean) {
+function licenceView(licence: Licence, devices: Device[], own: Device | null, zoomSignedIn: boolean, renews: boolean) {
   return {
     zoomSignedIn,
+    renews,
     keyTail: licence.keyTail,
     seats: licence.seats,
     used: devices.length,
@@ -133,7 +134,7 @@ export function createApp(outside: Outside) {
     const devices = await store.devicesOf(licence.id);
     const own = devices.find((d) => d.deviceId === deviceId) ?? null;
     const signedIn = (await store.signinOf(licence.id)) !== null;
-    return c.json({ deviceToken: token, licence: licenceView(licence, devices, own, signedIn) });
+    return c.json({ deviceToken: token, licence: licenceView(licence, devices, own, signedIn, await store.renews(licence.id)) });
   });
 
   // ---- everything below /v1 needs the PC's token ----
@@ -164,7 +165,7 @@ export function createApp(outside: Outside) {
     const licence = c.get("licence");
     const devices = await store.devicesOf(licence.id);
     const signedIn = (await store.signinOf(licence.id)) !== null;
-    return c.json({ problem: problemOf(licence, outside.now()), licence: licenceView(licence, devices, c.get("device"), signedIn) });
+    return c.json({ problem: problemOf(licence, outside.now()), licence: licenceView(licence, devices, c.get("device"), signedIn, await store.renews(licence.id)) });
   });
 
   pc.post("/deactivate", async (c) => {

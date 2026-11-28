@@ -92,7 +92,7 @@ async function settle(shop: Shop, store: Store, sub: Subscription, now: number):
   if (licence === null) throw new Error("the licence of the subscription is gone");
   if (paying(sub.status) && sub.seats === null) throw new Error(`the price of ${sub.id} does not say how many PCs it is for (metadata "seats")`);
   const seats = paying(sub.status) && sub.seats !== null ? Math.min(sub.seats, MAX_SEATS) : licence.seats;
-  await store.followSubscription(sub.id, licence.id, sub.status, seats, expiryOf(sub, now, licence.expiresAt), now);
+  await store.followSubscription(sub.id, licence.id, sub.status, sub.ending, seats, expiryOf(sub, now, licence.expiresAt), now);
   return sale;
 }
 

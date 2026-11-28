@@ -298,9 +298,24 @@ export class Store {
     await this.db.prepare("DELETE FROM licences WHERE id = ?").bind(id).run();
   }
 
+  /**
+   * True when this licence is paid by a subscription that renews by itself: its end date
+   * then moves on with every payment, and nobody needs to be told that it is near.
+   */
+  async renews(licenceId: number): Promise<boolean> {
+    const row = await this.db
+      .prepare("SELECT status, ending FROM subscriptions WHERE licence_id = ?")
+      .bind(licenceId)
+      .first<{ status: string; ending: number }>();
+    return row !== null && (row.status === "active" || row.status === "trialing") && row.ending === 0;
+  }
+
   /** What the subscription says now. PCs beyond the new number lose their place, the longest unused first. */
-  async followSubscription(stripeId: string, licenceId: number, status: string, seats: number, expiresAt: number, now: number) {
-    await this.db.prepare("UPDATE subscriptions SET status = ?, updated_at = ? WHERE stripe_id = ?").bind(status, now, stripeId).run();
+  async followSubscription(stripeId: string, licenceId: number, status: string, ending: boolean, seats: number, expiresAt: number, now: number) {
+    await this.db
+      .prepare("UPDATE subscriptions SET status = ?, ending = ?, updated_at = ? WHERE stripe_id = ?")
+      .bind(status, ending ? 1 : 0, now, stripeId)
+      .run();
     await this.db.prepare("UPDATE licences SET seats = ?, expires_at = ? WHERE id = ?").bind(seats, expiresAt, licenceId).run();
     const keep = "SELECT id FROM devices WHERE licence_id = ? ORDER BY last_seen_at DESC, id DESC LIMIT ?";
     await this.db
