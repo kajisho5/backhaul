@@ -7,7 +7,7 @@ $ErrorActionPreference = 'Stop'
 $version = '0.9.4'   # https://github.com/vslavik/winsparkle/releases
 $sha256 = '6037df37fc263bd1650a1c4949681a9d40ffe991d01f35892a406cb5d103c976'
 $zip = Join-Path $Into "WinSparkle-$version.zip"
-curl.exe -sSL --fail --max-time 180 -o $zip "https://github.com/vslavik/winsparkle/releases/download/v$version/WinSparkle-$version.zip"
+curl.exe -sSL --fail --retry 3 --retry-all-errors --max-time 180 -o $zip "https://github.com/vslavik/winsparkle/releases/download/v$version/WinSparkle-$version.zip"
 if ($LASTEXITCODE -ne 0) { throw "WinSparkle $version could not be downloaded" }
 $got = (Get-FileHash -Algorithm SHA256 $zip).Hash.ToLowerInvariant()
 if ($got -ne $sha256) { throw "WinSparkle-$version.zip is not the expected file (sha256 $got)" }
