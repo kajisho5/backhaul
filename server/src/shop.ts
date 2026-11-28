@@ -135,8 +135,8 @@ async function callerOf(c: Context): Promise<string> {
 }
 
 /** This server's own privacy page (the mails link to it). */
-function privacyOf(c: Context): string {
-  return `${new URL(c.req.url).origin}/privacy`;
+function privacyOf(c: Context, lang: "en" | "ja"): string {
+  return `${new URL(c.req.url).origin}${lang === "ja" ? "/ja" : ""}/privacy`;
 }
 
 function maskEmail(email: string): string {
@@ -173,7 +173,7 @@ export function shopRoutes(outside: Outside) {
     const sub = await open.stripe.subscription(subscriptionId);
     const sale = await settle(open, store, sub, now);
     // A mail that cannot be sent makes this request fail, so that Stripe sends the message again later.
-    if (sale !== null) await deliver(open, outside, store, sale, sub, privacyOf(c), now);
+    if (sale !== null) await deliver(open, outside, store, sale, sub, privacyOf(c, sub.lang), now);
     await store.forgetDeliveredKeys(now);
     return c.json({ ok: true });
   });
@@ -240,7 +240,7 @@ export function shopRoutes(outside: Outside) {
       if (sale === null) return c.json({ pending: true }, 202);
       let mailed = true;
       try {
-        await deliver(open, outside, store, sale, sub, privacyOf(c), now);
+        await deliver(open, outside, store, sale, sub, privacyOf(c, sub.lang), now);
       } catch (error) {
         if (!(error instanceof MailError)) throw error;
         console.error(error);
@@ -294,7 +294,7 @@ export function shopRoutes(outside: Outside) {
       nextBillingAt: 0,
       siteUrl: open.siteUrl,
       billingUrl: "",
-      privacyUrl: privacyOf(c),
+      privacyUrl: privacyOf(c, lang),
       contact: CONTACT,
       sellerTaxId: "",
     });
