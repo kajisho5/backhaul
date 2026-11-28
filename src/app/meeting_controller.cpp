@@ -150,8 +150,10 @@ void MeetingController::join() {
   request.clientId.clear();
   request.clientSecret.clear();
   preparing_ = true;
+  const int asked = ++prepareRound_;
   emit changed();
-  licence_->prepareJoin([this, request](const LicenceController::Entry& entry) mutable {
+  licence_->prepareJoin([this, request, asked](const LicenceController::Entry& entry) mutable {
+    if (asked != prepareRound_) return;  // the operator pressed "leave" while this was on its way
     preparing_ = false;
     if (!entry.ok) {
       state_ = MeetingState::Failed;
@@ -184,6 +186,15 @@ bool MeetingController::sendVideo(const std::uint8_t* i420, int width, int heigh
 }
 
 void MeetingController::leave() {
+  if (preparing_) {
+    // Nothing was started at the meeting service yet: the answer on its way is simply not used.
+    ++prepareRound_;
+    preparing_ = false;
+    state_ = MeetingState::Idle;
+    detail_.clear();
+    emit changed();
+    return;
+  }
   if (client_ != nullptr && busy()) client_->leave();
 }
 

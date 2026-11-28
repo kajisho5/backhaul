@@ -16,6 +16,9 @@ ColumnLayout {
     readonly property bool lActive: sample || licence.active
     readonly property bool zSignedIn: sample || licence.zoomSignedIn
     readonly property bool wide: width >= 820
+    // The licence and its Zoom sign-in are shared with other PCs: look again whenever this page is opened.
+    onVisibleChanged: if (visible && !sample) licence.refresh()
+    Component.onCompleted: if (visible && !sample) licence.refresh()
 
     Text { text: qsTr("Zoom接続"); color: Theme.ink; font.family: app.sansFamily; font.pixelSize: 22; font.bold: true; Layout.bottomMargin: 20 }
 

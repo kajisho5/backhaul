@@ -14,7 +14,8 @@ std::size_t powerOfTwoAtLeast(std::size_t n) {
 }
 
 std::int16_t toInt16(float v) {
-  if (!(v > -1.0f)) v = -1.0f;  // also catches NaN
+  if (std::isnan(v)) return 0;  // not a number (a plug-in gone wrong): silence, never a full-level click
+  if (v < -1.0f) v = -1.0f;
   if (v > 1.0f) v = 1.0f;
   return static_cast<std::int16_t>(std::lround(v * 32767.0f));
 }

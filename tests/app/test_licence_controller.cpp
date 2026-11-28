@@ -100,7 +100,7 @@ QJsonObject licenceJson(int used = 1, double expiresAt = 1830000000.0) {
 
 struct Rig {
   QByteArray licenceSaved;
-  FakeGate* gate = new FakeGate;
+  FakeGate* gate = nullptr;  // owned by the controller, like the store
   MemorySecret* licenceStore = nullptr;
   QList<QUrl> opened;
   bool browserWorks = true;
@@ -359,11 +359,31 @@ void testZoomSignIn() {
   rig.gate->flush();
   CHECK(entry.ok && entry.zak.isEmpty() && entry.notice.contains(QStringLiteral("サインインが切れました")));
   CHECK(!rig.licence->zoomSignedIn());
-  // Not signed in: Zoom is not asked for a ZAK at all.
+  // Not signed in as far as this PC knows: the server is asked all the same (the sign-in
+  // is shared by the licence's PCs), and "nobody signed in" is nothing to tell the operator.
   const int zakAsked = rig.gate->count(zakPath);
+  rig.gate->answer(zakPath, 404, {{QStringLiteral("error"), QStringLiteral("not_signed_in")}});
   rig.licence->prepareJoin([&](const LicenceController::Entry& e) { entry = e; });
   rig.gate->flush();
-  CHECK(entry.ok && entry.notice.isEmpty() && rig.gate->count(zakPath) == zakAsked);
+  CHECK(entry.ok && entry.zak.isEmpty() && entry.notice.isEmpty() && rig.gate->count(zakPath) == zakAsked + 1);
+  CHECK(!rig.licence->zoomSignedIn());
+  // The server out of reach while nobody is known to be signed in: no notice either.
+  rig.gate->unreachable(zakPath);
+  rig.licence->prepareJoin([&](const LicenceController::Entry& e) { entry = e; });
+  rig.gate->flush();
+  CHECK(entry.ok && entry.zak.isEmpty() && entry.notice.isEmpty());
+  // Somebody signed in on another PC of the licence: this PC gets the ZAK without a
+  // restart, and shows the sign-in from then on (also after a restart).
+  rig.gate->answer(zakPath, 200, {{QStringLiteral("zak"), QStringLiteral("sample-zak-from-elsewhere")}});
+  rig.licence->prepareJoin([&](const LicenceController::Entry& e) { entry = e; });
+  rig.gate->flush();
+  CHECK(entry.ok && entry.zak == QStringLiteral("sample-zak-from-elsewhere") && entry.notice.isEmpty());
+  CHECK(rig.licence->zoomSignedIn() && QJsonDocument::fromJson(rig.licenceSaved).object().value(QStringLiteral("zoomSignedIn")).toBool());
+  // Signed out again on that other PC: said once, here too.
+  rig.gate->answer(zakPath, 404, {{QStringLiteral("error"), QStringLiteral("not_signed_in")}});
+  rig.licence->prepareJoin([&](const LicenceController::Entry& e) { entry = e; });
+  rig.gate->flush();
+  CHECK(entry.ok && entry.zak.isEmpty() && entry.notice.contains(QStringLiteral("サインインが切れました")) && !rig.licence->zoomSignedIn());
 
   // "No" in the browser, running out of time, giving up, and signing out.
   LicenceController& m = *rig.licence;
@@ -481,18 +501,33 @@ void testJoining() {
   CHECK(client->joins == 2 && client->last.zak == "typed-by-hand" && !m.joinNotice().isEmpty());
   m.leave();
 
+  // "Leave" pressed while the entry is still on its way: the answer is not used.
+  rig.gate->answer(QStringLiteral("/v1/zoom/zak"), 200, {{QStringLiteral("zak"), QStringLiteral("sample-zak")}});
+  m.join();
+  CHECK(m.busy() && client->joins == 2);
+  m.leave();
+  CHECK(!m.busy() && m.canJoin() && !m.failed());
+  rig.gate->flush();
+  CHECK(client->joins == 2 && !m.busy() && m.canJoin());
+  // ...and the next join is a join of its own.
+  rig.gate->answer(QStringLiteral("/v1/zoom/zak"), 200, {{QStringLiteral("zak"), QStringLiteral("sample-zak")}});
+  m.join();
+  rig.gate->flush();
+  CHECK(client->joins == 3 && client->last.zak == "sample-zak");
+  m.leave();
+
   // The licence does not work: no join, and the reason is on the screen.
   rig.now += 2 * 86400;
   rig.gate->answer(QStringLiteral("/v1/sdk-token"), 403, {{QStringLiteral("error"), QStringLiteral("revoked")}});
   m.join();
   rig.gate->flush();
-  CHECK(client->joins == 2 && m.failed() && !m.busy() && m.detail().contains(QStringLiteral("止められています")) && m.canJoin());
+  CHECK(client->joins == 3 && m.failed() && !m.busy() && m.detail().contains(QStringLiteral("止められています")) && m.canJoin());
 
   // Zoom keys typed into this PC come first; the server is then not asked at all.
   const int asked = static_cast<int>(rig.gate->asked.size());
   CHECK(m.saveCredentials(QStringLiteral("SampleClientId_01"), QStringLiteral("sample-secret")));
   m.join();
-  CHECK(client->joins == 3 && client->last.sdkToken.empty() && client->last.clientId == "SampleClientId_01");
+  CHECK(client->joins == 4 && client->last.sdkToken.empty() && client->last.clientId == "SampleClientId_01");
   CHECK(static_cast<int>(rig.gate->asked.size()) == asked);
 }
 

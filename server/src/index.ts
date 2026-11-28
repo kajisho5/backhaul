@@ -104,17 +104,24 @@ export function createApp(outside: Outside) {
     const store = new Store(c.env.DB);
     const now = outside.now();
     const caller = await sha256Hex(c.req.header("cf-connecting-ip") ?? "unknown");
-    if (!(await store.allow(`activate:${caller}`, 10, 600, now))) return c.json({ error: "slow_down" }, 429);
+    // Only keys that do not exist count: that is what guessing looks like. A venue that
+    // registers twenty PCs through one connection within minutes is not slowed down.
+    const guesses = `activate:${caller}`;
+    if (await store.over(guesses, 10, 600, now)) return c.json({ error: "slow_down" }, 429);
+    const wrongKey = async () => {
+      await store.allow(guesses, 10, 600, now);
+      return c.json({ error: "unknown_key" }, 404);
+    };
 
     const body = await readJson(c);
     const key = normaliseKey(text(body?.key, 1, 80) ?? "");
     const deviceId = text(body?.deviceId, 16, 64);
     const name = text(body?.deviceName, 1, 60);
-    if (key === null) return c.json({ error: "unknown_key" }, 404);
+    if (key === null) return wrongKey();
     if (deviceId === null || !/^[A-Za-z0-9-]+$/.test(deviceId) || name === null) return c.json({ error: "bad_request" }, 400);
 
     const licence = await store.licenceByKeyHash(await sha256Hex(key));
-    if (licence === null) return c.json({ error: "unknown_key" }, 404);
+    if (licence === null) return wrongKey();
     const problem = problemOf(licence, now);
     if (problem !== null) return c.json({ error: problem, expiresAt: licence.expiresAt }, 403);
 
@@ -236,10 +243,10 @@ export function createApp(outside: Outside) {
     // token works once, so two at a time would break the sign-in); the others wait for its result.
     for (let round = 0; round < 16; round++) {
       const now = outside.now();
-      const signin = await store.signinOf(licenceId);
-      if (signin === null) return c.json({ error: "not_signed_in" }, 404);
-      if (signin.zakCipher !== null && now - signin.zakAt < ZAK_KEEP_SECONDS) {
-        const kept = await vault.unseal(signin.zakCipher);
+      const seen = await store.signinOf(licenceId);
+      if (seen === null) return c.json({ error: "not_signed_in" }, 404);
+      if (seen.zakCipher !== null && now - seen.zakAt < ZAK_KEEP_SECONDS) {
+        const kept = await vault.unseal(seen.zakCipher);
         if (kept !== null) return c.json({ zak: kept });
       }
       if (!(await store.lockSignin(licenceId, now, LOCK_SECONDS))) {
@@ -247,6 +254,14 @@ export function createApp(outside: Outside) {
         continue;
       }
       try {
+        // Read again now that nobody else can change it: between the look above and the
+        // lock, another PC may have renewed the tokens, and the old refresh token is dead.
+        const signin = await store.signinOf(licenceId);
+        if (signin === null) return c.json({ error: "not_signed_in" }, 404);
+        if (signin.zakCipher !== null && now - signin.zakAt < ZAK_KEEP_SECONDS) {
+          const kept = await vault.unseal(signin.zakCipher);
+          if (kept !== null) return c.json({ zak: kept });
+        }
         const access = signin.accessExpiresAt - now > 120 ? await vault.unseal(signin.accessCipher) : null;
         let zak: string | null = null;
         if (access !== null) {

@@ -110,6 +110,7 @@ class MeetingController : public QObject, public backhaul::MeetingEvents {
   std::unique_ptr<CredentialStore> credentials_;
   LicenceController* licence_ = nullptr;
   bool preparing_ = false;  // waiting for the licence server before the join starts
+  int prepareRound_ = 0;    // which wait is the current one; "leave" ends it by moving on
   QString joinNotice_;
   QString clientId_, clientSecret_, passcode_, zak_, detail_;
   backhaul::MeetingState state_ = backhaul::MeetingState::Idle;

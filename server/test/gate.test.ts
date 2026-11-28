@@ -96,6 +96,8 @@ describe("licence keys", () => {
     expect(normaliseKey("  BH ABCDE FGHIJ KMNPQ RSTVW ")).toBe("BH-ABCDE-FGH1J-KMNPQ-RSTVW"); // I read as 1
     expect(normaliseKey("ABCDEFGH1JKMNPQRSTVW")).toBe("BH-ABCDE-FGH1J-KMNPQ-RSTVW");
     expect(normaliseKey("BH-0O0O0-LLLLL-AAAAA-BBBBB")).toBe("BH-00000-11111-AAAAA-BBBBB");
+    // Typed with a Japanese keyboard left in full-width mode.
+    expect(normaliseKey("ＢＨ－ａｂｃｄｅ－ｆｇｈ１ｊ－ｋｍｎｐｑ－ｒｓｔｖｗ")).toBe("BH-ABCDE-FGH1J-KMNPQ-RSTVW");
     expect(normaliseKey("BH-ABCDE")).toBeNull();
     expect(normaliseKey("BH-ABCDE-FGH1J-KMNPQ-RSTV!")).toBeNull();
     expect(normaliseKey("")).toBeNull();
@@ -183,6 +185,18 @@ describe("registering PCs", () => {
     expect((await activate("BH-AAAAA-AAAAA-AAAAA-AAAAA")).status).toBe(429);
     now += 601;
     expect((await activate("BH-AAAAA-AAAAA-AAAAA-AAAAA")).status).toBe(404);
+  });
+  it("does not slow down a venue that registers all its PCs through one connection", async () => {
+    const { key } = await issue(20);
+    for (let i = 0; i < 20; i++) {
+      const pc = String(i).padStart(2, "0");
+      expect((await activate(key, `sample-device-venue-${pc}`, `SAMPLE-PC-${pc}`)).status).toBe(200);
+    }
+    // Registering the same PCs again (a reinstall) is not guessing either.
+    for (let i = 0; i < 12; i++) expect((await activate(key)).status).toBe(409);
+    // Wrong keys from there are still counted, and then even the right key waits.
+    for (let i = 0; i < 10; i++) expect((await activate("BH-AAAAA-AAAAA-AAAAA-AAAAA")).status).toBe(404);
+    expect((await activate(key, "sample-device-venue-00")).status).toBe(429);
   });
 });
 
@@ -389,6 +403,57 @@ describe("signing in to Zoom", () => {
     expect(refreshes).toBe(1);
   });
 
+  it("does not use a refresh token another PC replaced a moment ago", async () => {
+    const { key } = await issue(2);
+    const a = await tokenFor(key, PC_A);
+    const b = await tokenFor(key, PC_B, "SAMPLE-PC-02");
+    await signedIn(a);
+    now += 2 * 3600;
+    // Zoom as it is: a refresh token works once.
+    let good = "";
+    zoomAnswer = (url, body) => {
+      if (url.includes("/users/me/token")) return Response.json({ token: "sample-zak" });
+      const sent = new URLSearchParams(body).get("refresh_token") ?? "";
+      if (good !== "" && sent !== good) return Response.json({ reason: "Invalid Token!" }, { status: 401 });
+      good = `sample-refresh-next-${zoomCalls.length}`;
+      return Response.json({ access_token: "sample-access-next", refresh_token: good, expires_in: 3600 });
+    };
+    // PC A has read the sign-in and is about to take the lock; in exactly that gap PC B
+    // does everything: lock, renew at Zoom, keep the ZAK, unlock.
+    const db = env.DB;
+    let gap = true;
+    const racing = new Proxy(db, {
+      get(target, name) {
+        if (name !== "prepare") return Reflect.get(target, name) as unknown;
+        return (sql: string) => {
+          const statement = target.prepare(sql);
+          if (!gap || !sql.startsWith("SELECT * FROM zoom_signins")) return statement;
+          return {
+            bind: (...values: unknown[]) => {
+              const bound = statement.bind(...values);
+              return {
+                first: async () => {
+                  const seen = await bound.first();
+                  if (gap) {
+                    gap = false;
+                    expect((await call("/v1/zoom/zak", {}, b)).status).toBe(200);
+                  }
+                  return seen;
+                },
+              };
+            },
+          };
+        };
+      },
+    });
+    const headers = { "content-type": "application/json", "cf-connecting-ip": "192.0.2.7", authorization: `Bearer ${a}` };
+    const first = await app.request("/v1/zoom/zak", { method: "POST", headers, body: "{}" }, { ...env, DB: racing as D1Database });
+    expect(first.status).toBe(200);
+    expect(await first.json()).toEqual({ zak: "sample-zak" });
+    expect(zoomCalls.filter((c) => c.body.includes("grant_type=refresh_token")).length).toBe(1); // PC B's renewal, and no other
+    expect(((await (await call("/v1/status", {}, a)).json()) as { licence: { zoomSignedIn: boolean } }).licence.zoomSignedIn).toBe(true);
+  });
+
   it("drops a sign-in Zoom no longer accepts, and keeps one through a hiccup", async () => {
     const { key } = await issue();
     const token = await tokenFor(key);
@@ -398,6 +463,11 @@ describe("signing in to Zoom", () => {
     const down = await call("/v1/zoom/zak", {}, token);
     expect(down.status).toBe(502);
     expect(((await down.json()) as { error: string }).error).toBe("zoom_failed");
+    // "Too many requests" says nothing about the sign-in either: it is kept.
+    zoomAnswer = () => Response.json({ reason: "Too many requests" }, { status: 429 });
+    const busy = await call("/v1/zoom/zak", {}, token);
+    expect(busy.status).toBe(502);
+    expect(((await busy.json()) as { error: string }).error).toBe("zoom_failed");
     // Still signed in, and not left locked: the next try goes through.
     zoomAnswer = (url) =>
       url.includes("/oauth/token")

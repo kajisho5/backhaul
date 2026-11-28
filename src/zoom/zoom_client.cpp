@@ -297,9 +297,9 @@ class ZoomClient final : public MeetingClient,
 
   void leave() override {
     stopRaw();
-    if (meeting_ != nullptr && meeting_->GetMeetingStatus() == sdk::MEETING_STATUS_INMEETING) {
-      meeting_->Leave(sdk::LEAVE_MEETING);
-    }
+    // Also on the way in (connecting, waiting room, reconnecting): otherwise the meeting
+    // library carries on and enters the meeting after this program said it had left.
+    if (meeting_ != nullptr && onTheWayInOrIn(meeting_->GetMeetingStatus())) meeting_->Leave(sdk::LEAVE_MEETING);
     endOfMeeting();
     if (events_ != nullptr) state(MeetingState::Idle, {});
   }
@@ -391,6 +391,11 @@ class ZoomClient final : public MeetingClient,
   void onMeetingStatusChanged(sdk::MeetingStatus status, int result) override {
     switch (status) {
       case sdk::MEETING_STATUS_INMEETING:
+        if (!busy_) {
+          // Nobody asked to be here any more (left while this was on its way): go out again.
+          if (meeting_ != nullptr) meeting_->Leave(sdk::LEAVE_MEETING);
+          break;
+        }
         enterMeeting();
         break;
       case sdk::MEETING_STATUS_FAILED:
@@ -443,6 +448,20 @@ class ZoomClient final : public MeetingClient,
   void onSmartRecordingEnableActionCallback(sdk::ISmartRecordingEnableActionHandler*) override {}
 
  private:
+  // True from the moment a join was started until the meeting is over for this PC.
+  static bool onTheWayInOrIn(sdk::MeetingStatus status) {
+    switch (status) {
+      case sdk::MEETING_STATUS_CONNECTING:
+      case sdk::MEETING_STATUS_WAITINGFORHOST:
+      case sdk::MEETING_STATUS_INMEETING:
+      case sdk::MEETING_STATUS_RECONNECTING:
+      case sdk::MEETING_STATUS_IN_WAITING_ROOM:
+        return true;
+      default:
+        return false;
+    }
+  }
+
   void state(MeetingState s, const std::string& detail) {
     if (events_ != nullptr) events_->onMeetingState(s, detail);
   }
@@ -483,8 +502,12 @@ class ZoomClient final : public MeetingClient,
 
   void enterMeeting() {
     if (inMeeting_) {  // back from a reconnect
-      if (!rawStarted_ && request_.receive) state(MeetingState::WaitingForPermission, {});
-      if (!request_.receive) state(MeetingState::Receiving, {});
+      // Say where things stand again: the screen showed "reconnecting" until now.
+      if (!request_.receive || rawStarted_) {
+        state(MeetingState::Receiving, {});
+      } else {
+        state(MeetingState::WaitingForPermission, {});
+      }
       return;
     }
     inMeeting_ = true;
@@ -816,7 +839,7 @@ class ZoomClient final : public MeetingClient,
     stopRaw();
     events_ = nullptr;
     if (meeting_ != nullptr) {
-      if (meeting_->GetMeetingStatus() == sdk::MEETING_STATUS_INMEETING) meeting_->Leave(sdk::LEAVE_MEETING);
+      if (onTheWayInOrIn(meeting_->GetMeetingStatus())) meeting_->Leave(sdk::LEAVE_MEETING);
       sdk::DestroyMeetingService(meeting_);
       meeting_ = nullptr;
     }
