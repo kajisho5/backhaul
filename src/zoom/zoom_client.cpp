@@ -253,7 +253,9 @@ class ZoomClient final : public MeetingClient,
                          std::chrono::system_clock::now().time_since_epoch())
                          .count();
     // Issued a minute in the past so a slightly fast PC clock is not rejected.
-    const std::string token = makeSdkToken(request.clientId, request.clientSecret, now - 60, 24 * 3600);
+    const std::string token = !request.sdkToken.empty()
+                                  ? request.sdkToken
+                                  : makeSdkToken(request.clientId, request.clientSecret, now - 60, 24 * 3600);
     if (token.empty() || request.meetingNumber == 0) {
       state(MeetingState::Failed, "Zoomアプリの鍵か会議IDが正しくありません");
       return false;

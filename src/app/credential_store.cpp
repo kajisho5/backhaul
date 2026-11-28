@@ -50,14 +50,52 @@ class WindowsCredentialStore final : public CredentialStore {
   std::wstring target_;
 };
 
+class WindowsSecretStore final : public SecretStore {
+ public:
+  explicit WindowsSecretStore(const QString& name) : target_(name.toStdWString()) {}
+
+  QByteArray load() override {
+    PCREDENTIALW found = nullptr;
+    if (!CredReadW(target_.c_str(), CRED_TYPE_GENERIC, 0, &found) || found == nullptr) return {};
+    const QByteArray secret(reinterpret_cast<const char*>(found->CredentialBlob), static_cast<qsizetype>(found->CredentialBlobSize));
+    CredFree(found);
+    return secret;
+  }
+
+  bool save(const QByteArray& secret) override {
+    if (secret.isEmpty() || secret.size() > kMaxBytes) return false;
+    QByteArray copy = secret;
+    std::wstring user = L"backhaul";
+    CREDENTIALW entry{};
+    entry.Type = CRED_TYPE_GENERIC;
+    entry.TargetName = target_.data();
+    entry.UserName = user.data();
+    entry.CredentialBlob = reinterpret_cast<LPBYTE>(copy.data());
+    entry.CredentialBlobSize = static_cast<DWORD>(copy.size());
+    entry.Persist = CRED_PERSIST_LOCAL_MACHINE;
+    return CredWriteW(&entry, 0) != FALSE;
+  }
+
+  bool clear() override {
+    if (CredDeleteW(target_.c_str(), CRED_TYPE_GENERIC, 0)) return true;
+    return GetLastError() == ERROR_NOT_FOUND;
+  }
+
+ private:
+  std::wstring target_;
+};
+
 }  // namespace
 
 std::unique_ptr<CredentialStore> makeCredentialStore(const QString& name) {
   return std::make_unique<WindowsCredentialStore>(name);
 }
 
+std::unique_ptr<SecretStore> makeSecretStore(const QString& name) { return std::make_unique<WindowsSecretStore>(name); }
+
 #else
 
 std::unique_ptr<CredentialStore> makeCredentialStore(const QString&) { return nullptr; }
+std::unique_ptr<SecretStore> makeSecretStore(const QString&) { return nullptr; }
 
 #endif

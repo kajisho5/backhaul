@@ -17,6 +17,7 @@ namespace backhaul {
 class AudioMixer;
 }
 class AppState;
+class LicenceController;
 class FrameStore;
 
 class MeetingController : public QObject, public backhaul::MeetingEvents {
@@ -30,6 +31,7 @@ class MeetingController : public QObject, public backhaul::MeetingEvents {
   Q_PROPERTY(QString zak MEMBER zak_ NOTIFY changed)
   // 0 nothing yet, 1 credentials accepted, 2 in the meeting, 3 receiving.
   Q_PROPERTY(int step READ step NOTIFY changed)
+  Q_PROPERTY(QString joinNotice READ joinNotice NOTIFY changed)
   Q_PROPERTY(bool busy READ busy NOTIFY changed)       // between "join" and the end of the meeting
   Q_PROPERTY(bool failed READ failed NOTIFY changed)
   Q_PROPERTY(QString statusText READ statusText NOTIFY changed)
@@ -66,6 +68,11 @@ class MeetingController : public QObject, public backhaul::MeetingEvents {
   bool sendAudio(const std::int16_t* samples, std::size_t frames, int channels);
 
   Q_INVOKABLE void join();
+  // Where the Meeting SDK token and the ZAK come from when no Zoom keys are saved on this PC.
+  // Not owned; must outlive this object. May be left unset.
+  void setLicence(LicenceController* licence);
+  // Something the operator should know about the join that is under way (may be empty).
+  QString joinNotice() const { return joinNotice_; }
   Q_INVOKABLE void leave();
   Q_INVOKABLE bool saveCredentials(const QString& clientId, const QString& clientSecret);
   Q_INVOKABLE void clearCredentials();
@@ -101,6 +108,9 @@ class MeetingController : public QObject, public backhaul::MeetingEvents {
   FrameStore& frames_;
   std::unique_ptr<backhaul::MeetingClient> client_;
   std::unique_ptr<CredentialStore> credentials_;
+  LicenceController* licence_ = nullptr;
+  bool preparing_ = false;  // waiting for the licence server before the join starts
+  QString joinNotice_;
   QString clientId_, clientSecret_, passcode_, zak_, detail_;
   backhaul::MeetingState state_ = backhaul::MeetingState::Idle;
   bool authenticated_ = false;

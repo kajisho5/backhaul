@@ -1,0 +1,110 @@
+// The licence of this PC and the operator's Zoom sign-in. With both, joining a meeting
+// needs no Zoom keys on the PC: the licence server signs the Meeting SDK token, and
+// turns the sign-in into the ZAK that meetings of other accounts ask for.
+#pragma once
+
+#include <QObject>
+#include <QString>
+#include <QTimer>
+#include <QUrl>
+#include <functional>
+#include <memory>
+
+#include "credential_store.h"
+#include "gate_client.h"
+
+class LicenceController : public QObject {
+  Q_OBJECT
+  Q_PROPERTY(bool available READ available CONSTANT)   // false: no server connection or no protected store here
+  Q_PROPERTY(bool active READ active NOTIFY changed)   // this PC is registered with a licence
+  Q_PROPERTY(bool busy READ busy NOTIFY changed)       // an answer of the server is awaited
+  Q_PROPERTY(QString keyTail READ keyTail NOTIFY changed)
+  Q_PROPERTY(int seats READ seats NOTIFY changed)
+  Q_PROPERTY(int used READ used NOTIFY changed)
+  Q_PROPERTY(QString expiresText READ expiresText NOTIFY changed)  // "2027-11-30 まで" or "期限なし"
+  Q_PROPERTY(QString deviceName READ deviceName NOTIFY changed)
+  Q_PROPERTY(QString message READ message NOTIFY changed)
+  Q_PROPERTY(bool messageBad READ messageBad NOTIFY changed)
+  // Zoom sign-in.
+  Q_PROPERTY(bool zoomSignedIn READ zoomSignedIn NOTIFY changed)
+  Q_PROPERTY(bool zoomWaiting READ zoomWaiting NOTIFY changed)  // the browser is open, the answer is awaited
+  Q_PROPERTY(QString zoomMessage READ zoomMessage NOTIFY changed)
+  Q_PROPERTY(bool zoomMessageBad READ zoomMessageBad NOTIFY changed)
+
+ public:
+  using Opener = std::function<bool(const QUrl&)>;  // opens the browser
+  using Clock = std::function<qint64()>;            // unix seconds
+
+  // Any of the first three may be null: the feature is then switched off (available() is false).
+  LicenceController(std::unique_ptr<GateClient> gate, std::unique_ptr<SecretStore> licenceStore,
+                    std::unique_ptr<SecretStore> zoomStore, QString deviceName, Opener openUrl, Clock clock = {},
+                    QObject* parent = nullptr);
+
+  bool available() const { return gate_ != nullptr && licenceStore_ != nullptr && zoomStore_ != nullptr; }
+  bool active() const { return !deviceToken_.isEmpty(); }
+  bool busy() const { return pending_ > 0; }
+  QString keyTail() const { return keyTail_; }
+  int seats() const { return seats_; }
+  int used() const { return used_; }
+  QString expiresText() const;
+  QString deviceName() const { return shownName_; }
+  QString message() const { return message_; }
+  bool messageBad() const { return messageBad_; }
+  bool zoomSignedIn() const { return !refreshToken_.isEmpty(); }
+  bool zoomWaiting() const { return !loginState_.isEmpty(); }
+  QString zoomMessage() const { return zoomMessage_; }
+  bool zoomMessageBad() const { return zoomMessageBad_; }
+
+  Q_INVOKABLE void activate(const QString& key);
+  Q_INVOKABLE void deactivate();
+  // Asks the server where the licence stands (seats in use, end, stopped).
+  Q_INVOKABLE void refresh();
+  Q_INVOKABLE void signIn();
+  Q_INVOKABLE void cancelSignIn();
+  Q_INVOKABLE void signOut();
+  // The sign-in's clock, also callable from a test: asks whether the browser part is done.
+  void pollSignIn();
+
+  // What a join needs. `ok` false: do not join, `error` says why. `notice` is something the
+  // operator should know although the join goes ahead (for example: no ZAK this time).
+  struct Entry {
+    bool ok = false;
+    QString sdkToken, zak, error, notice;
+  };
+  void prepareJoin(std::function<void(const Entry&)> done);
+
+ signals:
+  void changed();
+
+ private:
+  void post(const QString& path, const QJsonObject& body, GateClient::Done done);
+  QString explain(const GateReply& reply);
+  void takeLicence(const QJsonObject& licence);
+  void say(const QString& message, bool bad);
+  void sayZoom(const QString& message, bool bad);
+  void saveLicence();
+  void forgetLicence();
+  void addZak(Entry entry, std::function<void(const Entry&)> done);
+  qint64 now() const;
+
+  std::unique_ptr<GateClient> gate_;
+  std::unique_ptr<SecretStore> licenceStore_, zoomStore_;
+  QString machineName_;
+  Opener openUrl_;
+  Clock clock_;
+
+  QString deviceId_, deviceToken_, keyTail_, shownName_;
+  int seats_ = 0, used_ = 0;
+  qint64 expiresAt_ = 0;  // 0 = no end
+  QString message_, zoomMessage_;
+  bool messageBad_ = false, zoomMessageBad_ = false;
+  int pending_ = 0;
+
+  QString sdkToken_;
+  qint64 sdkTokenExpiresAt_ = 0;
+
+  QString refreshToken_;
+  QString loginState_, loginVerifier_;
+  qint64 loginDeadline_ = 0;
+  QTimer loginTimer_;
+};

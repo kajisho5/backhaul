@@ -7,6 +7,14 @@ ColumnLayout {
     id: root
     spacing: 0
     property bool editingKeys: false
+    property bool editingLicence: false
+    // The fold-outs start open when what is inside them is in use.
+    property bool ownKeysOpen: meeting.credentialsSaved
+    property bool manualZakOpen: meeting.zak.length > 0
+    // The demo picture shows a PC that is set up (nothing is asked from any server).
+    readonly property bool sample: app.demo
+    readonly property bool lActive: sample || licence.active
+    readonly property bool zSignedIn: sample || licence.zoomSignedIn
     readonly property bool wide: width >= 820
 
     Text { text: "Zoom接続"; color: Theme.ink; font.family: app.sansFamily; font.pixelSize: 22; font.bold: true; Layout.bottomMargin: 20 }
@@ -120,105 +128,286 @@ ColumnLayout {
                     color: meeting.failed ? Theme.lost : Theme.muted
                     font.family: app.sansFamily; font.pixelSize: 13
                 }
+                Text {
+                    Layout.fillWidth: true
+                    visible: text.length > 0 && meeting.busy
+                    wrapMode: Text.WordWrap
+                    text: meeting.joinNotice
+                    color: Theme.muted
+                    font.family: app.sansFamily; font.pixelSize: 13
+                }
             }
 
-            // The app credentials
+            // Licence: the usual way to get into meetings without Zoom keys on this PC
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: 14
-                Text { text: "Zoomアプリの鍵"; color: Theme.ink; font.family: app.sansFamily; font.pixelSize: 15; font.bold: true }
+                Text { text: "ライセンス"; color: Theme.ink; font.family: app.sansFamily; font.pixelSize: 15; font.bold: true }
                 Text {
                     Layout.fillWidth: true
                     wrapMode: Text.WordWrap
-                    text: meeting.credentialsSupported
-                        ? "Zoomの開発者ページで作ったアプリの Client ID と Client Secret です。このPCの資格情報の保管場所に入れ、設定ファイルには書きません。"
-                        : "このOSでは鍵を安全に保管できないため、保存できません（Windowsで使ってください）。"
+                    text: "購入時に届いたライセンスキーを入れると、会議に入るための鍵をこのアプリが自動で受け取ります。キーはこのPCの資格情報の保管場所に入れ、設定ファイルやプロジェクトには書きません。"
                     color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 13
                 }
                 Rectangle {
-                    visible: meeting.credentialsSaved && !root.editingKeys
+                    visible: root.lActive && !root.editingLicence
                     Layout.fillWidth: true
-                    implicitHeight: 60
+                    implicitHeight: 86
                     radius: 2
                     color: Theme.panel
                     border.width: 1
                     border.color: Theme.line
-                    RowLayout {
+                    ColumnLayout {
                         anchors.fill: parent
-                        anchors.leftMargin: 14
-                        anchors.rightMargin: 14
-                        spacing: 12
-                        Text { text: "保存済み"; color: Theme.ok; font.family: app.sansFamily; font.pixelSize: 13; font.bold: true }
+                        anchors.margins: 14
+                        spacing: 6
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 14
+                            Text {
+                                text: licence.messageBad ? "要確認" : "有効"
+                                color: licence.messageBad ? Theme.muted : Theme.ok
+                                font.family: app.sansFamily; font.pixelSize: 13; font.bold: true
+                            }
+                            Text {
+                                Layout.fillWidth: true
+                                elide: Text.ElideRight
+                                text: "BH-····-····-····-·" + (root.sample ? "7Q2M" : licence.keyTail)
+                                color: Theme.ink; font.family: app.monoFamily; font.pixelSize: 13
+                            }
+                            PlainButton { text: "入れ直す"; textSize: 13; implicitHeight: 32; enabled: !meeting.busy && !licence.busy; onClicked: root.editingLicence = true }
+                            PlainButton { text: "このPCを外す"; textSize: 13; implicitHeight: 32; enabled: !meeting.busy && !licence.busy; onClicked: licence.deactivate() }
+                        }
                         Text {
                             Layout.fillWidth: true
                             elide: Text.ElideRight
-                            text: "ID：" + meeting.credentialHint
-                            color: Theme.mute; font.family: app.monoFamily; font.pixelSize: 13
+                            text: root.sample ? "PC 2 / 5台　・　2027-11-30 まで　・　このPC：SAMPLE-PC-02"
+                                  : "PC " + licence.used + " / " + licence.seats + "台　・　" + licence.expiresText + "　・　このPC：" + licence.deviceName
+                            color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 12
                         }
-                        PlainButton { text: "入れ直す"; textSize: 13; implicitHeight: 36; enabled: !meeting.busy; onClicked: root.editingKeys = true }
-                        PlainButton { text: "消す"; textSize: 13; implicitHeight: 36; enabled: !meeting.busy; onClicked: meeting.clearCredentials() }
                     }
                 }
-                ColumnLayout {
-                    visible: meeting.credentialsSupported && (!meeting.credentialsSaved || root.editingKeys)
+                RowLayout {
+                    visible: licence.available && (!root.lActive || root.editingLicence)
                     Layout.fillWidth: true
-                    spacing: 12
-                    LabeledInput { id: idInput; Layout.fillWidth: true; label: "Client ID"; maxLength: 100 }
-                    LabeledInput { id: secretInput; Layout.fillWidth: true; label: "Client Secret"; secret: true; maxLength: 200 }
-                    RowLayout {
-                        spacing: 8
-                        PlainButton {
-                            text: "保存する"
-                            strong: true
-                            textSize: 13
-                            implicitHeight: 36
-                            enabled: idInput.text.trim().length > 0 && secretInput.text.trim().length > 0
-                            onClicked: {
-                                if (meeting.saveCredentials(idInput.text, secretInput.text)) {
+                    spacing: 8
+                    LabeledInput { id: keyInput; Layout.fillWidth: true; label: "ライセンスキー"; placeholder: "BH-XXXXX-XXXXX-XXXXX-XXXXX"; maxLength: 64; readOnly: licence.busy }
+                    PlainButton {
+                        Layout.alignment: Qt.AlignBottom
+                        text: licence.busy ? "確かめています…" : "確かめて保存"
+                        strong: true
+                        textSize: 13
+                        implicitHeight: 40
+                        enabled: !licence.busy && keyInput.text.trim().length > 0
+                        onClicked: licence.activate(keyInput.text)
+                    }
+                    PlainButton {
+                        Layout.alignment: Qt.AlignBottom
+                        visible: root.editingLicence
+                        text: "やめる"
+                        textSize: 13
+                        implicitHeight: 40
+                        onClicked: { keyInput.text = ""; root.editingLicence = false }
+                    }
+                }
+                Connections {
+                    target: licence
+                    // A key that was taken closes the field; a refused one stays for correcting.
+                    function onChanged() {
+                        if (licence.active && !licence.busy && !licence.messageBad && keyInput.text.length > 0) {
+                            keyInput.text = ""
+                            root.editingLicence = false
+                        }
+                    }
+                }
+                Text {
+                    visible: text.length > 0
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
+                    text: root.sample ? "" : !licence.available ? "このPCではライセンスを保管できないため、使えません（Windowsで使ってください）。" : licence.message
+                    color: licence.messageBad ? Theme.lost : Theme.mute
+                    font.family: app.sansFamily; font.pixelSize: 13
+                }
+                Text {
+                    text: "自分で作ったZoomアプリの鍵（Client ID・Secret）を使う　" + (root.ownKeysOpen ? "▾" : "▸")
+                    color: ownKeysArea.containsMouse || activeFocus ? Theme.ink : Theme.mute
+                    font.family: app.sansFamily; font.pixelSize: 12
+                    activeFocusOnTab: true
+                    Accessible.role: Accessible.Button
+                    Accessible.name: "自分で作ったZoomアプリの鍵を使う欄を" + (root.ownKeysOpen ? "閉じる" : "開く")
+                    Accessible.onPressAction: root.ownKeysOpen = !root.ownKeysOpen
+                    Keys.onReturnPressed: root.ownKeysOpen = !root.ownKeysOpen
+                    Keys.onSpacePressed: root.ownKeysOpen = !root.ownKeysOpen
+                    MouseArea { id: ownKeysArea; anchors.fill: parent; anchors.margins: -6; hoverEnabled: true; onClicked: root.ownKeysOpen = !root.ownKeysOpen }
+                }
+                Text {
+                    visible: root.ownKeysOpen
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
+                    text: meeting.credentialsSupported
+                        ? "Zoomの開発者ページで自分で作ったアプリの鍵です。入っている間は、ライセンスよりこちらを使います。このPCの資格情報の保管場所に入れ、設定ファイルには書きません。"
+                        : "このOSでは鍵を安全に保管できないため、保存できません（Windowsで使ってください）。"
+                    color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 13
+                }
+                ColumnLayout {
+                    visible: root.ownKeysOpen
+                    Layout.fillWidth: true
+                    spacing: 14
+                    Rectangle {
+                        visible: meeting.credentialsSaved && !root.editingKeys
+                        Layout.fillWidth: true
+                        implicitHeight: 60
+                        radius: 2
+                        color: Theme.panel
+                        border.width: 1
+                        border.color: Theme.line
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.leftMargin: 14
+                            anchors.rightMargin: 14
+                            spacing: 12
+                            Text { text: "保存済み"; color: Theme.ok; font.family: app.sansFamily; font.pixelSize: 13; font.bold: true }
+                            Text {
+                                Layout.fillWidth: true
+                                elide: Text.ElideRight
+                                text: "ID：" + meeting.credentialHint
+                                color: Theme.mute; font.family: app.monoFamily; font.pixelSize: 13
+                            }
+                            PlainButton { text: "入れ直す"; textSize: 13; implicitHeight: 36; enabled: !meeting.busy; onClicked: root.editingKeys = true }
+                            PlainButton { text: "消す"; textSize: 13; implicitHeight: 36; enabled: !meeting.busy; onClicked: meeting.clearCredentials() }
+                        }
+                    }
+                    ColumnLayout {
+                        visible: meeting.credentialsSupported && (!meeting.credentialsSaved || root.editingKeys)
+                        Layout.fillWidth: true
+                        spacing: 12
+                        LabeledInput { id: idInput; Layout.fillWidth: true; label: "Client ID"; maxLength: 100 }
+                        LabeledInput { id: secretInput; Layout.fillWidth: true; label: "Client Secret"; secret: true; maxLength: 200 }
+                        RowLayout {
+                            spacing: 8
+                            PlainButton {
+                                text: "保存する"
+                                strong: true
+                                textSize: 13
+                                implicitHeight: 36
+                                enabled: idInput.text.trim().length > 0 && secretInput.text.trim().length > 0
+                                onClicked: {
+                                    if (meeting.saveCredentials(idInput.text, secretInput.text)) {
+                                        idInput.text = ""
+                                        secretInput.text = ""
+                                        root.editingKeys = false
+                                        saveError.visible = false
+                                    } else {
+                                        saveError.visible = true
+                                    }
+                                }
+                            }
+                            PlainButton {
+                                visible: meeting.credentialsSaved
+                                text: "やめる"
+                                textSize: 13
+                                implicitHeight: 36
+                                onClicked: {
                                     idInput.text = ""
                                     secretInput.text = ""
                                     root.editingKeys = false
-                                    saveError.visible = false
-                                } else {
-                                    saveError.visible = true
                                 }
                             }
+                            Text { id: saveError; visible: false; text: "保存できませんでした"; color: Theme.lost; font.family: app.sansFamily; font.pixelSize: 13 }
                         }
-                        PlainButton {
-                            visible: meeting.credentialsSaved
-                            text: "やめる"
-                            textSize: 13
-                            implicitHeight: 36
-                            onClicked: {
-                                idInput.text = ""
-                                secretInput.text = ""
-                                root.editingKeys = false
-                            }
-                        }
-                        Text { id: saveError; visible: false; text: "保存できませんでした"; color: Theme.lost; font.family: app.sansFamily; font.pixelSize: 13 }
                     }
                 }
             }
 
-            // Meetings of other accounts
+            // The operator's Zoom account: what meetings of other accounts ask for
             ColumnLayout {
                 Layout.fillWidth: true
-                spacing: 10
-                Text { text: "ほかのアカウントの会議に入るとき"; color: Theme.ink; font.family: app.sansFamily; font.pixelSize: 15; font.bold: true }
+                spacing: 14
+                Text { text: "Zoomアカウント"; color: Theme.ink; font.family: app.sansFamily; font.pixelSize: 15; font.bold: true }
                 Text {
                     Layout.fillWidth: true
                     wrapMode: Text.WordWrap
-                    text: "自分のZoomアカウント以外が開いた会議では、入るための許可コード（ZAK）が必要です。その日かぎりで使い、保存しません。"
+                    text: "サインインしておくと、ほかのアカウントが開いた会議に入るための許可（ZAK）を、入るたびにアプリが自動で取ります。自分のアカウントの会議だけなら、サインインは要りません。"
                     color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 13
                 }
-                LabeledInput {
+                Rectangle {
+                    visible: root.zSignedIn
                     Layout.fillWidth: true
-                    label: "許可コード（ZAK）"
-                    value: meeting.zak
-                    secret: true
-                    maxLength: 2000
-                    readOnly: meeting.busy
-                    onEdited: (text) => meeting.zak = text
+                    implicitHeight: 86
+                    radius: 2
+                    color: Theme.panel
+                    border.width: 1
+                    border.color: Theme.line
+                    ColumnLayout {
+                        anchors.fill: parent
+                        anchors.margins: 14
+                        spacing: 6
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 14
+                            Text { Layout.fillWidth: true; text: "サインイン済み"; color: Theme.ok; font.family: app.sansFamily; font.pixelSize: 13; font.bold: true }
+                            PlainButton { text: "サインアウト"; textSize: 13; implicitHeight: 32; enabled: !meeting.busy; onClicked: licence.signOut() }
+                        }
+                        Text {
+                            Layout.fillWidth: true
+                            elide: Text.ElideRight
+                            text: "許可（ZAK）は、会議に入るたびに取り直します"
+                            color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 12
+                        }
+                    }
+                }
+                PlainButton {
+                    visible: licence.available && !root.zSignedIn
+                    text: licence.zoomWaiting ? "やめる" : "Zoomにサインイン"
+                    strong: !licence.zoomWaiting
+                    textSize: 13
+                    implicitHeight: 40
+                    enabled: root.lActive && !meeting.busy
+                    onClicked: licence.zoomWaiting ? licence.cancelSignIn() : licence.signIn()
+                }
+                Text {
+                    visible: text.length > 0
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
+                    text: root.sample ? ""
+                          : licence.zoomMessage.length > 0 ? licence.zoomMessage
+                          : !licence.available || root.zSignedIn ? ""
+                          : !root.lActive ? "サインインは、ライセンスキーを入れてからできます。"
+                          : "ブラウザが開きます。サインインして「許可」を押すと、この画面に戻ります。"
+                    color: licence.zoomMessageBad ? Theme.lost : Theme.mute
+                    font.family: app.sansFamily; font.pixelSize: 12
+                }
+                Text {
+                    text: "サインインできないときは、許可コード（ZAK）を手で貼る　" + (root.manualZakOpen ? "▾" : "▸")
+                    color: zakArea.containsMouse || activeFocus ? Theme.ink : Theme.mute
+                    font.family: app.sansFamily; font.pixelSize: 12
+                    activeFocusOnTab: true
+                    Accessible.role: Accessible.Button
+                    Accessible.name: "許可コードを手で貼る欄を" + (root.manualZakOpen ? "閉じる" : "開く")
+                    Accessible.onPressAction: root.manualZakOpen = !root.manualZakOpen
+                    Keys.onReturnPressed: root.manualZakOpen = !root.manualZakOpen
+                    Keys.onSpacePressed: root.manualZakOpen = !root.manualZakOpen
+                    MouseArea { id: zakArea; anchors.fill: parent; anchors.margins: -6; hoverEnabled: true; onClicked: root.manualZakOpen = !root.manualZakOpen }
+                }
+                ColumnLayout {
+                    visible: root.manualZakOpen
+                    Layout.fillWidth: true
+                    spacing: 10
+                    Text {
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                        text: "その日かぎりで使い、保存しません。サインイン済みのときは、自動で取ったものを優先します。"
+                        color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 13
+                    }
+                    LabeledInput {
+                        Layout.fillWidth: true
+                        label: "許可コード（ZAK）"
+                        value: meeting.zak
+                        secret: true
+                        maxLength: 2000
+                        readOnly: meeting.busy
+                        onEdited: (text) => meeting.zak = text
+                    }
                 }
             }
 
@@ -253,7 +442,7 @@ ColumnLayout {
             Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: Theme.line }
             Repeater {
                 model: [
-                    { at: 1, title: "Zoomアプリの鍵が通った", note: "鍵が正しいことをZoomが確認すると進みます" },
+                    { at: 1, title: "Zoomの鍵が通った", note: "ライセンス（または自分の鍵）で作った入場券をZoomが確認すると進みます" },
                     { at: 2, title: "会議に入った", note: meeting.step >= 2 ? app.meetingName : "" },
                     { at: 3, title: meeting.step === 2 ? "映像と音を受け取る許可を待っています" : "映像と音を受け取る許可が出た",
                       note: "ホストに、この参加者「" + app.joinName + "」を共同ホストにしてもらってください" },

@@ -1,4 +1,4 @@
-find_package(Qt6 6.4 REQUIRED COMPONENTS Gui Qml Quick)
+find_package(Qt6 6.4 REQUIRED COMPONENTS Gui Network Qml Quick)
 qt_standard_project_setup()
 
 # State and models, separate from the executable so they can be tested.
@@ -7,6 +7,8 @@ add_library(backhaul_app_state STATIC
   audio_controller.cpp audio_controller.h
   credential_store.cpp credential_store.h
   frame_store.cpp frame_store.h
+  gate_client.cpp gate_client.h
+  licence_controller.cpp licence_controller.h
   meeting_controller.cpp meeting_controller.h
   return_controller.cpp return_controller.h
   demo_source.cpp demo_source.h
@@ -19,14 +21,16 @@ add_library(backhaul_app_state STATIC
   slot_model.cpp slot_model.h
 )
 target_include_directories(backhaul_app_state PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(backhaul_app_state PUBLIC backhaul_core backhaul_audio backhaul_video backhaul_plugins Qt6::Gui)
+target_link_libraries(backhaul_app_state PUBLIC backhaul_core backhaul_audio backhaul_video backhaul_plugins Qt6::Gui Qt6::Network)
 target_include_directories(backhaul_app_state PUBLIC ${CMAKE_SOURCE_DIR}/src)
 if(WIN32)
   target_link_libraries(backhaul_app_state PRIVATE advapi32 comdlg32)
 endif()
 backhaul_warnings(backhaul_app_state app)
 
+set(BACKHAUL_GATE_URL "https://backhaul-gate.seventh-well.com" CACHE STRING "The licence server this build talks to")
 qt_add_executable(backhaul main.cpp frame_item.cpp frame_item.h)
+target_compile_definitions(backhaul PRIVATE BACKHAUL_GATE_URL="${BACKHAUL_GATE_URL}")
 if(TARGET backhaul_zoom)
   target_link_libraries(backhaul PRIVATE backhaul_zoom)
 else()
@@ -114,4 +118,11 @@ if(BUILD_TESTING)
   backhaul_warnings(plugin_controller_tests app)
   add_test(NAME plugin_controller_tests COMMAND plugin_controller_tests)
   set_tests_properties(plugin_controller_tests PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+  add_executable(licence_controller_tests ${CMAKE_SOURCE_DIR}/tests/app/test_licence_controller.cpp)
+  target_include_directories(licence_controller_tests PRIVATE ${CMAKE_SOURCE_DIR}/tests)
+  target_link_libraries(licence_controller_tests PRIVATE backhaul_app_state)
+  backhaul_warnings(licence_controller_tests app)
+  add_test(NAME licence_controller_tests COMMAND licence_controller_tests)
+  set_tests_properties(licence_controller_tests PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 endif()

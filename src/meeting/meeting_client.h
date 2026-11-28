@@ -27,6 +27,9 @@ enum class SendVideo {
 struct JoinRequest {
   std::string clientId;      // Zoom app credentials (UTF-8)
   std::string clientSecret;
+  // A ready-made Meeting SDK token (from the licence server). When set, it is used and the
+  // two fields above are not needed.
+  std::string sdkToken;
   std::uint64_t meetingNumber = 0;
   std::string displayName;
   std::string passcode;      // may be empty
