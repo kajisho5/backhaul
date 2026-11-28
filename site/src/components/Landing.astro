@@ -1,7 +1,7 @@
 ---
 // The start page, the same in both languages.
 import Base from "../layouts/Base.astro";
-import { GATE, PLANS, money } from "../texts";
+import { GATE, PLANS, money, withTax } from "../texts";
 import type { Texts } from "../texts";
 
 interface Props { t: Texts }
@@ -78,8 +78,10 @@ const cur = t.currency;
           <h3>{p.plans[i]}</h3>
           <div class="pc">{p.pcs(plan.seats)}</div>
           <div class="amount when-month">{money(plan.month[cur], cur)} <small>{p.perMonth}</small></div>
+          {cur === "jpy" && <div class="taxin when-month">{p.taxIn(money(withTax(plan.month.jpy), "jpy"))}</div>}
           <div class="alt when-month">{p.orYear(money(plan.year[cur], cur))}</div>
           <div class="amount when-year">{money(plan.year[cur], cur)} <small>{p.perYear}</small></div>
+          {cur === "jpy" && <div class="taxin when-year">{p.taxIn(money(withTax(plan.year.jpy), "jpy"))}</div>}
           <div class="alt when-year">{p.orMonth(money(plan.month[cur], cur))}</div>
           <button type="button" class={i === 0 ? "btn solid" : "btn line"} data-buy={plan.seats} data-busy={p.opening}>{p.buy(p.plans[i]!)}</button>
         </div>

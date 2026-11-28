@@ -6,6 +6,10 @@ import type { Fetcher } from "./zoom";
 /** The API version every request asks for, so that a change at Stripe cannot change the answers. */
 export const STRIPE_VERSION = "2026-11-18.endive";
 
+/** Consumption tax on payments in yen. When the rate changes, change both lines: a new rate is then made at Stripe. */
+export const JAPAN_TAX_PERCENT = 10;
+const JAPAN_TAX_MARK = "jct10";
+
 /** How old a message from Stripe may be (Stripe's own libraries use five minutes). */
 export const WEBHOOK_TOLERANCE_SECONDS = 300;
 
@@ -92,6 +96,41 @@ export class Stripe {
     ]);
     const first = Array.isArray(list.data) ? (list.data[0] as unknown) : null;
     return isObject(first) && typeof first.id === "string" ? first.id : null;
+  }
+
+  /**
+   * The id of the tax rate added to payments in yen: Japanese consumption tax, 10 %, on top of
+   * the price. It is looked up at Stripe by its mark and made there if it does not exist yet,
+   * so the test environment and the real one need no setting of their own.
+   */
+  async japanTaxRate(): Promise<string> {
+    const list = await this.send("GET", "/v1/tax_rates", [
+      ["active", "true"],
+      ["inclusive", "false"],
+      ["limit", "100"],
+    ]);
+    for (const rate of Array.isArray(list.data) ? (list.data as unknown[]) : []) {
+      if (!isObject(rate) || typeof rate.id !== "string") continue;
+      const mark = isObject(rate.metadata) ? rate.metadata.backhaul : null;
+      if (mark === JAPAN_TAX_MARK && rate.percentage === JAPAN_TAX_PERCENT) return rate.id;
+    }
+    const made = await this.send(
+      "POST",
+      "/v1/tax_rates",
+      [
+        ["display_name", "消費税"],
+        ["description", "Japanese consumption tax, added to payments in yen"],
+        ["percentage", String(JAPAN_TAX_PERCENT)],
+        ["inclusive", "false"],
+        ["country", "JP"],
+        ["jurisdiction", "JP"],
+        ["tax_type", "jct"],
+        ["metadata[backhaul]", JAPAN_TAX_MARK],
+      ],
+      `backhaul-${JAPAN_TAX_MARK}`, // two first purchases in the same moment make one rate, not two
+    );
+    if (typeof made.id !== "string") throw new StripeError("Stripe gave no tax rate", 502);
+    return made.id;
   }
 
   /** Opens Stripe's payment page for one subscription; returns the address to send the buyer to. */

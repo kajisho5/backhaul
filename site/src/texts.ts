@@ -18,6 +18,13 @@ export const PLANS = [
   { seats: 20, month: { usd: 199, jpy: 29800 }, year: { usd: 1990, jpy: 298000 } },
 ] as const;
 
+/** Japanese consumption tax, added to payments in yen (the server adds the same rate at Stripe). */
+export const JAPAN_TAX_PERCENT = 10;
+
+export function withTax(amount: number): number {
+  return Math.round((amount * (100 + JAPAN_TAX_PERCENT)) / 100);
+}
+
 export function money(amount: number, currency: "usd" | "jpy"): string {
   return (currency === "usd" ? "$" : "¥") + amount.toLocaleString("en-US");
 }
@@ -63,6 +70,7 @@ const en = {
     perYear: "per year",
     orYear: (price: string) => `or ${price} per year`,
     orMonth: (price: string) => `or ${price} per month`,
+    taxIn: (_price: string) => "",
     pcs: (n: number) => `${n} PCs`,
     plans: ["Standard", "Team", "Rental house"],
     buy: (name: string) => `Buy ${name}`,
@@ -135,7 +143,7 @@ const en = {
     billing: "Change plan or card, cancel, receipts",
   },
   notFound: { title: "Page not found", text: "There is nothing at this address.", home: "Back to the start page" },
-  footer: { privacy: "Privacy", terms: "Terms", support: "Support", billing: "Manage subscription", zoom: "Zoom is a trademark of Zoom Video Communications, Inc. backhaul is not made or endorsed by Zoom." },
+  footer: { privacy: "Privacy", terms: "Terms", support: "Support", billing: "Manage subscription", legal: "特定商取引法に基づく表記", zoom: "Zoom is a trademark of Zoom Video Communications, Inc. backhaul is not made or endorsed by Zoom." },
 };
 
 type Texts = typeof en;
@@ -173,7 +181,7 @@ const ja: Texts = {
   },
   pricing: {
     title: "料金",
-    note: "日本円・税別です。",
+    note: "日本円・税別です（消費税10%が加わります）。",
     otherCurrency: { text: "ドルで支払う場合は", link: "米ドルの料金", href: "/#pricing" },
     monthly: "月額",
     yearly: "年額（2か月分お得）",
@@ -181,6 +189,7 @@ const ja: Texts = {
     perYear: "／年",
     orYear: (price: string) => `年額なら ${price}`,
     orMonth: (price: string) => `月額なら ${price}`,
+    taxIn: (price: string) => `税込 ${price}`,
     pcs: (n: number) => `PC ${n}台`,
     plans: ["スタンダード", "チーム", "レンタルハウス"],
     buy: (name: string) => `${name}を申し込む`,
@@ -253,7 +262,7 @@ const ja: Texts = {
     billing: "プラン・カードの変更、解約、領収書",
   },
   notFound: { title: "ページが見つかりません", text: "このアドレスには何もありません。", home: "最初のページへ" },
-  footer: { privacy: "プライバシー", terms: "利用規約", support: "サポート", billing: "契約の管理", zoom: "Zoom は Zoom Video Communications, Inc. の商標です。backhaul は Zoom が作ったものでも、Zoom が推奨するものでもありません。" },
+  footer: { privacy: "プライバシー", terms: "利用規約", support: "サポート", billing: "契約の管理", legal: "特定商取引法に基づく表記", zoom: "Zoom は Zoom Video Communications, Inc. の商標です。backhaul は Zoom が作ったものでも、Zoom が推奨するものでもありません。" },
 };
 
 export const texts: Record<Lang, Texts> = { en, ja };

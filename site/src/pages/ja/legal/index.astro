@@ -1,0 +1,48 @@
+---
+// 特定商取引法に基づく表記。日本の法律が求めるページなので日本語だけ。
+// 住所と電話番号は、個人事業者に認められている「請求があれば遅滞なく開示」の形にしている。
+import Base from "../../../layouts/Base.astro";
+import { BILLING, PLANS, money, texts, withTax } from "../../../texts";
+const t = texts.ja;
+const names = t.pricing.plans;
+---
+<Base t={t} title="特定商取引法に基づく表記" otherHref="/">
+  <div class="sheet">
+    <h1>特定商取引法に基づく表記</h1>
+    <p class="lead">backhaul の販売について、法律で定められた事項です。</p>
+    <dl class="facts">
+      <div><dt>販売事業者</dt><dd>SEVENTHWELL</dd></div>
+      <div><dt>運営統括責任者</dt><dd>梶山 翔悟</dd></div>
+      <div><dt>所在地</dt><dd>請求があったら遅滞なく開示します。</dd></div>
+      <div><dt>電話番号</dt><dd>請求があったら遅滞なく開示します。</dd></div>
+      <div><dt>メールアドレス</dt><dd><a href="mailto:info@seventh-well.com">info@seventh-well.com</a>（お問い合わせ、所在地・電話番号の開示のご請求はこちらへ）</dd></div>
+      <div>
+        <dt>販売価格</dt>
+        <dd>
+          <table>
+            <thead><tr><th>プラン</th><th>月額（税込）</th><th>年額（税込）</th></tr></thead>
+            <tbody>
+              {PLANS.map((plan, i) => (
+                <tr><td>{names[i]}（PC {plan.seats}台）</td><td>{money(withTax(plan.month.jpy), "jpy")}</td><td>{money(withTax(plan.year.jpy), "jpy")}</td></tr>
+              ))}
+            </tbody>
+          </table>
+          <p class="note">税別の価格は<a href="/ja/#pricing">料金</a>のとおりです。米ドルでのお支払いは<a href="/#pricing">英語のページ</a>に表示した金額で、日本の消費税は加わりません。</p>
+        </dd>
+      </div>
+      <div><dt>商品代金以外の必要料金</dt><dd>ありません。インターネットの接続料金、Zoom のご利用料金はお客様のご負担です。</dd></div>
+      <div><dt>支払方法</dt><dd>クレジットカード（決済は Stripe が行います）</dd></div>
+      <div><dt>支払時期</dt><dd>お申し込みのときに最初の1か月分（年額は1年分）をお支払いいただき、以後は毎月（年額は毎年）の同じ日に自動で更新・請求します。</dd></div>
+      <div><dt>提供時期</dt><dd>お支払いの完了後すぐに、ライセンスキーを画面に表示し、メールでもお送りします。</dd></div>
+      <div>
+        <dt>解約・返金</dt>
+        <dd>
+          <p>解約は<a href={BILLING}>契約の管理ページ</a>からいつでもできます。解約後も、お支払い済みの期間の終わりまでお使いいただけます。次の更新日の前までに解約すれば、次回の請求は発生しません。</p>
+          <p>ソフトウェアの性質上、ライセンスキーの発行後は、お客様のご都合による返金はお受けしていません。説明どおりに動かず、相当の期間内に直せない場合は、未使用の期間分を返金します。</p>
+        </dd>
+      </div>
+      <div><dt>動作環境</dt><dd>Windows 10 または 11（64ビット）。Zoom のアカウントが必要です。</dd></div>
+      <div><dt>無料体験</dt><dd>PC 3台・14日間。カードの登録は不要で、期間が終わっても自動で有料にはなりません。</dd></div>
+    </dl>
+  </div>
+</Base>

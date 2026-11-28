@@ -119,6 +119,7 @@ html:lang(ja) h2 { line-height: 1.2; letter-spacing: -0.01em; }
 .plan .pc { color: var(--mute); font-size: 15px; }
 .plan .amount { font: 700 52px/1 var(--text); letter-spacing: -0.04em; margin: 26px 0 6px; white-space: nowrap; }
 .plan .amount small { font: 400 16px var(--text); color: var(--mute); letter-spacing: 0; }
+.plan .taxin { color: var(--paper); font-size: 15px; margin-bottom: 2px; }
 .plan .alt { color: var(--mute); font-size: 15px; margin-bottom: 24px; }
 .plan .btn { display: block; width: 100%; }
 [data-period="month"] .when-year, [data-period="year"] .when-month { display: none; }
@@ -139,6 +140,17 @@ input[type="email"]:focus-visible { outline-offset: 0; border-color: var(--mint)
 .key { font: 600 clamp(19px, 4.6vw, 30px)/1.3 ui-monospace, "SF Mono", Consolas, monospace; letter-spacing: 0.04em; color: var(--mint); background: #060b09; border: 1px solid #2a3d34; border-radius: 14px; padding: 20px; margin: 0 0 16px; text-align: center; overflow-wrap: anywhere; user-select: all; }
 .note { color: var(--mute); font-size: 15px; margin: 14px 0 0; }
 .good { color: var(--paper); font-size: 17px; margin: 0 0 18px; }
+dl.facts { margin: 0 0 28px; border: 1px solid var(--line); border-radius: 22px; background: rgba(11, 21, 18, 0.8); padding: 6px 26px; }
+dl.facts > div { display: grid; grid-template-columns: 11em 1fr; gap: 6px 24px; padding: 18px 0; border-top: 1px solid var(--line); }
+dl.facts > div:first-child { border-top: 0; }
+dl.facts dt { color: var(--mute); font-size: 15px; }
+dl.facts dd { margin: 0; font-size: 16px; }
+dl.facts dd p { margin: 0 0 6px; }
+dl.facts table { border-collapse: collapse; width: 100%; font-size: 15px; font-variant-numeric: tabular-nums; }
+dl.facts th, dl.facts td { text-align: right; padding: 6px 0 6px 12px; font-weight: 400; white-space: nowrap; }
+dl.facts th:first-child, dl.facts td:first-child { text-align: left; padding-left: 0; white-space: normal; }
+dl.facts thead th { color: var(--mute); font-size: 13.5px; }
+@media (max-width: 820px) { dl.facts { padding: 4px 20px; } dl.facts > div { grid-template-columns: 1fr; } dl.facts table { font-size: 14px; } dl.facts th, dl.facts td { padding-left: 8px; } }
 ol.steps { list-style: none; counter-reset: step; margin: 0 0 28px; padding: 0; display: grid; gap: 14px; }
 ol.steps li { counter-increment: step; position: relative; padding: 24px 26px 24px 76px; border: 1px solid var(--line); border-radius: 22px; background: rgba(11, 21, 18, 0.8); }
 ol.steps li::before { content: counter(step); position: absolute; left: 24px; top: 22px; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: var(--paper); color: var(--ink); font-weight: 700; font-size: 16px; }
