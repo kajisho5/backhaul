@@ -13,8 +13,16 @@ interface Props {
   otherHref?: string;
   /** Pages that only make sense to their visitor (the key, the trial form) stay out of search engines. */
   hidden?: boolean;
+  /** What search engines and link previews say about this page; the site's own when not given. */
+  description?: string;
+  /** True when `otherHref` is the same page in the other language. */
+  pair?: boolean;
 }
-const { t, title, otherHref = t.other.href, hidden = false } = Astro.props;
+const { t, title, otherHref = t.other.href, hidden = false, description = t.description } = Astro.props;
+// Whether `otherHref` is this same page in the other language (the start page always is).
+const paired = Astro.props.pair ?? title === undefined;
+const there = new URL(otherHref, Astro.site).href;
+const image = new URL("/og.png", Astro.site).href;
 const pageTitle = title ? `${title} | backhaul` : t.title;
 const here = new URL(Astro.url.pathname, Astro.site).href;
 ---
@@ -24,19 +32,30 @@ const here = new URL(Astro.url.pathname, Astro.site).href;
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>{pageTitle}</title>
-    <meta name="description" content={t.description} />
+    <meta name="description" content={description} />
     {(hidden || !SALES_OPEN) && <meta name="robots" content="noindex" />}
     <link rel="canonical" href={here} />
+    {paired && <link rel="alternate" hreflang={t.lang} href={here} />}
+    {paired && <link rel="alternate" hreflang={t.lang === "ja" ? "en" : "ja"} href={there} />}
+    {paired && <link rel="alternate" hreflang="x-default" href={t.lang === "en" ? here : there} />}
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <meta name="theme-color" content="#050a08" />
     <meta property="og:title" content={pageTitle} />
-    <meta property="og:description" content={t.description} />
+    <meta property="og:description" content={description} />
+    <meta property="og:site_name" content="backhaul" />
+    <meta property="og:locale" content={t.lang === "ja" ? "ja_JP" : "en_US"} />
+    <meta property="og:image" content={image} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <slot name="head" />
     <meta property="og:type" content="website" />
     <meta property="og:url" content={here} />
   </head>
   <body>
     <a class="skip" href="#main">{t.lang === "ja" ? "本文へ" : "Skip to content"}</a>
-    {!SALES_OPEN && <p class="preview">{t.preview}</p>}
+    {!SALES_OPEN && <aside class="preview" aria-label={t.lang === "ja" ? "お知らせ" : "Notice"}><p>{t.preview}</p></aside>}
     <header>
       <nav class="pill" aria-label={t.lang === "ja" ? "ページ内の案内" : "Site"}>
         <a class="logo" href={t.home}><img src="/logo.svg" alt="backhaul" width="109" height="26" /></a>

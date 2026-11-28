@@ -8,8 +8,26 @@ interface Props { t: Texts }
 const { t } = Astro.props;
 const p = t.pricing;
 const cur = t.currency;
+// What search engines may show about the product: its kind, where it runs, what it costs.
+const product = {
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  name: "backhaul",
+  description: t.description,
+  applicationCategory: "MultimediaApplication",
+  operatingSystem: "Windows 10, Windows 11",
+  url: new URL(t.home, Astro.site).href,
+  publisher: { "@type": "Organization", name: "SEVENTHWELL", url: "https://seventh-well.com/" },
+  offers: PLANS.map((plan, i) => ({
+    "@type": "Offer",
+    name: `${p.plans[i]} (${plan.seats} PCs, monthly)`,
+    price: String(plan.month[cur]),
+    priceCurrency: cur.toUpperCase(),
+  })),
+};
 ---
 <Base t={t}>
+  <script slot="head" type="application/ld+json" is:inline set:html={JSON.stringify(product).replace(/</g, "\\u003c")} />
   <section class="hero">
     <span class="avail"><i></i>{t.hero.badge}</span>
     <h1>Zoom in.<br />Programme out.</h1>
@@ -89,6 +107,18 @@ const cur = t.currency;
     </div>
     <p class="problem" role="alert" data-errors={JSON.stringify(p.errors)}></p>
     <p class="fine">{p.fine}</p>
+  </section>
+
+  <section class="sec" id="faq">
+    <h2>{t.faq.title}</h2>
+    <div class="faq">
+      {t.faq.items.map((item) => (
+        <details>
+          <summary>{item.q}</summary>
+          <p>{item.a}</p>
+        </details>
+      ))}
+    </div>
   </section>
 </Base>
 

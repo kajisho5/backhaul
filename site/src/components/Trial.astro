@@ -8,7 +8,7 @@ interface Props { t: Texts }
 const { t } = Astro.props;
 const x = t.trial;
 ---
-<Base t={t} title={x.title} otherHref={`${t.other.href}trial/`} hidden>
+<Base t={t} title={x.title} otherHref={`${t.other.href}trial/`} description={t.descriptions.trial} pair hidden>
   <div class="sheet">
     <h1>{x.heading}</h1>
     <p class="lead">{x.lead}</p>
