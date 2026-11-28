@@ -152,6 +152,10 @@ export class Stripe {
       ["cancel_url", o.cancelUrl],
       ["billing_address_collection", "required"],
       ["subscription_data[metadata][lang]", o.lang],
+      // SEVENTHWELL is the seller, with its own tax rate and its own legal page. A Stripe
+      // account can have "Managed Payments" (Stripe as the seller) on by default; such a
+      // session refuses products without a tax code, so it is switched off here.
+      ["managed_payments[enabled]", "false"],
     ];
     if (o.taxRate !== null) fields.push(["subscription_data[default_tax_rates][0]", o.taxRate]);
     const session = await this.send("POST", "/v1/checkout/sessions", fields);
