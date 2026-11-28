@@ -97,6 +97,43 @@ ColumnLayout {
         Item { Layout.fillWidth: true; Layout.preferredWidth: 0 }
     }
 
+
+    // The spare output device: takes over by itself when the main one stays away.
+    RowLayout {
+        visible: audio.available
+        Layout.fillWidth: true
+        Layout.maximumWidth: 860
+        Layout.topMargin: -20
+        Layout.bottomMargin: 28
+        spacing: 16
+        z: spareChoice.open ? 100 : 0
+        ColumnLayout {
+            Layout.fillWidth: true
+            Layout.minimumWidth: 160
+            Layout.maximumWidth: 320
+            spacing: 6
+            Text { text: qsTr("予備の機器"); color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 12 }
+            Dropdown {
+                id: spareChoice
+                Layout.fillWidth: true
+                name: qsTr("予備の音声機器")
+                options: audio.spareNames
+                current: audio.spareIndex
+                dimmed: audio.spareIndex === 0
+                enabled: app.audioDeviceName.length > 0
+                opacity: enabled ? 1.0 : 0.4
+                onPicked: (index) => audio.chooseSpare(index)
+            }
+        }
+        Text {
+            Layout.fillWidth: true
+            Layout.alignment: Qt.AlignBottom
+            wrapMode: Text.WordWrap
+            text: qsTr("主の機器が3秒戻らないとき、予備へ自動で切り替えます。主の機器が戻っても、「元の機器に戻す」を押すまで予備のままです。")
+            color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 13
+        }
+    }
+
     Text {
         Layout.fillWidth: true
         Layout.topMargin: -16

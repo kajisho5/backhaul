@@ -3,6 +3,9 @@
 // steady pace. Nothing here knows the meeting service, Qt or Windows.
 #pragma once
 
+#include <cstdint>
+#include <vector>
+
 namespace backhaul {
 
 // Why a meeting is over for this PC, as far as the meeting service said.
@@ -27,5 +30,19 @@ inline constexpr int kRejoinGiveUpSeconds = 600;
 
 // How often a device that went away is looked for.
 inline constexpr int kDeviceSeekSeconds = 2;
+
+// The sound output has a main device and, when the operator chose one, a spare. With no
+// output running: the main device whenever it is there; the spare only after the main
+// one has been gone this long (a quick re-plug is not worth a switch).
+inline constexpr std::int64_t kSpareAfterMs = 3000;
+enum class OutputPick { None, Main, Spare };
+OutputPick pickOutput(bool mainThere, bool spareThere, std::int64_t mainGoneMs);
+
+// A program that crashed is started again, but not for ever: with this many starts
+// within the window, the next crash is left alone.
+inline constexpr int kRestartLimit = 3;
+inline constexpr std::int64_t kRestartWindowMs = 5 * 60 * 1000;
+// `earlier` are the times of the restarts so far (any order). True when one more is allowed.
+bool mayRestart(const std::vector<std::int64_t>& earlier, std::int64_t nowMs);
 
 }  // namespace backhaul

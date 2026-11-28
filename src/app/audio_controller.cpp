@@ -1,6 +1,7 @@
 #include "audio_controller.h"
 #include "dictionary_translator.h"
 
+#include <QDateTime>
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -44,6 +45,7 @@ AudioController::AudioController(AppState& app, std::unique_ptr<backhaul::AudioO
     if (output_ != nullptr) output_->stop();
     if (asio_ != nullptr) asio_->stop();
     deviceIndex_ = 0;
+    onSpare_ = mainBack_ = false;
     problem_.clear();
     app_.audioOk_ = false;
     app_.notifyChanged();
@@ -81,9 +83,10 @@ void AudioController::setAsio(bool asio) {
   if (active() != nullptr) active()->stop();
   devices_.clear();
   deviceIndex_ = 0;
+  onSpare_ = mainBack_ = false;
   problem_.clear();
   app_.audioOk_ = false;
-  app_.setAudioDeviceName(QString());
+  app_.setAudioDeviceName(QString());  // takes the spare with it: the two methods name devices differently
   app_.setAudioAsio(asio);
   refreshDevices();
   refreshMics();
@@ -150,6 +153,7 @@ void AudioController::chooseDevice(int index) {
     if (app_.audioAsio()) stopMic();
     active()->stop();
     deviceIndex_ = 0;
+    onSpare_ = mainBack_ = false;
     problem_.clear();
     app_.audioOk_ = false;
     app_.setAudioDeviceName(QString());
@@ -159,6 +163,7 @@ void AudioController::chooseDevice(int index) {
   }
   // Remember the choice even when it cannot start right now: it is what the operator wants.
   app_.setAudioDeviceName(QString::fromStdString(devices_[static_cast<std::size_t>(index - 1)].name));
+  onSpare_ = mainBack_ = false;
   startDevice(index);
 }
 
@@ -188,6 +193,7 @@ void AudioController::reloadSaved() {
   if (output_ != nullptr) output_->stop();
   if (asio_ != nullptr) asio_->stop();
   deviceIndex_ = 0;
+  onSpare_ = mainBack_ = false;
   problem_.clear();
   app_.audioOk_ = false;
   stereo_ = app_.sendStereo();
@@ -458,6 +464,54 @@ void AudioController::tick() {
   watchDevices();
 }
 
+// Everything found that is not the main device; a chosen spare that is unplugged stays in
+// the list so that the choice remains visible.
+QStringList AudioController::spareNames() const {
+  QStringList names{T("なし")};
+  for (const backhaul::AudioDevice& d : devices_) {
+    const QString name = QString::fromStdString(d.name);
+    if (name != app_.audioDeviceName_) names.push_back(name);
+  }
+  if (!app_.spareDeviceName().isEmpty() && !names.contains(app_.spareDeviceName())) names.push_back(app_.spareDeviceName());
+  return names;
+}
+
+int AudioController::spareIndex() const {
+  return app_.spareDeviceName().isEmpty() ? 0 : std::max(0, static_cast<int>(spareNames().indexOf(app_.spareDeviceName())));
+}
+
+qint64 AudioController::nowMs() const { return clock_ ? clock_() : QDateTime::currentMSecsSinceEpoch(); }
+
+bool AudioController::spareThere() const {
+  if (active() == nullptr || app_.spareDeviceName().isEmpty()) return false;
+  for (const backhaul::AudioDevice& d : active()->devices()) {
+    if (QString::fromStdString(d.name) == app_.spareDeviceName()) return true;
+  }
+  return false;
+}
+
+void AudioController::chooseSpare(int index) {
+  const QStringList names = spareNames();
+  if (index < 0 || index >= names.size()) return;
+  app_.setSpareDeviceName(index == 0 ? QString() : names.at(index));
+  emit changed();
+}
+
+void AudioController::returnToMain() {
+  if (!onSpare_ || active() == nullptr) return;
+  stopTest();
+  if (app_.audioAsio()) stopMic();
+  active()->stop();
+  deviceIndex_ = 0;
+  onSpare_ = mainBack_ = false;
+  outputGoneAtMs_ = nowMs();  // the three seconds for the main device start again
+  app_.audioOk_ = false;
+  problem_.clear();
+  app_.notifyChanged();
+  emit changed();
+  watchDevices(true);  // the main device, if it is there
+}
+
 // The operator's choice stands while its name is kept: "no output" and "not used" clear it.
 bool AudioController::outputSeeking() const {
   return active() != nullptr && deviceIndex_ == 0 && wantsOutput() && !app_.audioDeviceName_.isEmpty();
@@ -470,6 +524,8 @@ bool AudioController::micSeeking() const {
 }
 
 void AudioController::watchDevices(bool lookNow) {
+  // An output is running: whatever was counted towards "the main device is gone" is over.
+  if (deviceIndex_ > 0) outputGoneAtMs_ = -1;
   // A recording device can disappear on its own.
   if (micIndex_ > 0 && !app_.audioAsio() && input_ != nullptr && !input_->running()) {
     micIndex_ = 0;
@@ -481,6 +537,7 @@ void AudioController::watchDevices(bool lookNow) {
     stopTest();
     if (app_.audioAsio()) stopMic();  // its inputs went with it; they come back with it
     deviceIndex_ = 0;
+    onSpare_ = mainBack_ = false;  // the spare went too: both are looked for, the main one first
     problem_ = T("音声の機器が止まりました。同じ機器を探しています");
     app_.audioOk_ = false;
     app_.notifyChanged();
@@ -490,6 +547,8 @@ void AudioController::watchDevices(bool lookNow) {
   const bool output = outputSeeking(), mic = micSeeking();
   if (output && !outputSought_.isValid()) outputSought_.start();
   if (!output) outputSought_.invalidate();
+  if (output && outputGoneAtMs_ < 0) outputGoneAtMs_ = nowMs();
+  if (!output) outputGoneAtMs_ = -1;
   if (mic && !micSought_.isValid()) micSought_.start();
   if (!mic) micSought_.invalidate();
   const int seconds = output || mic ? outputSeekSeconds() + micSeekSeconds() : -1;
@@ -497,20 +556,43 @@ void AudioController::watchDevices(bool lookNow) {
     shownSeekSeconds_ = seconds;
     emit seekChanged();
   }
-  if (!output && !mic) return;
+  if (!output && !mic && !onSpare_) return;
   if (!lookNow && lastLook_.isValid() && lastLook_.elapsed() < qint64{1000} * backhaul::kDeviceSeekSeconds) return;
   lastLook_.start();
+
+  // On the spare: say when the main device is back. Going back is the operator's decision
+  // (it interrupts the sound once more).
+  if (onSpare_ && active() != nullptr) {
+    bool back = false;
+    for (const backhaul::AudioDevice& d : active()->devices()) back = back || QString::fromStdString(d.name) == app_.audioDeviceName_;
+    if (back != mainBack_) {
+      mainBack_ = back;
+      emit changed();
+    }
+  }
 
   // Looked for quietly: the lists on the screen change only when the device is there.
   if (output) {
     const std::vector<backhaul::AudioDevice> found = active()->devices();
+    int mainAt = -1, spareAt = -1;
     for (std::size_t i = 0; i < found.size(); ++i) {
-      if (QString::fromStdString(found[i].name) != app_.audioDeviceName_) continue;
+      const QString name = QString::fromStdString(found[i].name);
+      if (name == app_.audioDeviceName_ && mainAt < 0) mainAt = static_cast<int>(i);
+      if (!app_.spareDeviceName().isEmpty() && name == app_.spareDeviceName() && spareAt < 0) spareAt = static_cast<int>(i);
+    }
+    const backhaul::OutputPick pick = backhaul::pickOutput(mainAt >= 0, spareAt >= 0, outputGoneAtMs_ >= 0 ? nowMs() - outputGoneAtMs_ : 0);
+    if (pick != backhaul::OutputPick::None) {
+      const bool spare = pick == backhaul::OutputPick::Spare;
       devices_ = found;
       const QString before = problem_;
-      if (!startDevice(static_cast<int>(i) + 1)) problem_ = before;  // there, but not ready yet: the next look tries again
+      if (startDevice((spare ? spareAt : mainAt) + 1)) {
+        onSpare_ = spare;
+        mainBack_ = false;
+        if (spare) problem_ = T("予備の機器で出力しています（主の機器：%1）").arg(app_.audioDeviceName_);
+      } else {
+        problem_ = before;  // there, but not ready yet: the next look tries again
+      }
       emit changed();
-      break;
     }
   }
   if (micSeeking()) {

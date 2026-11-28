@@ -66,8 +66,8 @@ Rectangle {
             Text { text: qsTr("音声"); color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 13 }
             Text { text: app.audioDevice; color: Theme.ink; font.family: app.sansFamily; font.pixelSize: 13 }
             Text {
-                text: app.audioOk ? qsTr("正常") : qsTr("停止")
-                color: app.audioOk ? Theme.ok : Theme.lost
+                text: audio.onSpare ? qsTr("予備") : app.audioOk ? qsTr("正常") : qsTr("停止")
+                color: audio.onSpare ? Theme.muted : app.audioOk ? Theme.ok : Theme.lost
                 font.family: app.sansFamily; font.pixelSize: 13; font.bold: true
             }
         }

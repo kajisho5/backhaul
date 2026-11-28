@@ -26,6 +26,8 @@ class AppState : public QObject {
   Q_PROPERTY(QString elapsed MEMBER elapsed_ NOTIFY changed)
   Q_PROPERTY(QString audioDevice READ audioDevice NOTIFY changed)
   Q_PROPERTY(QString audioDeviceName MEMBER audioDeviceName_ NOTIFY changed)
+  // The spare output device (same method as the main one); empty when there is none.
+  Q_PROPERTY(QString spareDeviceName READ spareDeviceName NOTIFY changed)
   Q_PROPERTY(bool audioAsio READ audioAsio WRITE setAudioAsio NOTIFY changed)
   // Sound sent into the meeting (the sound role): the recording device by name, how the
   // meeting treats it (0 speech, 1 original, 2 music) and whether both sides are sent.
@@ -108,6 +110,8 @@ class AppState : public QObject {
   bool audioAsio() const { return audioAsio_; }
   void setAudioAsio(bool asio);
   void setAudioDeviceName(const QString& name);
+  QString spareDeviceName() const { return spareDeviceName_; }
+  void setSpareDeviceName(const QString& name);
   QString micDeviceName() const { return micDeviceName_; }
   void setMicDeviceName(const QString& name);
   int sendQuality() const { return sendQuality_; }
@@ -256,6 +260,7 @@ class AppState : public QObject {
   QString standbyText_ = QStringLiteral("SLIDE");
   QJsonObject pluginSettings_;
   QString micDeviceName_;
+  QString spareDeviceName_;
   int sendQuality_ = 0;
   bool sendStereo_ = false;
   QString videoDeviceName_;

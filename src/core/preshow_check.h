@@ -9,7 +9,7 @@ namespace backhaul {
 
 enum class CheckLevel { Ok, Warn, Bad };  // Warn: the show can go on; Bad: it will not work like this
 
-enum class CheckId { Internet, Licence, ZoomSignIn, MeetingId, AudioOutput, AudioInput, VideoOutputs, Power, Notifications, Update };
+enum class CheckId { Internet, Licence, ZoomSignIn, MeetingId, AudioOutput, SpareOutput, AudioInput, VideoOutputs, Power, Notifications, Update };
 
 enum class CheckReason {
   // Internet
@@ -22,6 +22,8 @@ enum class CheckReason {
   IdGood, IdMissing,
   // Devices (sound out, sound in)
   DeviceRunning, DeviceNotRunning, DeviceNotChosen,
+  // The spare sound device
+  SpareReady, SpareInUse, SpareNotThere, NoSpare,
   // Monitors
   OutputsGood, OutputMissing, NoOutputChosen,
   // Power
@@ -46,6 +48,7 @@ struct ShowFacts {
   bool zoomSignedIn = false;
   bool meetingIdGood = false;
   bool outputChosen = false, outputRunning = false;
+  bool spareChosen = false, spareThere = false, onSpare = false;
   bool inputChosen = false, inputRunning = false;
   int monitorsChosen = 0, monitorsMissing = 0;
   int power = -1;          // -1 unknown, 0 battery, 1 mains

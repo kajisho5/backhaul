@@ -18,6 +18,7 @@ ShowFacts ready() {
   f.zoomSignedIn = true;
   f.meetingIdGood = true;
   f.outputChosen = f.outputRunning = true;
+  f.spareChosen = f.spareThere = true;
   f.inputChosen = f.inputRunning = true;
   f.monitorsChosen = 2;
   f.power = 1;
@@ -42,9 +43,9 @@ void testPreshowCheck() {
   using enum CheckLevel;
   using enum CheckReason;
 
-  {  // everything fine: ten points, all OK, in the order of the screen
+  {  // everything fine: eleven points, all OK, in the order of the screen
     const auto items = checkBeforeShow(ready());
-    CHECK(items.size() == 10);
+    CHECK(items.size() == 11);
     CHECK(std::all_of(items.begin(), items.end(), [](const CheckItem& i) { return i.level == Ok; }));
     CHECK(items.front().id == CheckId::Internet && items.back().id == CheckId::Update);
     CHECK(items[1].id == CheckId::Licence && items[2].id == CheckId::ZoomSignIn && items[3].id == CheckId::MeetingId);
@@ -96,6 +97,17 @@ void testPreshowCheck() {
     f.inputChosen = false;  // sending a picture without sound is allowed
     CHECK(is(checkBeforeShow(f), CheckId::AudioInput, Warn, DeviceNotChosen));
   }
+  {  // the spare sound device: never a stop, but said
+    ShowFacts f = ready();
+    f.spareThere = false;
+    CHECK(is(checkBeforeShow(f), CheckId::SpareOutput, Warn, SpareNotThere));
+    f.spareChosen = false;
+    CHECK(is(checkBeforeShow(f), CheckId::SpareOutput, Warn, NoSpare));
+    f.spareChosen = f.spareThere = f.onSpare = true;  // the main device is gone right now
+    CHECK(is(checkBeforeShow(f), CheckId::SpareOutput, Warn, SpareInUse));
+    f.outputChosen = false;  // no main device at all: the point about the spare says nothing more
+    CHECK(find(checkBeforeShow(f), CheckId::SpareOutput) == nullptr);
+  }
   {  // monitors
     ShowFacts f = ready();
     f.monitorsMissing = 1;
@@ -117,7 +129,7 @@ void testPreshowCheck() {
     f.update = 0;
     const auto fewer = checkBeforeShow(f);
     CHECK(find(fewer, CheckId::Power) == nullptr && find(fewer, CheckId::Notifications) == nullptr && find(fewer, CheckId::Update) == nullptr);
-    CHECK(fewer.size() == 7);
+    CHECK(fewer.size() == 8);
   }
   {  // a PC that only shows one person: no points about sound
     ShowFacts f = ready();
@@ -125,6 +137,7 @@ void testPreshowCheck() {
     f.outputChosen = f.outputRunning = f.inputChosen = f.inputRunning = false;
     const auto items = checkBeforeShow(f);
     CHECK(find(items, CheckId::AudioOutput) == nullptr && find(items, CheckId::AudioInput) == nullptr);
+    CHECK(find(items, CheckId::SpareOutput) == nullptr);
     CHECK(std::all_of(items.begin(), items.end(), [](const CheckItem& i) { return i.level == Ok; }));
   }
   {  // a PC that only handles sound: no point about monitors

@@ -6,6 +6,20 @@
 #include "dictionary_translator.h"
 
 const DictionaryEntry kEnglish[] = {
+    // The spare sound device
+    {"なし", "None"},
+    {"予備の機器", "Spare device"},
+    {"予備の音声機器", "Spare audio device"},
+    {"主の機器が3秒戻らないとき、予備へ自動で切り替えます。主の機器が戻っても、「元の機器に戻す」を押すまで予備のままです。", "When the main device stays away for 3 seconds, the spare takes over by itself. When the main device is back, the spare keeps running until you press \"Back to the main device\"."},
+    {"予備の機器で出力しています", "Running on the spare device"},
+    {"「%1」が戻りました。「元の機器に戻す」で切り替えます（一瞬音が途切れます）", "\"%1\" is back. \"Back to the main device\" switches over (the sound stops for a moment)"},
+    {"「%1」が戻らなかったため、「%2」に切り替えました", "\"%1\" did not come back, so \"%2\" took over"},
+    {"元の機器に戻す", "Back to the main device"},
+    {"予備", "Spare"},
+    {"予備の機器で出力しています（主の機器：%1）", "Running on the spare device (main device: %1)"},
+    {"いま予備の機器で出力しています（主の機器：%1）", "Running on the spare device right now (main device: %1)"},
+    {"「%1」がつながっていません", "\"%1\" is not connected"},
+    {"選ばれていません（主の機器が抜けると音が止まります）", "None chosen (the sound stops if the main device drops out)"},
     // Lock, line quality, check before the show
     {"本番前チェック", "Pre-show check"},
     {"もう一度確かめる", "Check again"},

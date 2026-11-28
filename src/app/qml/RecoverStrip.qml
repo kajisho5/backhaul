@@ -31,6 +31,13 @@ Rectangle {
             list.push({ kind: "audio", title: qsTr("音声の機器を探しています"),
                         text: qsTr("「%1」が見つかりません。つなぎ直すと自動で戻ります（%2秒）").arg(app.audioDeviceName).arg(audio.outputSeekSeconds), waiting: false })
         }
+        if (audio.onSpare) {
+            list.push({ kind: "spare", title: qsTr("予備の機器で出力しています"),
+                        text: audio.mainBack
+                              ? qsTr("「%1」が戻りました。「元の機器に戻す」で切り替えます（一瞬音が途切れます）").arg(app.audioDeviceName)
+                              : qsTr("「%1」が戻らなかったため、「%2」に切り替えました").arg(app.audioDeviceName).arg(app.spareDeviceName),
+                        waiting: audio.mainBack })
+        }
         if (audio.micSeeking) {
             list.push({ kind: "audio", title: qsTr("入力の機器を探しています"),
                         text: qsTr("「%1」が見つかりません。つなぎ直すと自動で戻ります（%2秒）").arg(app.micDeviceName).arg(audio.micSeekSeconds), waiting: false })
@@ -64,7 +71,8 @@ Rectangle {
                     anchors.leftMargin: 16
                     anchors.rightMargin: 16
                     spacing: 12
-                    Rectangle { implicitWidth: 8; implicitHeight: 8; color: Theme.unstable }
+                    // Coming back is orange; running on the spare is a state to know about, yellow.
+                    Rectangle { implicitWidth: 8; implicitHeight: 8; color: line.modelData.kind === "spare" ? Theme.muted : Theme.unstable }
                     Text {
                         text: line.modelData.title
                         color: Theme.ink; font.family: app.sansFamily; font.pixelSize: 14; font.bold: true
@@ -88,7 +96,13 @@ Rectangle {
                         onClicked: meeting.leave()
                     }
                     PlainButton {
-                        visible: line.modelData.kind !== "meeting"
+                        visible: line.modelData.kind === "spare"
+                        enabled: line.modelData.waiting  // once the main device is there again
+                        text: qsTr("元の機器に戻す"); textSize: 13
+                        onClicked: audio.returnToMain()
+                    }
+                    PlainButton {
+                        visible: line.modelData.kind !== "meeting" && line.modelData.kind !== "spare"
                         enabled: !app.locked
                         text: qsTr("機器を選び直す"); textSize: 13
                         onClicked: root.deviceRequested(line.modelData.kind)

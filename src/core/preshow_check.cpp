@@ -43,6 +43,16 @@ std::vector<CheckItem> checkBeforeShow(const ShowFacts& f) {
       out.push_back(f.outputRunning ? CheckItem{CheckId::AudioOutput, Ok, DeviceRunning} : CheckItem{CheckId::AudioOutput, Bad, DeviceNotRunning});
     }
   }
+  // Without a spare the show can go on; with the main device gone it will be silent.
+  if (f.playsAudio && f.outputChosen) {
+    if (f.onSpare) {
+      out.push_back({CheckId::SpareOutput, Warn, SpareInUse});
+    } else if (!f.spareChosen) {
+      out.push_back({CheckId::SpareOutput, Warn, NoSpare});
+    } else {
+      out.push_back(f.spareThere ? CheckItem{CheckId::SpareOutput, Ok, SpareReady} : CheckItem{CheckId::SpareOutput, Warn, SpareNotThere});
+    }
+  }
   if (f.sendsAudio) {
     if (!f.inputChosen) {
       out.push_back({CheckId::AudioInput, Warn, DeviceNotChosen});  // a PC may send a picture only
