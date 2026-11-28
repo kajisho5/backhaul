@@ -6,6 +6,7 @@
 #include <QMutexLocker>
 
 #include "app_state.h"
+#include "licence_controller.h"
 #include "core/audio_mixer.h"
 #include "core/quality_policy.h"
 #include "core/yuv.h"
@@ -79,11 +80,12 @@ int MeetingController::step() const {
 }
 
 bool MeetingController::busy() const {
-  return state_ == MeetingState::Authenticating || state_ == MeetingState::Joining ||
+  return preparing_ || state_ == MeetingState::Authenticating || state_ == MeetingState::Joining ||
          state_ == MeetingState::WaitingForPermission || state_ == MeetingState::Receiving;
 }
 
 QString MeetingController::statusText() const {
+  if (preparing_) return QStringLiteral("入場券を取っています…");
   switch (state_) {
     case MeetingState::Idle: return QStringLiteral("未接続");
     case MeetingState::Authenticating: return QStringLiteral("鍵を確認中");
@@ -110,7 +112,8 @@ quint64 MeetingController::parseMeetingNumber(const QString& text) {
 }
 
 bool MeetingController::canJoin() const {
-  return client_ != nullptr && !busy() && credentialsSaved() && parseMeetingNumber(app_.meetingId()) != 0 &&
+  const bool keys = credentialsSaved() || (licence_ != nullptr && licence_->active());
+  return client_ != nullptr && !busy() && keys && parseMeetingNumber(app_.meetingId()) != 0 &&
          !app_.joinName().trimmed().isEmpty();
 }
 
@@ -137,7 +140,37 @@ void MeetingController::join() {
   request.receive = app_.receivesAnything();
   authenticated_ = false;
   detail_.clear();
-  client_->join(request, this);  // reports through onMeetingState, also when it cannot start
+  joinNotice_.clear();
+  // Zoom keys typed into this PC come first: that is the operator's explicit choice.
+  if (credentialsSaved()) {
+    client_->join(request, this);  // reports through onMeetingState, also when it cannot start
+    return;
+  }
+  request.clientId.clear();
+  request.clientSecret.clear();
+  preparing_ = true;
+  emit changed();
+  licence_->prepareJoin([this, request](const LicenceController::Entry& entry) mutable {
+    preparing_ = false;
+    if (!entry.ok) {
+      state_ = MeetingState::Failed;
+      detail_ = entry.error;
+      emit changed();
+      return;
+    }
+    request.sdkToken = entry.sdkToken.toStdString();
+    // The ZAK from the sign-in; one typed by hand is the fallback for when there is none.
+    if (!entry.zak.isEmpty()) request.zak = entry.zak.toStdString();
+    joinNotice_ = entry.notice;
+    emit changed();
+    client_->join(request, this);
+  });
+}
+
+void MeetingController::setLicence(LicenceController* licence) {
+  licence_ = licence;
+  if (licence_ != nullptr) connect(licence_, &LicenceController::changed, this, [this] { emit changed(); });
+  emit changed();
 }
 
 bool MeetingController::sendAudio(const std::int16_t* samples, std::size_t frames, int channels) {

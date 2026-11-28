@@ -1,5 +1,7 @@
 #include <QCommandLineParser>
+#include <QDesktopServices>
 #include <QFileInfo>
+#include <QSysInfo>
 #include <QGuiApplication>
 #include <QIcon>
 #include <QQmlApplicationEngine>
@@ -17,6 +19,7 @@
 #include "demo_source.h"
 #include "frame_item.h"
 #include "frame_store.h"
+#include "licence_controller.h"
 #include "meeting_controller.h"
 #include "plugin_controller.h"
 #include "plugins/plugin_host.h"
@@ -92,6 +95,15 @@ int main(int argc, char* argv[]) {
   MeetingController meeting(state, frames, demo ? nullptr : backhaul::makeMeetingClient(),
                             demo ? nullptr : makeCredentialStore());
 
+  // Licence and Zoom sign-in. BACKHAUL_GATE_URL points a test set-up at another server.
+  const QString gateUrl = qEnvironmentVariable("BACKHAUL_GATE_URL", QStringLiteral(BACKHAUL_GATE_URL));
+  LicenceController licence(demo ? nullptr : makeGateClient(gateUrl),
+                            demo ? nullptr : makeSecretStore(QStringLiteral("backhaul/licence")),
+                            demo ? nullptr : makeSecretStore(QStringLiteral("backhaul/zoom-signin")),
+                            QSysInfo::machineHostName(), [](const QUrl& url) { return QDesktopServices::openUrl(url); });
+  meeting.setLicence(&licence);
+  licence.refresh();
+
   // While the operator has paused sending, the sound stays here too. Declared before
   // `audio` so that it is still there when audio's sending thread makes its last call.
   std::atomic<bool> sendPaused{false};
@@ -132,6 +144,7 @@ int main(int argc, char* argv[]) {
   engine.rootContext()->setContextProperty(QStringLiteral("meeting"), &meeting);
   engine.rootContext()->setContextProperty(QStringLiteral("audio"), &audio);
   engine.rootContext()->setContextProperty(QStringLiteral("returning"), &returning);
+  engine.rootContext()->setContextProperty(QStringLiteral("licence"), &licence);
   engine.rootContext()->setContextProperty(QStringLiteral("plugins"), &plugins);
   engine.rootContext()->setContextProperty(QStringLiteral("project"), &project);
   engine.rootContext()->setContextProperty(QStringLiteral("app"), &state);

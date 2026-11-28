@@ -11,6 +11,7 @@
 ## 入れてはいけないもの（公開リポ）
 - Zoom Meeting SDK本体、Steinberg ASIO開発キット（`third_party/` に置き、コミットしない）
 - Zoomの鍵類（Client ID/Secret、ZAK、会議のパスコード）
+- 入場券サーバーの鍵（`ADMIN_TOKEN`、発行したライセンスキー）。Cloudflare の「秘密の値」にだけ置く
 
 ## コードの決まり
 - `src/core/` は Zoom・Qt・Windows に依存させない。ここは必ず自動テストを付け、Linux と Windows の両方で通す。
@@ -20,6 +21,7 @@
 - エラーの握りつぶし、テストを通すためだけの仮実装をしない。
 
 ## 確かめ方
+入場券サーバー（`server/`）は `npm ci && npm run check && npm test`。アプリは下のとおり。
 ```
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release
