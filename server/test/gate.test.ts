@@ -352,6 +352,18 @@ describe("signing in to Zoom", () => {
     expect(Object.fromEntries(new URLSearchParams(zoomCalls[3]!.body)).refresh_token).toBe("sample-refresh-2");
   });
 
+  it("forgets the sign-in when the licence is stopped", async () => {
+    const { id, key } = await issue();
+    const token = await tokenFor(key, PC_A);
+    await signedIn(token);
+    expect(((await (await call("/v1/status", {}, token)).json()) as { licence: { zoomSignedIn: boolean } }).licence.zoomSignedIn).toBe(true);
+    await call(`/admin/licences/${id}/revoke`, undefined, ADMIN);
+    await call(`/admin/licences/${id}/restore`, undefined, ADMIN);
+    const after = await call("/v1/zoom/zak", {}, token);
+    expect(after.status).toBe(404);
+    expect(await after.json()).toMatchObject({ error: "not_signed_in" });
+  });
+
   it("lets one PC at a time talk to Zoom; the others wait for its result", async () => {
     const { key } = await issue(2);
     const a = await tokenFor(key, PC_A);
@@ -463,5 +475,34 @@ describe("the owner's page", () => {
     expect(html).not.toContain(ADMIN);
     expect(html).not.toContain("sample-secret");
     expect(html).not.toMatch(/innerHTML|document\.write|\balert\(|\bconfirm\(/);
+  });
+});
+
+describe("the public pages", () => {
+  it("serves privacy, terms, support and the guide, each linking to the others", async () => {
+    for (const path of ["/privacy", "/terms", "/support", "/docs"]) {
+      const r = await app.request(path, {}, env);
+      expect(r.status).toBe(200);
+      expect(r.headers.get("content-type")).toContain("text/html");
+      expect(r.headers.get("x-frame-options")).toBe("DENY");
+      const html = await r.text();
+      expect(html).toContain("info@seventh-well.com");
+      for (const other of ["/privacy", "/terms", "/support", "/docs"]) {
+        if (other !== path) expect(html).toContain(`href="${other}"`);
+      }
+      expect(html).not.toContain(ADMIN);
+      expect(html).not.toContain("sample-secret");
+      expect(html).not.toContain("<script");
+    }
+    expect((await app.request("/privacy/", {}, env)).status).toBe(404);
+  });
+
+  it("says what is kept and how to remove the app", async () => {
+    const privacy = await (await app.request("/privacy", {}, env)).text();
+    expect(privacy).toContain("AES-256-GCM");
+    expect(privacy).toContain("Your rights");
+    const guide = await (await app.request("/docs", {}, env)).text();
+    expect(guide).toContain("Removing backhaul");
+    expect(guide).toContain("Added Apps");
   });
 });

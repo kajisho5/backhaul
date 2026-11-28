@@ -6,6 +6,7 @@ import type { Context } from "hono";
 import { newLicenceKey, normaliseKey, problemOf, randomToken, sameText, sha256Hex } from "./licence";
 import type { Licence } from "./licence";
 import { adminPage } from "./admin_page";
+import { publicPage, publicPaths } from "./public_pages";
 import { Store } from "./store";
 import { Vault } from "./vault";
 import type { Device } from "./store";
@@ -311,6 +312,11 @@ export function createApp(outside: Outside) {
   });
 
   // The page itself holds nothing secret; every request it makes needs the admin token.
+  // Privacy, terms, support and the guide: what the Zoom listing links to.
+  for (const path of publicPaths) {
+    app.get(path, (c) => c.html(publicPage(path) ?? "", 200, { "cache-control": "public, max-age=300", "x-frame-options": "DENY", "x-content-type-options": "nosniff" }));
+  }
+
   app.get("/admin", (c) => c.html(adminPage(), 200, { "cache-control": "no-store", "x-frame-options": "DENY", "referrer-policy": "no-referrer" }));
 
   admin.post("/licences", async (c) => {
@@ -349,7 +355,11 @@ export function createApp(outside: Outside) {
   admin.post("/licences/:id/:action{revoke|restore}", async (c) => {
     const id = Number(c.req.param("id"));
     if (!Number.isInteger(id)) return c.json({ error: "bad_request" }, 400);
-    const found = await new Store(c.env.DB).setRevoked(id, c.req.param("action") === "revoke");
+    const store = new Store(c.env.DB);
+    const stopping = c.req.param("action") === "revoke";
+    const found = await store.setRevoked(id, stopping);
+    // A stopped licence keeps no Zoom sign-in: restoring it later means signing in again.
+    if (found && stopping) await store.removeSignin(id);
     return found ? c.json({ ok: true }) : c.json({ error: "unknown_licence" }, 404);
   });
 
