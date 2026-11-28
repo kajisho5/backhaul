@@ -7,7 +7,7 @@ $version = '7.1.1'   # https://jrsoftware.org/isdl.php (7.2.0 was still a previe
 $sha256 = '8a5a6711c3766a6e5fb74f280ba0e3551e719ce94538d901fdbd1f8f9920b3f0'
 $tag = 'is-' + $version.Replace('.', '_')
 $exe = Join-Path $Into "innosetup-$version-x64.exe"
-curl.exe -sSL --fail --max-time 180 -o $exe "https://github.com/jrsoftware/issrc/releases/download/$tag/innosetup-$version-x64.exe"
+curl.exe -sSL --fail --retry 3 --retry-all-errors --max-time 180 -o $exe "https://github.com/jrsoftware/issrc/releases/download/$tag/innosetup-$version-x64.exe"
 if ($LASTEXITCODE -ne 0) { throw "Inno Setup $version could not be downloaded" }
 $got = (Get-FileHash -Algorithm SHA256 $exe).Hash.ToLowerInvariant()
 if ($got -ne $sha256) { throw "innosetup-$version-x64.exe is not the expected file (sha256 $got)" }

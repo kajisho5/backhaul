@@ -428,6 +428,7 @@ describe("starting a purchase", () => {
       success_url: `${SITE}/ja/thanks/?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${SITE}/ja/#pricing`,
       billing_address_collection: "required",
+      "managed_payments[enabled]": "false",
       "subscription_data[metadata][lang]": "ja",
       "subscription_data[default_tax_rates][0]": "txr_Sample2",
     });
