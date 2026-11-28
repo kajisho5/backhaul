@@ -50,6 +50,7 @@ ColumnLayout {
                 text: qsTr("この枠へ")
                 strong: true
                 implicitHeight: 28
+                enabled: !app.locked
                 Accessible.name: name + qsTr("を選択中の枠へ割り当てる")
                 onClicked: app.assignToSelected(index)
             }

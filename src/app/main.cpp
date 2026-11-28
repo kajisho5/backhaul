@@ -17,6 +17,7 @@
 
 #include "app_state.h"
 #include "audio_controller.h"
+#include "check_controller.h"
 #include "demo_source.h"
 #include "frame_item.h"
 #include "frame_store.h"
@@ -27,6 +28,7 @@
 #include "project_controller.h"
 #include "return_controller.h"
 #include "settings_saver.h"
+#include "system_facts.h"
 #include "update/updater.h"
 #include "update_controller.h"
 
@@ -62,6 +64,8 @@ int main(int argc, char* argv[]) {
                                      QStringLiteral("For pictures: show <version> as a newer version that was found."),
                                      QStringLiteral("version"));
   args.addOption(updateOpt);
+  const QCommandLineOption lockOpt(QStringLiteral("locked"), QStringLiteral("For pictures: start with the show lock on."));
+  args.addOption(lockOpt);
   const QCommandLineOption recoverOpt(QStringLiteral("recover"), QStringLiteral("For pictures: show the \"coming back\" strip with sample lines."));
   args.addOption(recoverOpt);
   const QCommandLineOption roleOpt(QStringLiteral("role"),
@@ -162,11 +166,19 @@ int main(int argc, char* argv[]) {
   // Updates. The demo neither looks on the web nor installs anything.
   UpdateController update(state, QStringLiteral(BACKHAUL_VERSION), QUrl(QStringLiteral(BACKHAUL_UPDATE_LATEST_URL)),
                           demo ? nullptr : backhaul::makeUpdater(), demo ? UpdateController::Fetch() : makeNetworkFetch(&qtApp));
-  const auto tellUpdate = [&update, &meeting] { update.setInMeeting(meeting.busy()); };
+  // While this PC is in a meeting (or coming back to one) Windows may neither sleep nor
+  // switch the screens off; outside meetings it is left to do as it is set up.
+  const auto tellUpdate = [&update, &meeting, demo] {
+    update.setInMeeting(meeting.busy());
+    if (!demo) keepAwake(meeting.busy());
+  };
   QObject::connect(&meeting, &MeetingController::changed, &update, tellUpdate);
   tellUpdate();
   // The installer is about to run: leave like on a normal quit, so that everything is saved.
   QObject::connect(&update, &UpdateController::closeRequested, &qtApp, &QCoreApplication::quit);
+  // The check before the show. The demo shows a sample result.
+  CheckController check(state, meeting, demo ? nullptr : &licence, demo ? nullptr : &audio, demo ? nullptr : &update);
+  if (demo) check.showForPicture();
   if (args.isSet(updateOpt)) {
     update.showForPicture(args.value(updateOpt));
   } else if (!args.isSet(shotOpt)) {
@@ -192,6 +204,7 @@ int main(int argc, char* argv[]) {
   engine.rootContext()->setContextProperty(QStringLiteral("plugins"), &plugins);
   engine.rootContext()->setContextProperty(QStringLiteral("project"), &project);
   engine.rootContext()->setContextProperty(QStringLiteral("updates"), &update);  // not "update": every QML item has a function of that name
+  engine.rootContext()->setContextProperty(QStringLiteral("check"), &check);
   engine.rootContext()->setContextProperty(QStringLiteral("app"), &state);
   QObject::connect(&engine, &QQmlApplicationEngine::objectCreationFailed, &qtApp,
                    [] { QCoreApplication::exit(2); }, Qt::QueuedConnection);
@@ -247,8 +260,8 @@ int main(int argc, char* argv[]) {
     const QString page = args.value(pageOpt);
     if (page != QStringLiteral("slots") && page != QStringLiteral("audio") && page != QStringLiteral("video") &&
         page != QStringLiteral("zoom") && page != QStringLiteral("project") && page != QStringLiteral("return") &&
-        page != QStringLiteral("software")) {
-      std::fprintf(stderr, "--settings wants zoom, slots, audio, video, return, project or software\n");
+        page != QStringLiteral("software") && page != QStringLiteral("check")) {
+      std::fprintf(stderr, "--settings wants check, zoom, slots, audio, video, return, project or software\n");
       return 5;
     }
     window->setProperty("settingsTab", page);
@@ -256,6 +269,7 @@ int main(int argc, char* argv[]) {
   }
 
   if (args.isSet(recoverOpt)) window->setProperty("recoverSample", true);
+  if (args.isSet(lockOpt)) state.setLocked(true);
 
   if (args.isSet(returnOpt)) {
     const QString send = args.value(returnOpt);

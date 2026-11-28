@@ -7,6 +7,8 @@ Rectangle {
     signal settingsRequested()
     signal roleRequested()
     readonly property var roleNames: ({ all: qsTr("1台でぜんぶ"), camera: qsTr("カメラ（1人）"), twoshot: qsTr("2ショット"), slide: qsTr("スライド"), audio: qsTr("音声"), return: qsTr("返し（映像・音声）") })
+    // The demo picture shows a good line.
+    readonly property string lineState: app.demo ? "good" : meeting.line
     color: Theme.bg
     implicitHeight: 48
 
@@ -25,10 +27,18 @@ Rectangle {
             textSize: 13
             implicitHeight: 32
             // The role decides how this PC joins (with or without sound), so it is fixed during a meeting.
-            enabled: !meeting.busy
-            Accessible.name: qsTr("役割を変える。今は") + (bar.roleNames[app.role] || "") + (enabled ? "" : qsTr("。会議中は変えられません"))
+            enabled: !meeting.busy && !app.locked
+            Accessible.name: qsTr("役割を変える。今は") + (bar.roleNames[app.role] || "") + (enabled ? "" : app.locked ? qsTr("。ロック中は変えられません") : qsTr("。会議中は変えられません"))
             onClicked: bar.roleRequested()
         }
+        // What is going on. This part gives way when the window is narrow; the controls to
+        // its right always stay on the screen.
+        RowLayout {
+            Layout.fillWidth: true
+            Layout.minimumWidth: 0  // without this the texts inside would push the controls off the screen
+            Layout.preferredWidth: 0
+            spacing: 18
+            clip: true
         Text { text: app.meetingName; color: Theme.ink; font.family: app.sansFamily; font.pixelSize: 13; visible: text.length > 0 }
         Row {
             spacing: 6
@@ -38,6 +48,17 @@ Rectangle {
                 font.family: app.sansFamily; font.pixelSize: 13; font.bold: true
             }
             Text { text: app.elapsed; color: Theme.mute; font.family: app.monoFamily; font.pixelSize: 13; visible: app.connected }
+        }
+        // This PC's own line, while in the meeting.
+        Row {
+            spacing: 6
+            visible: bar.lineState.length > 0
+            Text { text: qsTr("回線"); color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 13 }
+            Text {
+                text: bar.lineState === "good" ? qsTr("良好") : bar.lineState === "fair" ? qsTr("注意") : qsTr("不良")
+                color: bar.lineState === "good" ? Theme.ok : bar.lineState === "fair" ? Theme.muted : Theme.lost
+                font.family: app.sansFamily; font.pixelSize: 13; font.bold: true
+            }
         }
         Row {
             spacing: 6
@@ -64,16 +85,47 @@ Rectangle {
             color: Theme.lost
             font.family: app.sansFamily; font.pixelSize: 13; font.bold: true
         }
+        }
 
         Segmented {
             visible: app.role === "all"
+            enabled: !app.locked
+            opacity: enabled ? 1.0 : 0.4
             firstText: qsTr("1人1出力")
             secondText: qsTr("2×2まとめ")
             first: !app.gridMode
             onChosen: (first) => app.gridMode = !first
         }
+        // The show lock. One press locks; unlocking takes a press held for a second, so that
+        // a slip of the hand does not undo it.
+        PlainButton {
+            id: lockButton
+            // A short press while locked says how to unlock, for two seconds.
+            text: !app.locked ? qsTr("ロック") : hint.running ? qsTr("長押しで解除") : qsTr("ロック中")
+            strong: app.locked
+            property int held: 0  // key repeats counted while Return or Space stays down
+            Timer { id: hint; interval: 2000 }
+            Accessible.name: app.locked ? qsTr("ロック中。1秒長押しで解除") : qsTr("本番ロックをかける")
+            Accessible.onPressAction: app.locked = !app.locked  // asked for on purpose by a screen reader
+            onClicked: if (!app.locked) app.locked = true
+            Keys.onPressed: (event) => {
+                if (!app.locked || (event.key !== Qt.Key_Return && event.key !== Qt.Key_Space)) return
+                if (!event.isAutoRepeat) hint.restart()
+                held = event.isAutoRepeat ? held + 1 : 0
+                if (held >= 20) { held = 0; app.locked = false }
+                event.accepted = true
+            }
+            MouseArea {
+                anchors.fill: parent
+                enabled: app.locked
+                pressAndHoldInterval: 1000
+                onClicked: hint.restart()
+                onPressAndHold: { hint.stop(); app.locked = false }
+            }
+        }
         PlainButton {
             text: qsTr("設定")
+            enabled: !app.locked
             Accessible.name: updateDot.visible ? qsTr("設定（新しいバージョンがあります）") : text
             onClicked: bar.settingsRequested()
             // A newer version is waiting on the "Software" page of the settings.

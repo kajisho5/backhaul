@@ -3,6 +3,7 @@
 
 #include <QCryptographicHash>
 #include <QDateTime>
+#include <QElapsedTimer>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QRandomGenerator>
@@ -157,6 +158,7 @@ void LicenceController::forgetLicence() {
   sdkToken_.clear();
   sdkTokenExpiresAt_ = 0;
   zoomSignedIn_ = false;
+  stoppedByOwner_ = false;
   licenceStore_->clear();
 }
 
@@ -197,23 +199,51 @@ void LicenceController::deactivate() {
   });
 }
 
+void LicenceController::takeStatus(const GateReply& reply) {
+  if (reply.status != 200) {
+    say(explain(reply), true);
+    return;
+  }
+  takeLicence(reply.body.value(QStringLiteral("licence")).toObject());
+  const QString problem = reply.body.value(QStringLiteral("problem")).toString();
+  stoppedByOwner_ = problem == QStringLiteral("revoked");
+  if (problem == QStringLiteral("revoked")) {
+    say(T("このキーは止められています"), true);
+  } else if (problem == QStringLiteral("expired")) {
+    say(T("期限が切れています（%1 まで）").arg(dayOf(expiresAt_)), true);
+  } else {
+    say(QString(), false);
+  }
+}
+
 void LicenceController::refresh() {
   if (!available() || busy() || !active()) return;
-  post(QStringLiteral("/v1/status"), {}, [this](const GateReply& reply) {
-    if (reply.status != 200) {
-      say(explain(reply), true);
-      return;
-    }
-    takeLicence(reply.body.value(QStringLiteral("licence")).toObject());
-    const QString problem = reply.body.value(QStringLiteral("problem")).toString();
-    if (problem == QStringLiteral("revoked")) {
-      say(T("このキーは止められています"), true);
-    } else if (problem == QStringLiteral("expired")) {
-      say(T("期限が切れています（%1 まで）").arg(dayOf(expiresAt_)), true);
-    } else {
-      say(QString(), false);
-    }
+  post(QStringLiteral("/v1/status"), {}, [this](const GateReply& reply) { takeStatus(reply); });
+}
+
+void LicenceController::probe(std::function<void(bool reachable, int ms)> done) {
+  if (!available()) {
+    done(false, 0);
+    return;
+  }
+  const bool registered = active();
+  auto watch = std::make_shared<QElapsedTimer>();
+  watch->start();
+  post(QStringLiteral("/v1/status"), {}, [this, registered, watch, done = std::move(done)](const GateReply& reply) {
+    const int ms = static_cast<int>(watch->elapsed());
+    // A PC without a licence is turned away, which still shows that the server is there.
+    if (registered && reply.transport.isEmpty()) takeStatus(reply);
+    done(reply.transport.isEmpty(), ms);
   });
+}
+
+bool LicenceController::stopped() const {
+  return active() && (stoppedByOwner_ || (expiresAt_ > 0 && now() >= expiresAt_));
+}
+
+qint64 LicenceController::daysLeft() const {
+  if (expiresAt_ <= 0) return -1;
+  return std::max<qint64>(0, (expiresAt_ - now()) / 86400);
 }
 
 // ---- Zoom sign-in ----

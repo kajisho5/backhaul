@@ -865,6 +865,31 @@ void AppState::setChecksUpdates(bool on) {
   emit settingsEdited();
 }
 
+void AppState::setLocked(bool on) {
+  if (on == locked_) return;
+  locked_ = on;
+  emit changed();
+}
+
+void AppState::outputMonitors(int* chosen, int* missing) const {
+  QStringList keys;
+  if (backhaul::singleOutput(role_)) {
+    if (!roleScreen_.isEmpty()) keys.push_back(roleScreen_);
+  } else if (gridMode_) {
+    if (!gridScreen_.isEmpty()) keys.push_back(gridScreen_);
+  } else {
+    keys = slotByScreen_.keys();
+  }
+  int gone = 0;
+  for (const QString& key : keys) {
+    bool there = false;
+    for (const ScreenInfo& s : screens_) there = there || s.key == key;
+    if (!there) ++gone;
+  }
+  if (chosen != nullptr) *chosen = static_cast<int>(keys.size());
+  if (missing != nullptr) *missing = gone;
+}
+
 void AppState::setRejoins(bool on) {
   if (on == rejoins_) return;
   rejoins_ = on;

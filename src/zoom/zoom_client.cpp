@@ -339,6 +339,19 @@ class ZoomClient final : public MeetingClient,
     return sendNote_;
   }
 
+  LineQuality lineQuality() const override {
+    LineQuality line;
+    if (meeting_ == nullptr || !inMeeting_) return line;
+    line.receive = worseStep(stepOf(meeting_->GetVideoConnQuality(false)),
+                             request_.audio ? stepOf(meeting_->GetAudioConnQuality(false)) : 0);
+    int send = 0;
+    if (camera_.sending()) send = worseStep(send, stepOf(meeting_->GetVideoConnQuality(true)));
+    if (screen_.sending()) send = worseStep(send, stepOf(meeting_->GetSharingConnQuality(true)));
+    if (mic_.sending()) send = worseStep(send, stepOf(meeting_->GetAudioConnQuality(true)));
+    line.send = send;
+    return line;
+  }
+
   void poll() override {
     if (participants_ == nullptr || events_ == nullptr) return;
     std::vector<Participant> everyone;
@@ -355,6 +368,7 @@ class ZoomClient final : public MeetingClient,
         p.isCoHost = info->GetUserRole() == sdk::USERROLE_COHOST;
         p.videoOn = info->IsVideoOn();
         p.audioMuted = info->IsAudioMuted();
+        p.lineStep = lineStepOf(p.id);
         everyone.push_back(std::move(p));
       }
     }
@@ -427,7 +441,11 @@ class ZoomClient final : public MeetingClient,
     if (events_ != nullptr) events_->onMeetingTopic(toUtf8(topic));
   }
   void onMeetingFullToWatchLiveStream(const zchar_t*) override {}
-  void onUserNetworkStatusChanged(sdk::MeetingComponentType, sdk::ConnectionQuality, unsigned int, bool) override {}
+  void onUserNetworkStatusChanged(sdk::MeetingComponentType type, sdk::ConnectionQuality level, unsigned int userId,
+                                  bool uplink) override {
+    // Kept per kind of data and direction; poll() hands the worst one on with the person.
+    userLine_[{userId, static_cast<int>(type) * 2 + (uplink ? 1 : 0)}] = stepOf(level);
+  }
   void onAppSignalPanelUpdated(sdk::IMeetingAppSignalHandler*) override {}
 
   // IMeetingRecordingCtrlEvent
@@ -450,6 +468,32 @@ class ZoomClient final : public MeetingClient,
   void onSmartRecordingEnableActionCallback(sdk::ISmartRecordingEnableActionHandler*) override {}
 
  private:
+  // The meeting library's grades as plain numbers: 0 unknown, 1 very bad ... 6 excellent.
+  static int stepOf(sdk::ConnectionQuality quality) {
+    switch (quality) {
+      case sdk::Conn_Quality_Very_Bad: return 1;
+      case sdk::Conn_Quality_Bad: return 2;
+      case sdk::Conn_Quality_Not_Good: return 3;
+      case sdk::Conn_Quality_Normal: return 4;
+      case sdk::Conn_Quality_Good: return 5;
+      case sdk::Conn_Quality_Excellent: return 6;
+      default: return 0;
+    }
+  }
+  // The worse of two grades; an unknown one (0) does not count.
+  static int worseStep(int a, int b) {
+    if (a == 0) return b;
+    if (b == 0) return a;
+    return a < b ? a : b;
+  }
+  int lineStepOf(std::uint32_t userId) const {
+    int step = 0;
+    for (auto it = userLine_.lower_bound({userId, 0}); it != userLine_.end() && it->first.first == userId; ++it) {
+      step = worseStep(step, it->second);
+    }
+    return step;
+  }
+
   // What the meeting library's numbers mean for coming back. Only failures that are the
   // line's fault count as such; everything not listed is left alone.
   static EndCause causeOfFailure(int result) {
@@ -862,6 +906,7 @@ class ZoomClient final : public MeetingClient,
   }
 
   void endOfMeeting() {
+    userLine_.clear();
     stopSending();
     stopSendingVideo();
     inMeeting_ = false;
@@ -911,6 +956,8 @@ class ZoomClient final : public MeetingClient,
   sdk::IMeetingRecordingController* recording_ = nullptr;
   std::vector<VideoWant> wants_;
   std::vector<Participant> lastParticipants_;
+  // (person, kind of data and direction) -> grade, as last said by the meeting library.
+  std::map<std::pair<std::uint32_t, int>, int> userLine_;
   std::map<std::uint32_t, Subscription> video_;
   bool sdkReady_ = false;
   bool busy_ = false;

@@ -63,8 +63,17 @@ struct Participant {
   bool isCoHost = false;
   bool videoOn = false;
   bool audioMuted = true;
+  // This person's line as the meeting service grades it: 0 unknown, 1 very bad ... 6
+  // excellent (the worst of what was said about their sound, picture and shared screen).
+  int lineStep = 0;
 
   bool operator==(const Participant&) const = default;
+};
+
+// This PC's own line, on the same scale as Participant::lineStep (0 unknown).
+struct LineQuality {
+  int receive = 0;
+  int send = 0;
 };
 
 enum class VideoSize { P90, P180, P360, P720, P1080 };
@@ -135,6 +144,8 @@ class MeetingClient {
   virtual bool sendVideo(const std::uint8_t* i420, int width, int height) = 0;
   virtual bool sendingVideo() const = 0;
   virtual std::string sendVideoNote() const = 0;
+  // How good this PC's line is right now. Call from the thread that called join().
+  virtual LineQuality lineQuality() const { return {}; }
   // Call a few times per second from the thread that called join(): reports
   // changes in the participant list (camera, mute, names, roles).
   virtual void poll() = 0;

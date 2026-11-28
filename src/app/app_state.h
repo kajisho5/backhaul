@@ -42,6 +42,9 @@ class AppState : public QObject {
   Q_PROPERTY(bool returnInAll READ returnInAll WRITE setReturnInAll NOTIFY roleChanged)
   // Whether the program looks for a newer version when it starts.
   Q_PROPERTY(bool checksUpdates READ checksUpdates WRITE setChecksUpdates NOTIFY changed)
+  // The show lock: while on, the screen offers nothing that could stop the show by a slip
+  // of the hand (settings, role, leaving, devices, assignments). Never saved.
+  Q_PROPERTY(bool locked READ locked WRITE setLocked NOTIFY changed)
   // Whether this PC joins the meeting again by itself after the line dropped.
   Q_PROPERTY(bool rejoins READ rejoins WRITE setRejoins NOTIFY changed)
   Q_PROPERTY(bool sendsVideo READ sendsVideo NOTIFY roleChanged)
@@ -129,6 +132,11 @@ class AppState : public QObject {
   bool returnInAll() const { return returnInAll_; }
   void setReturnInAll(bool on);
   bool checksUpdates() const { return checksUpdates_; }
+  bool locked() const { return locked_; }
+  void setLocked(bool on);
+  // The monitors chosen as outputs for this PC's role: how many, and how many of them
+  // are not connected right now.
+  void outputMonitors(int* chosen, int* missing) const;
   bool rejoins() const { return rejoins_; }
   void setRejoins(bool on);
   void setChecksUpdates(bool on);
@@ -256,6 +264,7 @@ class AppState : public QObject {
   bool returnInAll_ = false;
   bool checksUpdates_ = true;
   bool rejoins_ = true;
+  bool locked_ = false;
   QString roleScreen_;
   bool twoShotSwapped_ = false, twoShotFill_ = true, twoShotSolo_ = false;
   int twoShotSplit_ = 0;

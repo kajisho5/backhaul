@@ -167,6 +167,16 @@ int main(int argc, char* argv[]) {
     a.setCropSlides(false);
     a.addPersonSlot();
 
+    // The show lock is for this run only: it is never written to the settings.
+    {
+      const QJsonObject before = a.settingsJson();
+      CHECK(!a.locked());
+      a.setLocked(true);
+      CHECK(a.locked() && a.settingsJson() == before);
+      AppState fresh;
+      CHECK(fresh.applySettings(a.settingsJson()) && !fresh.locked());
+      a.setLocked(false);
+    }
     // Coming back after a dropped line: on unless switched off, and kept with the Zoom settings.
     CHECK(a.rejoins() && !a.settingsJson().value(QStringLiteral("zoom")).toObject().contains(QStringLiteral("rejoin")));
     a.setRejoins(false);

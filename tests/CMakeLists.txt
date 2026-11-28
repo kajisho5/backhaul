@@ -5,8 +5,10 @@ add_executable(core_tests
   test_audio_mixer.cpp
   test_delay_line.cpp
   test_effect_chain.cpp
+  test_line_quality.cpp
   test_mic_feed.cpp
   test_nv12.cpp
+  test_preshow_check.cpp
   test_quality_policy.cpp
   test_recovery.cpp
   test_resampler.cpp

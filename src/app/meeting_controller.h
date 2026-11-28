@@ -11,6 +11,7 @@
 #include <functional>
 #include <memory>
 
+#include "core/line_quality.h"
 #include "credential_store.h"
 #include "meeting/meeting_client.h"
 
@@ -43,6 +44,8 @@ class MeetingController : public QObject, public backhaul::MeetingEvents {
   Q_PROPERTY(QString sendNote READ sendNote NOTIFY changed)
   Q_PROPERTY(bool sendingVideo READ sendingVideo NOTIFY changed)
   Q_PROPERTY(QString sendVideoNote READ sendVideoNote NOTIFY changed)
+  // This PC's line while in the meeting: "" (not known) | "good" | "fair" | "poor".
+  Q_PROPERTY(QString line READ line NOTIFY changed)
   // Coming back after the line dropped: whether this PC is trying, which try it is on,
   // and the seconds until the next one starts (0 while a try is under way).
   Q_PROPERTY(bool rejoining READ rejoining NOTIFY changed)
@@ -62,6 +65,10 @@ class MeetingController : public QObject, public backhaul::MeetingEvents {
   bool busy() const;
   // Not while coming back: a try that did not get in is followed by the next one.
   bool failed() const { return state_ == backhaul::MeetingState::Failed && !rejoining(); }
+  QString line() const;
+  // Asks the meeting how this PC's line is and brings the slots' "unstable" up to date.
+  // Called once a second while in a meeting; also callable from a test.
+  void refreshLine();
   bool rejoining() const { return rejoinAttempt_ > 0; }
   int rejoinAttempt() const { return rejoinAttempt_; }
   int rejoinWaitSeconds() const;
@@ -120,6 +127,7 @@ class MeetingController : public QObject, public backhaul::MeetingEvents {
   void everySecond();
   void resetSlots();
   void startJoin();
+  void applyUnstable();
   void stopRejoining();
   bool planRejoin();
   qint64 nowMs() const;
@@ -132,6 +140,8 @@ class MeetingController : public QObject, public backhaul::MeetingEvents {
   bool preparing_ = false;  // waiting for the licence server before the join starts
   int prepareRound_ = 0;    // which wait is the current one; "leave" ends it by moving on
   QString joinNotice_;
+  backhaul::LineGrade line_ = backhaul::LineGrade::Unknown;
+  backhaul::UnstableWatch lineWatch_;
   // Coming back after the line dropped.
   bool wasIn_ = false;        // this join got into the meeting, so there is something to come back to
   backhaul::EndCause endCause_ = backhaul::EndCause::None;  // said for the end that is about to be reported

@@ -83,11 +83,13 @@ Rectangle {
                     }
                     PlainButton {
                         visible: line.modelData.kind === "meeting"
+                        enabled: !app.locked  // giving up is leaving the meeting
                         text: qsTr("やめる"); textSize: 13
                         onClicked: meeting.leave()
                     }
                     PlainButton {
                         visible: line.modelData.kind !== "meeting"
+                        enabled: !app.locked
                         text: qsTr("機器を選び直す"); textSize: 13
                         onClicked: root.deviceRequested(line.modelData.kind)
                     }

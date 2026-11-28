@@ -85,6 +85,43 @@ int MeetingController::step() const {
 
 qint64 MeetingController::nowMs() const { return clock_ ? clock_() : QDateTime::currentMSecsSinceEpoch(); }
 
+QString MeetingController::line() const {
+  switch (line_) {
+    case backhaul::LineGrade::Good: return QStringLiteral("good");
+    case backhaul::LineGrade::Fair: return QStringLiteral("fair");
+    case backhaul::LineGrade::Poor: return QStringLiteral("poor");
+    case backhaul::LineGrade::Unknown: break;
+  }
+  return QString();
+}
+
+// A slot's person is shown as unstable once their line has been poor for a while.
+void MeetingController::applyUnstable() {
+  const qint64 now = nowMs();
+  const auto& slotRows = app_.slotList()->rows();
+  for (int i = 0; i < slotRows.size(); ++i) {
+    const SlotRow& r = slotRows[i];
+    if (!isPerson(r)) continue;
+    const bool unstable = r.userId != 0 && r.situation.connected && lineWatch_.unstable(r.userId, now);
+    if (r.situation.unstable != unstable) {
+      app_.slotList()->update(i, [unstable](SlotRow& row) { row.situation.unstable = unstable; });
+    }
+  }
+}
+
+void MeetingController::refreshLine() {
+  if (client_ != nullptr && app_.connected_) {
+    const backhaul::LineQuality quality = client_->lineQuality();
+    const backhaul::LineGrade line =
+        backhaul::worse(backhaul::gradeOfStep(quality.receive), backhaul::gradeOfStep(quality.send));
+    if (line != line_) {
+      line_ = line;
+      emit changed();
+    }
+  }
+  applyUnstable();  // a poor line becomes "unstable" with time, not with a new message
+}
+
 int MeetingController::rejoinWaitSeconds() const {
   if (!rejoining() || rejoinNextMs_ == 0) return 0;
   return static_cast<int>(std::max<qint64>(0, (rejoinNextMs_ - nowMs() + 999) / 1000));
@@ -304,7 +341,9 @@ void MeetingController::onMeetingState(MeetingState state, const std::string& de
     pollTimer_.start();
     secondTimer_.start();
   }
+  if (!in) line_ = backhaul::LineGrade::Unknown;
   if (!live) {
+    lineWatch_.clear();
     sendingAudio_ = sendingVideo_ = false;
     sendNote_.clear();
     sendVideoNote_.clear();
@@ -425,7 +464,11 @@ void MeetingController::applyParticipants() {
   if (!busy()) return;
   const auto& slotRows = app_.slotList()->rows();
   QVector<ParticipantRow> people;
+  std::vector<std::uint32_t> here;
+  for (const backhaul::Participant& p : everyone_) here.push_back(p.id);
+  lineWatch_.keepOnly(here);  // who left is forgotten: a number may be given to somebody else
   for (const backhaul::Participant& p : everyone_) {
+    lineWatch_.report(p.id, backhaul::gradeOfStep(p.lineStep) == backhaul::LineGrade::Poor, nowMs());
     ParticipantRow row;
     row.id = p.id;
     row.name = QString::fromStdString(p.name);
@@ -507,6 +550,7 @@ void MeetingController::applyParticipants() {
     const QMutexLocker lock(&routeMutex_);
     slotByUser_ = slotByUser;
   }
+  applyUnstable();
   app_.notifyChanged();
   updateWants();
 }
@@ -570,6 +614,7 @@ void MeetingController::everySecond() {
     }
   }
   if (rejoining()) emit changed();  // the seconds until the next try
+  refreshLine();
   if (joinedAtMs_ != 0) {
     const qint64 s = (QDateTime::currentMSecsSinceEpoch() - joinedAtMs_) / 1000;
     app_.elapsed_ = QStringLiteral("%1:%2:%3")
