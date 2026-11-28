@@ -20,9 +20,10 @@ add_library(backhaul_app_state STATIC
   file_pick.cpp file_pick.h
   settings_saver.cpp settings_saver.h
   slot_model.cpp slot_model.h
+  update_controller.cpp update_controller.h
 )
 target_include_directories(backhaul_app_state PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(backhaul_app_state PUBLIC backhaul_core backhaul_audio backhaul_video backhaul_plugins Qt6::Gui Qt6::Network)
+target_link_libraries(backhaul_app_state PUBLIC backhaul_core backhaul_audio backhaul_video backhaul_plugins backhaul_update Qt6::Gui Qt6::Network)
 target_include_directories(backhaul_app_state PUBLIC ${CMAKE_SOURCE_DIR}/src)
 if(WIN32)
   target_link_libraries(backhaul_app_state PRIVATE advapi32 comdlg32)
@@ -31,7 +32,10 @@ backhaul_warnings(backhaul_app_state app)
 
 set(BACKHAUL_GATE_URL "https://backhaul-gate.seventh-well.com" CACHE STRING "The licence server this build talks to")
 qt_add_executable(backhaul main.cpp frame_item.cpp frame_item.h)
-target_compile_definitions(backhaul PRIVATE BACKHAUL_GATE_URL="${BACKHAUL_GATE_URL}")
+set(BACKHAUL_UPDATE_LATEST_URL "https://github.com/kajisho5/backhaul-sdk/releases/download/updates/latest.json"
+    CACHE STRING "The small file that says which version is the newest")
+target_compile_definitions(backhaul PRIVATE BACKHAUL_GATE_URL="${BACKHAUL_GATE_URL}"
+  BACKHAUL_VERSION="${PROJECT_VERSION}" BACKHAUL_UPDATE_LATEST_URL="${BACKHAUL_UPDATE_LATEST_URL}")
 if(TARGET backhaul_zoom)
   target_link_libraries(backhaul PRIVATE backhaul_zoom)
 else()
@@ -76,6 +80,8 @@ qt_add_qml_module(backhaul
     qml/PluginRack.qml
     qml/PickLine.qml
     qml/SettingsProject.qml
+    qml/SettingsSoftware.qml
+    qml/UpdateStrip.qml
 )
 
 target_link_libraries(backhaul PRIVATE backhaul_app_state Qt6::Qml Qt6::Quick)
@@ -99,6 +105,13 @@ endif()
 if(WIN32)
   set_target_properties(backhaul PROPERTIES WIN32_EXECUTABLE TRUE)
 endif()
+if(BACKHAUL_HAS_UPDATER)
+  # The program does not start without the update library's DLL beside it.
+  add_custom_command(TARGET backhaul POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+      "${BACKHAUL_WINSPARKLE_DIR}/x64/Release/WinSparkle.dll" "$<TARGET_FILE_DIR:backhaul>"
+    VERBATIM)
+endif()
 
 if(BUILD_TESTING)
   add_executable(app_state_tests ${CMAKE_SOURCE_DIR}/tests/app/test_app_state.cpp)
@@ -121,6 +134,13 @@ if(BUILD_TESTING)
   backhaul_warnings(plugin_controller_tests app)
   add_test(NAME plugin_controller_tests COMMAND plugin_controller_tests)
   set_tests_properties(plugin_controller_tests PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+  add_executable(update_controller_tests ${CMAKE_SOURCE_DIR}/tests/app/test_update_controller.cpp)
+  target_include_directories(update_controller_tests PRIVATE ${CMAKE_SOURCE_DIR}/tests)
+  target_link_libraries(update_controller_tests PRIVATE backhaul_app_state)
+  backhaul_warnings(update_controller_tests app)
+  add_test(NAME update_controller_tests COMMAND update_controller_tests)
+  set_tests_properties(update_controller_tests PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
   add_executable(licence_controller_tests ${CMAKE_SOURCE_DIR}/tests/app/test_licence_controller.cpp)
   target_include_directories(licence_controller_tests PRIVATE ${CMAKE_SOURCE_DIR}/tests)

@@ -37,6 +37,18 @@ jobs:
           node-version: 22
       - run: npm ci
       - run: npm run build
+
+  feed:
+    name: update feed
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python -m pip install cryptography==50.0.1
+      - run: python -m unittest discover -s packaging -p "test_*.py"
+
   core:
     name: core (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
@@ -70,8 +82,16 @@ jobs:
           version: ${{ matrix.qt }}
           arch: win64_msvc2022_64
           cache: true
+      - name: Fetch the update library (WinSparkle)
+        shell: pwsh
+        run: |
+          $dir = & packaging\fetch_winsparkle.ps1 -Into $env:RUNNER_TEMP
+          "WINSPARKLE_DIR=$dir" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
       - name: Configure
-        run: cmake -S . -B build -DBACKHAUL_BUILD_APP=ON
+        shell: pwsh
+        run: |
+          cmake -S . -B build -DBACKHAUL_BUILD_APP=ON "-DBACKHAUL_WINSPARKLE_DIR=$env:WINSPARKLE_DIR"
+          if ($LASTEXITCODE -ne 0) { exit 1 }
       - name: Build
         run: cmake --build build --config Release
       - name: Test
@@ -85,11 +105,14 @@ jobs:
           $p = Start-Process -FilePath $exe.FullName -ArgumentList '--demo','--screenshot',"$PWD\operator-windows.png" -Wait -PassThru
           if ($p.ExitCode -ne 0) { throw "backhaul exited with $($p.ExitCode)" }
           if (-not (Test-Path operator-windows.png)) { throw "no picture was written" }
-          foreach ($page in 'zoom','slots','audio','video','project') {
+          foreach ($page in 'zoom','slots','audio','video','project','software') {
             $p = Start-Process -FilePath $exe.FullName -ArgumentList '--demo','--settings',$page,'--screenshot',"$PWD\settings-$page-windows.png" -Wait -PassThru
             if ($p.ExitCode -ne 0) { throw "backhaul --settings $page exited with $($p.ExitCode)" }
             if (-not (Test-Path "settings-$page-windows.png")) { throw "no picture of the $page settings was written" }
           }
+          $p = Start-Process -FilePath $exe.FullName -ArgumentList '--demo','--update','9.9.9','--screenshot',"$PWD\update-notice-windows.png" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "backhaul --update exited with $($p.ExitCode)" }
+          if (-not (Test-Path update-notice-windows.png)) { throw "no picture of the update notice was written" }
           foreach ($role in 'ask','camera','twoshot','slide','audio','return') {
             $p = Start-Process -FilePath $exe.FullName -ArgumentList '--demo','--role',$role,'--screenshot',"$PWD\role-$role-windows.png" -Wait -PassThru
             if ($p.ExitCode -ne 0) { throw "backhaul --role $role exited with $($p.ExitCode)" }
@@ -106,6 +129,8 @@ jobs:
             role-*-windows.png
             settings-zoom-windows.png
             settings-project-windows.png
+            settings-software-windows.png
+            update-notice-windows.png
 
   app-linux:
     name: app (ubuntu 24.04, Qt 6.4)
@@ -135,6 +160,8 @@ jobs:
           ./build/src/app/backhaul --demo --settings video --screenshot settings-video-linux.png
           ./build/src/app/backhaul --demo --settings zoom --screenshot settings-zoom-linux.png
           ./build/src/app/backhaul --demo --settings project --screenshot settings-project-linux.png
+          ./build/src/app/backhaul --demo --settings software --screenshot settings-software-linux.png
+          ./build/src/app/backhaul --demo --update 9.9.9 --screenshot update-notice-linux.png
           ./build/src/app/backhaul --demo --role all --return on --settings return --screenshot settings-return-linux.png
           ./build/src/app/backhaul --demo --role all --return on --screenshot role-all-return-linux.png
           ./build/src/app/backhaul --demo --role ask --screenshot role-ask-linux.png
@@ -153,4 +180,6 @@ jobs:
             settings-video-linux.png
             settings-zoom-linux.png
             settings-project-linux.png
+            settings-software-linux.png
+            update-notice-linux.png
             role-*-linux.png

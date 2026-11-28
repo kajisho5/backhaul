@@ -27,11 +27,13 @@
 #include "project_controller.h"
 #include "return_controller.h"
 #include "settings_saver.h"
+#include "update/updater.h"
+#include "update_controller.h"
 
 int main(int argc, char* argv[]) {
   QGuiApplication qtApp(argc, argv);
   QGuiApplication::setApplicationName(QStringLiteral("backhaul"));
-  QGuiApplication::setApplicationVersion(QStringLiteral("0.1.0"));
+  QGuiApplication::setApplicationVersion(QStringLiteral(BACKHAUL_VERSION));
   QGuiApplication::setWindowIcon(QIcon(QStringLiteral(":/icon-256.png")));
 
   QCommandLineParser args;
@@ -56,6 +58,10 @@ int main(int argc, char* argv[]) {
                                      QStringLiteral("For pictures of the all-in-one role: select the return tile, sending on or off."),
                                      QStringLiteral("on|off"));
   args.addOption(returnOpt);
+  const QCommandLineOption updateOpt(QStringLiteral("update"),
+                                     QStringLiteral("For pictures: show <version> as a newer version that was found."),
+                                     QStringLiteral("version"));
+  args.addOption(updateOpt);
   const QCommandLineOption roleOpt(QStringLiteral("role"),
                                    QStringLiteral("Start in a role: all, camera, twoshot, slide, audio or return; \"ask\" shows the role question."),
                                    QStringLiteral("role"));
@@ -151,6 +157,20 @@ int main(int argc, char* argv[]) {
     returning.reloadSaved();
   });
 
+  // Updates. The demo neither looks on the web nor installs anything.
+  UpdateController update(state, QStringLiteral(BACKHAUL_VERSION), QUrl(QStringLiteral(BACKHAUL_UPDATE_LATEST_URL)),
+                          demo ? nullptr : backhaul::makeUpdater(), demo ? UpdateController::Fetch() : makeNetworkFetch(&qtApp));
+  const auto tellUpdate = [&update, &meeting] { update.setInMeeting(meeting.busy()); };
+  QObject::connect(&meeting, &MeetingController::changed, &update, tellUpdate);
+  tellUpdate();
+  // The installer is about to run: leave like on a normal quit, so that everything is saved.
+  QObject::connect(&update, &UpdateController::closeRequested, &qtApp, &QCoreApplication::quit);
+  if (args.isSet(updateOpt)) {
+    update.showForPicture(args.value(updateOpt));
+  } else if (!args.isSet(shotOpt)) {
+    update.start();
+  }
+
   QQmlApplicationEngine engine;
   const auto applyLanguage = [&state, &english, &engine] {
     if (state.language() == QStringLiteral("ja")) {
@@ -169,6 +189,7 @@ int main(int argc, char* argv[]) {
   engine.rootContext()->setContextProperty(QStringLiteral("licence"), &licence);
   engine.rootContext()->setContextProperty(QStringLiteral("plugins"), &plugins);
   engine.rootContext()->setContextProperty(QStringLiteral("project"), &project);
+  engine.rootContext()->setContextProperty(QStringLiteral("updates"), &update);  // not "update": every QML item has a function of that name
   engine.rootContext()->setContextProperty(QStringLiteral("app"), &state);
   QObject::connect(&engine, &QQmlApplicationEngine::objectCreationFailed, &qtApp,
                    [] { QCoreApplication::exit(2); }, Qt::QueuedConnection);
@@ -223,8 +244,9 @@ int main(int argc, char* argv[]) {
   if (args.isSet(pageOpt)) {
     const QString page = args.value(pageOpt);
     if (page != QStringLiteral("slots") && page != QStringLiteral("audio") && page != QStringLiteral("video") &&
-        page != QStringLiteral("zoom") && page != QStringLiteral("project") && page != QStringLiteral("return")) {
-      std::fprintf(stderr, "--settings wants zoom, slots, audio, video, return or project\n");
+        page != QStringLiteral("zoom") && page != QStringLiteral("project") && page != QStringLiteral("return") &&
+        page != QStringLiteral("software")) {
+      std::fprintf(stderr, "--settings wants zoom, slots, audio, video, return, project or software\n");
       return 5;
     }
     window->setProperty("settingsTab", page);

@@ -16,7 +16,8 @@ Rectangle {
         { key: "video", title: qsTr("映像出力"), ready: true },
         { key: "audio", title: qsTr("音声出力"), ready: true },
         { key: "return", title: qsTr("返し"), ready: true },
-        { key: "project", title: qsTr("プロジェクト"), ready: true }
+        { key: "project", title: qsTr("プロジェクト"), ready: true },
+        { key: "software", title: qsTr("ソフトウェア"), ready: true }
     ]
 
     ColumnLayout {
@@ -94,6 +95,12 @@ Rectangle {
                                 color: navItem.on ? Theme.bg : Theme.ink
                                 font.family: app.sansFamily; font.pixelSize: 14; font.bold: navItem.on
                             }
+                            // A newer version is waiting on the "Software" page.
+                            Rectangle {
+                                visible: navItem.modelData.key === "software" && updates.status === "available"
+                                implicitWidth: 8; implicitHeight: 8
+                                color: navItem.on ? "#1b9e57" : Theme.ok
+                            }
                             Text {
                                 visible: !navItem.modelData.ready
                                 text: qsTr("準備中")
@@ -120,7 +127,7 @@ Rectangle {
                 clip: true
                 readonly property real pageWidth: Math.max(width, 760)
                 contentWidth: pageWidth
-                contentHeight: (root.tab === "audio" ? audioPage.implicitHeight : root.tab === "video" ? videoPage.implicitHeight : root.tab === "zoom" ? zoomPage.implicitHeight : root.tab === "project" ? projectPage.implicitHeight : root.tab === "return" ? returnPage.implicitHeight : slotsPage.implicitHeight) + 56
+                contentHeight: (root.tab === "audio" ? audioPage.implicitHeight : root.tab === "video" ? videoPage.implicitHeight : root.tab === "zoom" ? zoomPage.implicitHeight : root.tab === "project" ? projectPage.implicitHeight : root.tab === "return" ? returnPage.implicitHeight : root.tab === "software" ? softwarePage.implicitHeight : slotsPage.implicitHeight) + 56
                 boundsBehavior: Flickable.StopAtBounds
 
                 SettingsAudio {
@@ -151,6 +158,12 @@ Rectangle {
                 SettingsProject {
                     id: projectPage
                     visible: root.tab === "project"
+                    x: 32; y: 28
+                    width: scroller.pageWidth - 64
+                }
+                SettingsSoftware {
+                    id: softwarePage
+                    visible: root.tab === "software"
                     x: 32; y: 28
                     width: scroller.pageWidth - 64
                 }

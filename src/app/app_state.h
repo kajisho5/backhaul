@@ -40,6 +40,8 @@ class AppState : public QObject {
   Q_PROPERTY(QString language READ language WRITE setLanguage NOTIFY languageChanged)
   Q_PROPERTY(bool returnAsShare READ returnAsShare WRITE setReturnAsShare NOTIFY changed)
   Q_PROPERTY(bool returnInAll READ returnInAll WRITE setReturnInAll NOTIFY roleChanged)
+  // Whether the program looks for a newer version when it starts.
+  Q_PROPERTY(bool checksUpdates READ checksUpdates WRITE setChecksUpdates NOTIFY changed)
   Q_PROPERTY(bool sendsVideo READ sendsVideo NOTIFY roleChanged)
   Q_PROPERTY(bool receivesVideo READ receivesVideo NOTIFY roleChanged)
   Q_PROPERTY(int audioChannels MEMBER audioChannels_ NOTIFY changed)
@@ -124,6 +126,8 @@ class AppState : public QObject {
   // that devices remembered from another role never start sending by themselves.
   bool returnInAll() const { return returnInAll_; }
   void setReturnInAll(bool on);
+  bool checksUpdates() const { return checksUpdates_; }
+  void setChecksUpdates(bool on);
   bool receivesVideo() const { return backhaul::receivesVideo(role_); }
   // Slides that are not 16:9: true cuts them to 16:9, false shows all with black bars.
   bool cropSlides() const;
@@ -246,6 +250,7 @@ class AppState : public QObject {
   bool returnAsShare_ = false;
   QString language_ = QStringLiteral("en");
   bool returnInAll_ = false;
+  bool checksUpdates_ = true;
   QString roleScreen_;
   bool twoShotSwapped_ = false, twoShotFill_ = true, twoShotSolo_ = false;
   int twoShotSplit_ = 0;

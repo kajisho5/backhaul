@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(backhaul VERSION 0.1.0 LANGUAGES CXX)
+project(backhaul VERSION 0.2.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -8,6 +8,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 option(BACKHAUL_BUILD_APP "Build the Qt operator application (needs Qt 6.4 or newer)" OFF)
 option(BACKHAUL_PLUGINS "Host VST 3 plug-ins (downloads the VST 3 SDK when configuring)" ON)
 set(BACKHAUL_ASIO_SDK_DIR "" CACHE PATH "The unpacked Steinberg ASIOSDK folder; empty builds without ASIO")
+set(BACKHAUL_WINSPARKLE_DIR "" CACHE PATH "The unpacked WinSparkle release folder (Windows); empty builds without the updater")
 set(BACKHAUL_ZOOM_SDK_DIR "" CACHE PATH "x64 folder of the unpacked Zoom Meeting SDK for Windows; empty builds without Zoom")
 
 # Our own code is built with warnings as errors. The strictest set is used for the
@@ -34,6 +35,7 @@ if(BACKHAUL_ZOOM_SDK_DIR)
 endif()
 
 if(BACKHAUL_BUILD_APP)
+  add_subdirectory(src/update)
   add_subdirectory(src/audio)
   add_subdirectory(src/video)
   add_subdirectory(src/app)

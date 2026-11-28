@@ -477,6 +477,28 @@ const DictionaryEntry kEnglish[] = {
     {"毎秒60コマの共有にできませんでした", "Could not share at 60 fps"},
     {"画面共有を始められていません（ほかの人が共有中か、共有が許可されていません）", "Screen sharing has not started (someone else is sharing, or sharing is not allowed)"},
     {"音声を受け取れませんでした（映像のみ）", "Could not receive audio (video only)"},
+    // Updates.
+    {"バージョン %1 があります", "Version %1 is available"},
+    {"今は %1 です。更新すると backhaul が再起動します（1分ほど）。", "You have %1. Updating restarts backhaul and takes about a minute."},
+    {"今は %1 です。このビルドは自分では更新できません。", "You have %1. This build cannot update itself."},
+    {"変更点", "What's new"},
+    {"あとで", "Later"},
+    {"今すぐ更新", "Update now"},
+    {"ソフトウェア", "Software"},
+    {"このビルドは自分では更新できません。新しいバージョンは、販売ページから入れ直してください。", "This build cannot update itself. Install the new version from the website."},
+    {"会議に入っている間は更新できません。", "Updating is not possible while in a meeting."},
+    {"更新すると backhaul が再起動します（1分ほど）。設定とライセンスはそのまま残ります。", "Updating restarts backhaul and takes about a minute. Settings and the licence stay as they are."},
+    {"このPCのバージョン", "This PC has"},
+    {"最後に確かめた時刻", "Last checked"},
+    {"起動したときに確かめる", "Check when backhaul starts"},
+    {"確かめています…", "Checking…"},
+    {"%1　確かめられませんでした。ネットを確かめてください", "%1   Could not check. Check your network"},
+    {"%1　最新です", "%1   Up to date"},
+    {"まだ確かめていません", "Not checked yet"},
+    {"今すぐ確かめる", "Check now"},
+    {"バージョン %1 の変更点", "What's new in %1"},
+    {"backhaul が自分で更新を始めることはありません。会議に入っている間は、確かめることも更新することもしません。", "backhaul never updates by itself, and never checks or updates while it is in a meeting."},
+    {"設定（新しいバージョンがあります）", "Settings (a newer version is available)"},
 };
 const std::size_t kEnglishCount = sizeof(kEnglish) / sizeof(kEnglish[0]);
 

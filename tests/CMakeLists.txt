@@ -14,6 +14,7 @@ add_executable(core_tests
   test_sdk_token.cpp
   test_slot_output.cpp
   test_test_tone.cpp
+  test_update_policy.cpp
   test_yuv.cpp
 )
 target_link_libraries(core_tests PRIVATE backhaul_core)
