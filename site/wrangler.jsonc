@@ -1,6 +1,6 @@
 // The sales site: only files, no code runs on the server.
+// wrangler is not a dependency here (its packages clash with Astro's); the publish workflow brings its own.
 {
-  "$schema": "node_modules/wrangler/config-schema.json",
   "name": "backhaul-site",
   "compatibility_date": "2026-11-01",
   "assets": { "directory": "./dist", "not_found_handling": "404-page" },
