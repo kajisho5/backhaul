@@ -12,6 +12,7 @@
 - Zoom Meeting SDK本体、Steinberg ASIO開発キット（`third_party/` に置き、コミットしない）
 - Zoomの鍵類（Client ID/Secret、ZAK、会議のパスコード）
 - 入場券サーバーの鍵（`ADMIN_TOKEN`、発行したライセンスキー）。Cloudflare の「秘密の値」にだけ置く
+- 販売の鍵（Stripe の `sk_…`・`whsec_…`、Resend の `re_…`）。同じく Cloudflare の「秘密の値」にだけ置く
 
 ## コードの決まり
 - `src/core/` は Zoom・Qt・Windows に依存させない。ここは必ず自動テストを付け、Linux と Windows の両方で通す。
@@ -22,7 +23,7 @@
 - 画面の文は日本語で書き、QMLでは `qsTr("…")`、C++（`src/app/`）では `T("…")` で包む。英語は `src/app/dictionary_en.cpp` に1行足す（最初の表示は英語、設定で日本語に切り替え）。`python3 tools/check_texts.py` が抜けを見つける。
 
 ## 確かめ方
-入場券サーバー（`server/`）は `npm ci && npm run check && npm test`。アプリは下のとおり。
+入場券サーバー（`server/`）は `npm ci && npm run check && npm test`。販売ページ（`site/`）は `npm ci && npm run build`。アプリは下のとおり。
 ```
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release

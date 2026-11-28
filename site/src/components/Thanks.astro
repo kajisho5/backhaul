@@ -1,0 +1,102 @@
+---
+// Where Stripe sends the buyer after paying: the key is shown here, once.
+import Base from "../layouts/Base.astro";
+import { GATE } from "../texts";
+import type { Texts } from "../texts";
+
+interface Props { t: Texts }
+const { t } = Astro.props;
+const x = t.thanks;
+const words = {
+  heading: x.heading,
+  headingShown: x.headingShown,
+  seats: x.seats(0).replace("0", "{n}"),
+  mailed: x.mailed("{email}"),
+  notMailed: x.notMailed,
+  shown: x.shown("{tail}", "{email}"),
+  slow: x.slow,
+  missing: x.missing,
+  copy: x.copy,
+  copied: x.copied,
+  errors: x.errors,
+};
+---
+<Base t={t} title={x.title} otherHref={t.other.href} hidden>
+  <div class="sheet" id="order" data-gate={GATE} data-words={JSON.stringify(words)}>
+    <h1 tabindex="-1">{x.waiting}</h1>
+    <div class="card" id="got" hidden>
+      <p class="key" id="key"></p>
+      <button class="btn solid" type="button" id="copy">{x.copy}</button>
+      <p class="note" id="once">{x.once}</p>
+      <p class="note" id="seats"></p>
+      <p class="note" id="mail"></p>
+    </div>
+    <p class="lead" id="say" role="status" hidden></p>
+    <div class="more" id="more" hidden><a class="btn line" href={`${t.home}start/`}>{x.next}</a></div>
+  </div>
+</Base>
+
+<script>
+  import { ask } from "../scripts/gate";
+
+  const root = document.querySelector<HTMLElement>("#order");
+  if (root) {
+    const words = JSON.parse(root.dataset.words ?? "{}") as Record<string, string> & { errors: Record<string, string> };
+    const heading = root.querySelector<HTMLElement>("h1")!;
+    const say = root.querySelector<HTMLElement>("#say")!;
+    const got = root.querySelector<HTMLElement>("#got")!;
+    const more = root.querySelector<HTMLElement>("#more")!;
+    const tell = (text: string) => {
+      say.textContent = text;
+      say.hidden = false;
+    };
+    const sessionId = new URLSearchParams(location.search).get("session_id") ?? "";
+
+    const look = async (round: number): Promise<void> => {
+      const answer = await ask(root.dataset.gate ?? "", "order", { sessionId });
+      if (answer.status === 202) {
+        // Stripe is still confirming: look again for about half a minute.
+        if (round < 10) {
+          setTimeout(() => void look(round + 1), 3000);
+          return;
+        }
+        tell(words.slow ?? "");
+        return;
+      }
+      if (answer.status !== 200) {
+        heading.hidden = true;
+        tell(words.errors[answer.error] ?? words.errors.network ?? "");
+        return;
+      }
+      const { key, keyTail, seats, mailed, email } = answer.body;
+      heading.textContent = (typeof key === "string" ? words.heading : words.headingShown) ?? "";
+      more.hidden = false;
+      if (typeof key !== "string") {
+        tell((words.shown ?? "").replace("{tail}", String(keyTail ?? "")).replace("{email}", String(email ?? "")));
+        return;
+      }
+      got.hidden = false;
+      root.querySelector<HTMLElement>("#key")!.textContent = key;
+      root.querySelector<HTMLElement>("#seats")!.textContent = (words.seats ?? "").replace("{n}", String(seats ?? ""));
+      root.querySelector<HTMLElement>("#mail")!.textContent = mailed === true ? (words.mailed ?? "").replace("{email}", String(email ?? "")) : (words.notMailed ?? "");
+      const copy = root.querySelector<HTMLButtonElement>("#copy")!;
+      copy.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(key);
+          copy.textContent = words.copied ?? "";
+          setTimeout(() => (copy.textContent = words.copy ?? ""), 2500);
+        } catch {
+          // No clipboard here (an old browser, or permission refused): select the key so it can be copied by hand.
+          getSelection()?.selectAllChildren(root.querySelector("#key")!);
+        }
+      });
+      heading.focus();
+    };
+
+    if (/^cs_[A-Za-z0-9_]{10,250}$/.test(sessionId)) void look(0);
+    else {
+      heading.hidden = true;
+      tell(words.missing ?? "");
+    }
+  }
+</script>

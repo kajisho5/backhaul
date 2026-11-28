@@ -1,0 +1,134 @@
+---
+// The start page, the same in both languages.
+import Base from "../layouts/Base.astro";
+import { GATE, PLANS, money } from "../texts";
+import type { Texts } from "../texts";
+
+interface Props { t: Texts }
+const { t } = Astro.props;
+const p = t.pricing;
+const cur = t.currency;
+---
+<Base t={t}>
+  <section class="hero">
+    <span class="avail"><i></i>{t.hero.badge}</span>
+    <h1>Zoom in.<br />Programme out.</h1>
+    <p class="lead">{t.hero.lead}</p>
+    <div class="actions">
+      <a class="btn solid" href={`${t.home}trial/`}>{t.nav.trial}</a>
+      <a class="btn line" href="#pricing">{t.hero.pricing}</a>
+    </div>
+    <div class="stage">
+      <span class="tally"><i></i>{t.hero.onAir}</span>
+      <img src={t.hero.shot} alt={t.hero.shotAlt} width="1600" height="1000" />
+    </div>
+  </section>
+
+  <section class="sec" id="how">
+    <h2>{t.how.title}</h2>
+    <p>{t.how.lead}</p>
+    <div class="bento">
+      <div class="cell c3">
+        <h3>{t.how.cells[0]!.title}</h3><p>{t.how.cells[0]!.text}</p>
+        <div class="vis outs" aria-hidden="true"><div class="on"><span>HDMI 1</span></div><div class="on"><span>HDMI 2</span></div><div><span>HDMI 3</span></div></div>
+      </div>
+      <div class="cell c3">
+        <h3>{t.how.cells[1]!.title}</h3><p>{t.how.cells[1]!.text}</p>
+        <div class="vis meters" aria-hidden="true">
+          {t.how.people.map((name, i) => (<div><b>{name}</b><u><i style={`width:${[72, 48, 61][i]}%`}></i></u>ch {i + 1}</div>))}
+        </div>
+      </div>
+      <div class="cell c2">
+        <h3>{t.how.cells[2]!.title}</h3><p>{t.how.cells[2]!.text}</p>
+        <div class="vis roles" aria-hidden="true">{t.how.roles.map((role, i) => <span class={i === 0 ? "h" : ""}>{role}</span>)}</div>
+      </div>
+      <div class="cell c2">
+        <h3>{t.how.cells[3]!.title}</h3><p>{t.how.cells[3]!.text}</p>
+        <div class="vis ret" aria-hidden="true">
+          <div class="box">{t.how.switcher}</div>
+          <svg width="46" height="14" viewBox="0 0 46 14" fill="none" stroke="#ffc83d" stroke-width="2" stroke-linecap="round"><path d="M1 7h42M37 2l6 5-6 5" /></svg>
+          <div class="box">Zoom</div>
+        </div>
+      </div>
+      <div class="cell c2">
+        <h3>{t.how.cells[4]!.title}</h3><p>{t.how.cells[4]!.text}</p>
+        <div class="vis pcs" aria-hidden="true">{Array.from({ length: 20 }, (_, i) => <i class={i < 5 ? "a" : ""}></i>)}</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec" id="pricing" data-period="month" data-gate={GATE} data-lang={t.lang} data-currency={cur}>
+    <div class="pricehead">
+      <div>
+        <h2>{p.title}</h2>
+        <div class="note">{p.note} {p.otherCurrency.text} <a href={p.otherCurrency.href}>{p.otherCurrency.link}</a></div>
+      </div>
+      <div class="toggle">
+        <button type="button" data-set="month" aria-pressed="true">{p.monthly}</button>
+        <button type="button" data-set="year" aria-pressed="false">{p.yearly}</button>
+      </div>
+    </div>
+    <div class="trial">
+      <div><b>{p.trialTitle}</b><span>{p.trialText}</span></div>
+      <a class="btn" href={`${t.home}trial/`}>{t.nav.trial}</a>
+    </div>
+    <div class="plans">
+      {PLANS.map((plan, i) => (
+        <div class={i === 0 ? "plan pick" : "plan"}>
+          <h3>{p.plans[i]}</h3>
+          <div class="pc">{p.pcs(plan.seats)}</div>
+          <div class="amount when-month">{money(plan.month[cur], cur)} <small>{p.perMonth}</small></div>
+          <div class="alt when-month">{p.orYear(money(plan.year[cur], cur))}</div>
+          <div class="amount when-year">{money(plan.year[cur], cur)} <small>{p.perYear}</small></div>
+          <div class="alt when-year">{p.orMonth(money(plan.month[cur], cur))}</div>
+          <button type="button" class={i === 0 ? "btn solid" : "btn line"} data-buy={plan.seats} data-busy={p.opening}>{p.buy(p.plans[i]!)}</button>
+        </div>
+      ))}
+    </div>
+    <p class="problem" role="alert" data-errors={JSON.stringify(p.errors)}></p>
+    <p class="fine">{p.fine}</p>
+  </section>
+</Base>
+
+<script>
+  import { ask } from "../scripts/gate";
+
+  const section = document.querySelector<HTMLElement>("#pricing");
+  if (section) {
+    const problem = section.querySelector<HTMLElement>(".problem");
+    const errors = JSON.parse(problem?.dataset.errors ?? "{}") as Record<string, string>;
+    for (const button of section.querySelectorAll<HTMLButtonElement>(".toggle button")) {
+      button.addEventListener("click", () => {
+        section.dataset.period = button.dataset.set ?? "month";
+        for (const other of section.querySelectorAll<HTMLButtonElement>(".toggle button")) {
+          other.setAttribute("aria-pressed", String(other === button));
+        }
+      });
+    }
+    for (const button of section.querySelectorAll<HTMLButtonElement>("[data-buy]")) {
+      const label = button.textContent ?? "";
+      button.addEventListener("click", async () => {
+        if (problem) problem.textContent = "";
+        button.disabled = true;
+        button.textContent = button.dataset.busy ?? label;
+        const answer = await ask(section.dataset.gate ?? "", "checkout", {
+          seats: Number(button.dataset.buy),
+          period: section.dataset.period,
+          currency: section.dataset.currency,
+          lang: section.dataset.lang,
+        });
+        if (answer.status === 200 && typeof answer.body.url === "string") {
+          location.assign(answer.body.url); // Stripe's payment page
+          return;
+        }
+        button.disabled = false;
+        button.textContent = label;
+        if (problem) problem.textContent = errors[answer.error] ?? errors.network ?? "";
+      });
+    }
+    // Coming back from Stripe with the browser's back button: the button must work again.
+    addEventListener("pageshow", () => {
+      for (const button of section.querySelectorAll<HTMLButtonElement>("[data-buy]")) button.disabled = false;
+    });
+  }
+</script>

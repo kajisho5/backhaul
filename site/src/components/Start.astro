@@ -1,0 +1,29 @@
+---
+// From the key to the first meeting. Also where the mails that carry a key point to.
+import Base from "../layouts/Base.astro";
+import { BILLING, DOWNLOAD_URL, GATE } from "../texts";
+import type { Texts } from "../texts";
+
+interface Props { t: Texts }
+const { t } = Astro.props;
+const x = t.start;
+---
+<Base t={t} title={x.title} otherHref={`${t.other.href}start/`}>
+  <div class="sheet">
+    <h1>{x.heading}</h1>
+    <p class="lead">{x.lead}</p>
+    <ol class="steps">
+      {x.steps.map((step, i) => (
+        <li>
+          <h2>{step.title}</h2>
+          <p>{step.text}</p>
+          {i === 0 && (DOWNLOAD_URL ? <a class="btn solid" href={DOWNLOAD_URL}>{x.download}</a> : <p class="note">{x.noDownload}</p>)}
+        </li>
+      ))}
+    </ol>
+    <div class="more">
+      <a class="btn line" href={`${GATE}/docs`}>{x.guide}</a>
+      <a class="btn line" href={BILLING}>{x.billing}</a>
+    </div>
+  </div>
+</Base>

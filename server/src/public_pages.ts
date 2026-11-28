@@ -24,12 +24,14 @@ const pages: Page[] = [
 <ul>
 <li><b>Licence.</b> A one-way hash and the last four characters of your licence key, a note for our records (for example the buyer's name), the number of PCs allowed, the expiry date, and for each registered PC a random device ID, the PC's name, a hash of its registration token, and the times it was registered and last used.</li>
 <li><b>Zoom sign-in (only if you sign in with Zoom in backhaul).</b> The OAuth tokens Zoom gives us for your account, encrypted with AES-256-GCM. We use them for one thing: to ask Zoom for a short-lived Zoom Access Key (ZAK) each time one of your PCs joins a meeting, so that Zoom knows which user the PC acts for. The ZAK is passed to your PC and kept on the server for at most 10 minutes. We do not read your profile, meetings, recordings, contacts or chat.</li>
+<li><b>Subscription (only if you buy one).</b> Payment is handled by Stripe; we never see or store your card number. Our server keeps the ID of your Stripe subscription next to your licence, and reads from Stripe the e-mail address you gave there when it sends your licence key. Until the key has reached you (shown once after payment and sent by e-mail), an encrypted copy of it is kept, for at most a week after the e-mail.</li>
+<li><b>Free trial (only if you ask for one).</b> The e-mail address you enter is used once, to send the trial key. We keep a one-way hash of it, so that each address gets one trial, and not the address itself.</li>
 <li><b>Technical logs.</b> Our hosting provider records ordinary request logs (time, address, path) for operation and abuse prevention.</li>
 </ul>
 <p>We do not use analytics or advertising, we do not sell personal information, and we do not use your data to train AI models.</p>
 
 <h2>Who processes it</h2>
-<p>The licence server runs on Cloudflare (Workers and D1), which processes the data above on our behalf. Zoom Video Communications receives the requests your PC and our server make to join meetings and to obtain a ZAK. We share data with nobody else unless the law requires it.</p>
+<p>The licence server runs on Cloudflare (Workers and D1), which processes the data above on our behalf. Zoom Video Communications receives the requests your PC and our server make to join meetings and to obtain a ZAK. Stripe processes payments and keeps your name, e-mail address, billing address, payment details and invoices as our payment processor. Resend delivers the e-mails that carry licence keys. We share data with nobody else unless the law requires it.</p>
 
 <h2>How long we keep it</h2>
 <ul>
@@ -67,7 +69,8 @@ const pages: Page[] = [
 <p>Do not use backhaul to join meetings you are not entitled to join, to capture people without their knowledge, to break the law, or to interfere with Zoom's services or our licence server.</p>
 
 <h2>5. Fees and refunds</h2>
-<p>Prices, the licence period and the payment method are shown at purchase. Unless the law gives you a right to withdraw, fees are not refundable once a licence key has been issued; if backhaul does not work as described and we cannot fix it in a reasonable time, write to us and we will refund the unused period.</p>
+<p>Prices, the licence period and the payment method are shown at purchase. Subscriptions are paid monthly or yearly in advance through Stripe and renew automatically until you cancel. You can cancel, change the plan or change the card at any time on the billing page linked in the e-mail that brought your key; after cancelling, the licence works until the end of the period already paid. If a renewal cannot be charged, the licence stops working three days after the unpaid period began, and works again once the payment succeeds. When you change to a plan with fewer PCs, the PCs that were unused the longest lose their registration. A free trial key works for 14 days on up to 3 PCs, once per customer.</p>
+<p>Unless the law gives you a right to withdraw, fees are not refundable once a licence key has been issued; if backhaul does not work as described and we cannot fix it in a reasonable time, write to us and we will refund the unused period.</p>
 
 <h2>6. Third-party software</h2>
 <p>backhaul includes third-party components (among them Qt, the Zoom Meeting SDK and the Steinberg VST 3 SDK) under their own licences, which are included with the software.</p>
