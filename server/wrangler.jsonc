@@ -14,7 +14,7 @@
     // Selling. BILLING_URL is Stripe's sign-in page for subscribers; this one belongs to the
     // test environment ("test_" in it) and is replaced when real payments are switched on.
     "SITE_URL": "https://backhaul.seventh-well.com",
-    "MAIL_FROM": "backhaul <info@seventh-well.com>",
+    "MAIL_FROM": "backhaul <backhaul@seventh-well.com>",
     "BILLING_URL": "https://billing.stripe.com/p/login/test_aFadR8emVbTy4gugmU6oo00"
   },
   "d1_databases": [
