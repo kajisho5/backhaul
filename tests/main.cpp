@@ -16,6 +16,7 @@ void testResampler();
 void testRole();
 void testRouteMatrix();
 void testSdkToken();
+void testShowLog();
 void testSlotOutput();
 void testTestTone();
 void testUpdatePolicy();
@@ -37,6 +38,7 @@ int main() {
   testRole();
   testRouteMatrix();
   testSdkToken();
+  testShowLog();
   testSlotOutput();
   testTestTone();
   testUpdatePolicy();

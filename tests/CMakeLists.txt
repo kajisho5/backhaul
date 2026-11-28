@@ -15,6 +15,7 @@ add_executable(core_tests
   test_role.cpp
   test_route_matrix.cpp
   test_sdk_token.cpp
+  test_show_log.cpp
   test_slot_output.cpp
   test_test_tone.cpp
   test_update_policy.cpp

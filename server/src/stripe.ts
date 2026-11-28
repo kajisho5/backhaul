@@ -200,6 +200,8 @@ export interface Subscription {
   seats: number | null;
   periodStart: number;
   periodEnd: number;
+  /** Set to end instead of renewing (cancelled, running out with the paid period or at a set time). */
+  ending: boolean;
   email: string | null;
   lang: "en" | "ja";
   interval: "month" | "year" | null;
@@ -241,6 +243,7 @@ export function readSubscription(sub: Json): Subscription {
     seats: perUnit === null || perUnit < 1 ? null : perUnit * quantity,
     periodStart: typeof item?.current_period_start === "number" ? item.current_period_start : 0,
     periodEnd: typeof item?.current_period_end === "number" ? item.current_period_end : 0,
+    ending: sub.cancel_at_period_end === true || typeof sub.cancel_at === "number",
     email: typeof customer?.email === "string" ? customer.email : null,
     lang: data?.lang === "ja" ? "ja" : "en",
     interval: recurring?.interval === "month" || recurring?.interval === "year" ? recurring.interval : null,

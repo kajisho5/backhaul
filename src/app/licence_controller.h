@@ -66,7 +66,7 @@ class LicenceController : public QObject {
   void probe(std::function<void(bool reachable, int ms)> done);
   // The licence stopped working (ended or stopped by the owner), as far as this PC knows.
   bool stopped() const;
-  // Whole days until the licence ends; -1 when it has no end.
+  // Whole days until the licence ends; -1 when it has no end or renews by itself.
   qint64 daysLeft() const;
   Q_INVOKABLE void signIn();
   Q_INVOKABLE void cancelSignIn();
@@ -108,6 +108,7 @@ class LicenceController : public QObject {
   bool stoppedByOwner_ = false;  // as the server last said
   int seats_ = 0, used_ = 0;
   qint64 expiresAt_ = 0;  // 0 = no end
+  bool renews_ = false;   // paid by a subscription that renews by itself (as the server last said)
   QString message_, zoomMessage_;
   bool messageBad_ = false, zoomMessageBad_ = false;
   int pending_ = 0;

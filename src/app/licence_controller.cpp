@@ -61,6 +61,7 @@ LicenceController::LicenceController(std::unique_ptr<GateClient> gate, std::uniq
     seats_ = saved.value(QStringLiteral("seats")).toInt();
     used_ = saved.value(QStringLiteral("used")).toInt();
     expiresAt_ = static_cast<qint64>(saved.value(QStringLiteral("expiresAt")).toDouble());
+    renews_ = saved.value(QStringLiteral("renews")).toBool();
     zoomSignedIn_ = saved.value(QStringLiteral("zoomSignedIn")).toBool();  // as last seen; refresh() asks again
   }
 }
@@ -128,6 +129,7 @@ void LicenceController::takeLicence(const QJsonObject& licence) {
   seats_ = licence.value(QStringLiteral("seats")).toInt();
   used_ = licence.value(QStringLiteral("used")).toInt();
   expiresAt_ = static_cast<qint64>(licence.value(QStringLiteral("expiresAt")).toDouble());
+  renews_ = licence.value(QStringLiteral("renews")).toBool();  // an older server does not say: then the end counts
   shownName_ = licence.value(QStringLiteral("deviceName")).toString().left(60);
   zoomSignedIn_ = licence.value(QStringLiteral("zoomSignedIn")).toBool();
   saveLicence();
@@ -142,6 +144,7 @@ void LicenceController::saveLicence() {
   o[QStringLiteral("seats")] = seats_;
   o[QStringLiteral("used")] = used_;
   o[QStringLiteral("expiresAt")] = static_cast<double>(expiresAt_);
+  o[QStringLiteral("renews")] = renews_;
   o[QStringLiteral("zoomSignedIn")] = zoomSignedIn_;
   if (!licenceStore_->save(QJsonDocument(o).toJson(QJsonDocument::Compact))) {
     say(T("ライセンスをこのPCに保存できませんでした。次に起動したとき、もう一度キーが必要です"), true);
@@ -155,6 +158,7 @@ void LicenceController::forgetLicence() {
   shownName_.clear();
   seats_ = used_ = 0;
   expiresAt_ = 0;
+  renews_ = false;
   sdkToken_.clear();
   sdkTokenExpiresAt_ = 0;
   zoomSignedIn_ = false;
@@ -242,7 +246,9 @@ bool LicenceController::stopped() const {
 }
 
 qint64 LicenceController::daysLeft() const {
-  if (expiresAt_ <= 0) return -1;
+  // A subscription that renews by itself moves its end on with every payment: the date
+  // is then when the next payment is due, not when the licence ends.
+  if (expiresAt_ <= 0 || renews_) return -1;
   return std::max<qint64>(0, (expiresAt_ - now()) / 86400);
 }
 

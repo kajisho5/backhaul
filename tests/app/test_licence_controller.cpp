@@ -228,6 +228,31 @@ void testLicence() {
   CHECK(!again.active() && rig.licenceSaved.isEmpty() && again.message().contains(QStringLiteral("入れ直して")));
 }
 
+// "Ends soon" is only said of a licence that really ends: one that renews by itself has a
+// date too (until when it is paid), and that date is always near.
+void testDaysLeft() {
+  Rig rig;
+  QJsonObject licence = licenceJson(1, static_cast<double>(rig.now + 5 * 86400 + 100));
+  auto activateWith = [&rig](const QJsonObject& l) {
+    rig.gate->answer(QStringLiteral("/v1/activate"), 200, {{QStringLiteral("deviceToken"), QStringLiteral("sample-device-token")}, {QStringLiteral("licence"), l}});
+    rig.licence->activate(QStringLiteral("bh-aaaaa-bbbbb-ccccc-d7q2m"));
+    rig.gate->flush();
+  };
+  activateWith(licence);  // a server that does not say whether it renews: the end counts
+  CHECK(rig.licence->active() && rig.licence->daysLeft() == 5);
+  licence[QStringLiteral("renews")] = true;
+  activateWith(licence);
+  CHECK(rig.licence->daysLeft() == -1);
+  rig.make();  // remembered over a restart
+  CHECK(rig.licence->active() && rig.licence->daysLeft() == -1);
+  licence[QStringLiteral("renews")] = false;  // cancelled: now the end is real
+  activateWith(licence);
+  CHECK(rig.licence->daysLeft() == 5);
+  licence[QStringLiteral("expiresAt")] = QJsonValue();  // no end at all
+  activateWith(licence);
+  CHECK(rig.licence->daysLeft() == -1);
+}
+
 void testJoinTokens() {
   Rig rig;
   LicenceController& l = *rig.licence;
@@ -678,6 +703,7 @@ int main(int argc, char* argv[]) {
   QGuiApplication qt(argc, argv);
   testLicence();
   testCheck();
+  testDaysLeft();
   testJoinTokens();
   testZoomSignIn();
   testJoining();

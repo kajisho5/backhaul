@@ -25,6 +25,8 @@ interface FakeSub {
   periodStart: number;
   periodEnd: number;
   email: string | null;
+  cancelAtPeriodEnd?: boolean;
+  cancelAt?: number | null;
   lang?: string;
   interval?: string;
   invoice?: Record<string, unknown> | null;
@@ -43,6 +45,8 @@ function subJson(id: string, s: FakeSub) {
     id,
     object: "subscription",
     status: s.status,
+    cancel_at_period_end: s.cancelAtPeriodEnd ?? false,
+    cancel_at: s.cancelAt ?? null,
     metadata: s.lang ? { lang: s.lang } : {},
     customer: { id: "cus_SampleOtter", email: s.email },
     items: {
@@ -307,6 +311,34 @@ describe("a paid subscription", () => {
     expect((await activate(key, "sample-device-aaaaaaaa", "SAMPLE-PC-01")).status).toBe(200);
   });
 
+  it("tells the program whether the licence renews by itself", async () => {
+    const renews = async (key: string, device: string) => {
+      const r = await activate(key, device, "SAMPLE-PC-01");
+      expect(r.status).toBe(200);
+      return ((await r.json()) as { licence: { renews: boolean } }).licence.renews;
+    };
+    subs.sub_SampleA1 = paid();
+    await tell("customer.subscription.created", { id: "sub_SampleA1" });
+    const key = keyIn(at(mails, 0).text);
+    expect(await renews(key, "sample-device-aaaaaaaa")).toBe(true);
+    // Cancelled, running out with the paid period: it does not renew, and the end is real.
+    subs.sub_SampleA1 = paid({ cancelAtPeriodEnd: true });
+    await tell("customer.subscription.updated", { id: "sub_SampleA1" });
+    expect(await renews(key, "sample-device-aaaaaaaa")).toBe(false);
+    // The other way Stripe says the same: an end set to a point in time.
+    subs.sub_SampleA1 = paid({ cancelAt: now + 30 * DAY });
+    await tell("customer.subscription.updated", { id: "sub_SampleA1" });
+    expect(await renews(key, "sample-device-aaaaaaaa")).toBe(false);
+    // Taken back: renews again.
+    subs.sub_SampleA1 = paid();
+    await tell("customer.subscription.updated", { id: "sub_SampleA1" });
+    expect(await renews(key, "sample-device-aaaaaaaa")).toBe(true);
+    // The payment failed: nothing renews until it is paid.
+    subs.sub_SampleA1 = paid({ status: "past_due" });
+    await tell("customer.subscription.updated", { id: "sub_SampleA1" });
+    expect(await renews(key, "sample-device-aaaaaaaa")).toBe(false);
+  });
+
   it("ends the licence when the subscription has ended", async () => {
     subs.sub_SampleA1 = paid();
     await tell("customer.subscription.created", { id: "sub_SampleA1" });
@@ -565,7 +597,7 @@ describe("when selling is not set up", () => {
 
 describe("the small rules", () => {
   it("the end date follows the subscription's state", () => {
-    const base = { id: "sub_x", seats: 5, periodStart: 1000, periodEnd: 5000, email: null, lang: "en" as const, interval: null, order: null };
+    const base = { id: "sub_x", seats: 5, periodStart: 1000, periodEnd: 5000, ending: false, email: null, lang: "en" as const, interval: null, order: null };
     expect(expiryOf({ ...base, status: "active" }, 2000, null)).toBe(5000 + GRACE_SECONDS);
     expect(expiryOf({ ...base, status: "trialing" }, 2000, null)).toBe(5000 + GRACE_SECONDS);
     expect(expiryOf({ ...base, status: "past_due" }, 2000, 9999)).toBe(1000 + GRACE_SECONDS);
@@ -575,7 +607,7 @@ describe("the small rules", () => {
 
   it("a subscription is read from where Stripe keeps things now (periods on the item)", () => {
     const read = readSubscription(subJson("sub_SampleA1", paid({ seats: "10", quantity: 2, lang: "ja" })) as unknown as Record<string, unknown>);
-    expect(read).toEqual({ id: "sub_SampleA1", status: "active", seats: 20, periodStart: now, periodEnd: now + 30 * DAY, email: "buyer@otter.example", lang: "ja", interval: "month", order: null });
+    expect(read).toEqual({ id: "sub_SampleA1", status: "active", seats: 20, periodStart: now, periodEnd: now + 30 * DAY, ending: false, email: "buyer@otter.example", lang: "ja", interval: "month", order: null });
     expect(readSubscription({ id: "sub_SampleA1", status: "active", customer: "cus_x" }).seats).toBeNull();
   });
 

@@ -14,6 +14,7 @@ add_library(backhaul_core STATIC
   route_matrix.cpp
   sdk_token.cpp
   sha256.cpp
+  show_log.cpp
   slot_output.cpp
   test_tone.cpp
   update_policy.cpp
