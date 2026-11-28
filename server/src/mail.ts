@@ -1,4 +1,5 @@
 // The two e-mails the service sends (a bought licence key, a trial key), through Resend.
+import { keyMailHtml } from "./mail_html";
 import type { Fetcher } from "./zoom";
 
 export class MailError extends Error {}
@@ -7,6 +8,8 @@ export interface Mail {
   to: string;
   subject: string;
   text: string;
+  /** The same message with its design, for mail programs that show one. */
+  html: string;
 }
 
 /**
@@ -17,7 +20,7 @@ export async function sendMail(fetcher: Fetcher, apiKey: string, from: string, r
   const answer = await fetcher("https://api.resend.com/emails", {
     method: "POST",
     headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/json", "idempotency-key": once },
-    body: JSON.stringify({ from, to: [mail.to], subject: mail.subject, text: mail.text, reply_to: replyTo }),
+    body: JSON.stringify({ from, to: [mail.to], subject: mail.subject, text: mail.text, html: mail.html, reply_to: replyTo }),
   });
   if (!answer.ok) throw new MailError(`the mail service answered ${answer.status}`);
 }
@@ -52,6 +55,7 @@ export interface KeyMail {
 
 export function keyMail(to: string, m: KeyMail): Mail {
   const guide = `${m.siteUrl}${m.lang === "ja" ? "/ja" : ""}/start/`;
+  const html = keyMailHtml({ lang: m.lang, key: m.key, seats: m.seats, trialUntil: m.trialUntil, guideUrl: guide, iconUrl: `${m.siteUrl}/mail-icon.png`, billingUrl: m.billingUrl });
   if (m.lang === "ja") {
     const lines = [
       m.trialUntil === null ? "backhaul をご契約いただき、ありがとうございます。" : "backhaul の無料体験にお申し込みいただき、ありがとうございます。",
@@ -69,6 +73,7 @@ export function keyMail(to: string, m: KeyMail): Mail {
       to,
       subject: m.trialUntil === null ? "backhaul のライセンスキー" : "backhaul 無料体験のライセンスキー",
       text: lines.join("\n"),
+    html,
     };
   }
   const lines = [
@@ -87,5 +92,6 @@ export function keyMail(to: string, m: KeyMail): Mail {
     to,
     subject: m.trialUntil === null ? "Your backhaul licence key" : "Your backhaul trial key",
     text: lines.join("\n"),
+    html,
   };
 }

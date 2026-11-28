@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../src/index";
 import type { Env } from "../src/index";
 import { keyMail, looksLikeEmail, trialIdentity } from "../src/mail";
+import { dayText, escapeHtml, keyMailHtml } from "../src/mail_html";
 import { GRACE_SECONDS, expiryOf } from "../src/shop";
 import { STRIPE_VERSION, readSubscription, verifyWebhook } from "../src/stripe";
 import { memoryD1 } from "./d1";
@@ -29,7 +30,7 @@ let sessions: Record<string, { status: string; payment_status: string; subscript
 let prices: Record<string, string>;
 let taxRates: { id: string; percentage: number; metadata: Record<string, string> }[];
 let stripeCalls: { method: string; url: string; body: string; headers: Headers }[];
-let mails: { to: string[]; subject: string; text: string; from: string; reply_to: string; once: string }[];
+let mails: { to: string[]; subject: string; text: string; html: string; from: string; reply_to: string; once: string }[];
 let mailWorks: boolean;
 
 function subJson(id: string, s: FakeSub) {
@@ -61,7 +62,7 @@ const app = createApp({
     const body = typeof init?.body === "string" ? init.body : "";
     if (url === "https://api.resend.com/emails") {
       if (!mailWorks) return json({ message: "down" }, 500);
-      const sent = JSON.parse(body) as { to: string[]; subject: string; text: string; from: string; reply_to: string };
+      const sent = JSON.parse(body) as { to: string[]; subject: string; text: string; html: string; from: string; reply_to: string };
       const once = headers.get("idempotency-key") ?? "";
       if (!mails.some((m) => m.once === once)) mails.push({ ...sent, once }); // the same name is delivered once
       return json({ id: "sample-mail-id" });
@@ -486,6 +487,8 @@ describe("the free trial", () => {
     expect(JSON.parse(answer)).toEqual({ ok: true, seats: 3, days: 14 });
     expect(at(mails, 0)).toMatchObject({ to: ["Crew@Otter.example"], subject: "Your backhaul trial key" });
     expect(at(mails, 0).text).toContain("Trial ends: 2027-01-29");
+    expect(at(mails, 0).html).toContain(keyIn(at(mails, 0).text));
+    expect(at(mails, 0).html).toContain("Jan 29");
     expect(at(mails, 0).text).not.toContain("billing.example.invalid");
     const list = await licences();
     expect(at(list, 0)).toMatchObject({ seats: 3, expiresAt: now + 14 * DAY, note: "Trial" });
@@ -569,5 +572,46 @@ describe("the small rules", () => {
     expect(m.text).toContain("PCs: up to 10");
     expect(m.text).toContain(`${SITE}/start/`);
     expect(m.text).not.toContain("Change plan");
+  });
+
+  it("the designed form of the mail says the same as the text form", () => {
+    const base = { key: "BH-AAAAA-BBBBB-CCCCC-DDDDD", seats: 3, siteUrl: SITE, contact: "info@seventh-well.com" };
+    const trialJa = keyMail("crew@otter.example", { ...base, lang: "ja", trialUntil: "2026-12-12", billingUrl: "" }).html;
+    expect(trialJa).toContain("BH-AAAAA-BBBBB-CCCCC-DDDDD");
+    expect(trialJa).toContain("3台");
+    expect(trialJa).toContain("12月12日");
+    expect(trialJa).toContain(`href="${SITE}/ja/start/"`);
+    expect(trialJa).toContain(`src="${SITE}/mail-icon.png"`);
+    expect(trialJa).toContain('<html lang="ja">');
+
+    const trialEn = keyMail("crew@otter.example", { ...base, lang: "en", trialUntil: "2026-12-12", billingUrl: "" }).html;
+    expect(trialEn).toContain("Up to 3");
+    expect(trialEn).toContain("Dec 12");
+    expect(trialEn).toContain(`href="${SITE}/start/"`);
+    expect(trialEn).not.toContain("台");
+
+    // A bought key: no end day, and the way to the subscriber's own page.
+    const paid = keyMail("buyer@otter.example", { ...base, lang: "en", seats: 10, trialUntil: null, billingUrl: "https://billing.example.invalid/p/login/sample?a=1&b=2" }).html;
+    expect(paid).toContain("Up to 10");
+    expect(paid).not.toContain("Ends");
+    expect(paid).toContain('href="https://billing.example.invalid/p/login/sample?a=1&amp;b=2"');
+    const paidWithoutPage = keyMail("buyer@otter.example", { ...base, lang: "en", trialUntil: null, billingUrl: "" }).html;
+    expect(paidWithoutPage).not.toContain("Change plan");
+  });
+
+  it("nothing from outside can become markup in the mail", () => {
+    const html = keyMailHtml({ lang: "en", key: '<img src=x onerror="a">', seats: 3, trialUntil: "<b>soon</b>", guideUrl: 'https://otter.example/"><script>', iconUrl: "https://otter.example/i.png", billingUrl: "" });
+    expect(html).not.toContain("<img src=x");
+    expect(html).not.toContain("<b>soon</b>");
+    expect(html).not.toContain("<script>");
+    expect(html).toContain("&lt;img src=x onerror=&quot;a&quot;&gt;");
+    expect(escapeHtml(`&<>"'`)).toBe("&amp;&lt;&gt;&quot;&#39;");
+  });
+
+  it("days are written the way people write them", () => {
+    expect(dayText("2026-12-12", "ja")).toBe("12月12日");
+    expect(dayText("2027-01-05", "en")).toBe("Jan 5");
+    expect(dayText("2026-13-01", "en")).toBe("2026-13-01");
+    expect(dayText("soon", "ja")).toBe("soon");
   });
 });
