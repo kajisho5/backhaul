@@ -31,7 +31,7 @@ const app = createApp({
   },
 });
 let slept = 0;
-const SIGNIN_KEY = btoa(String.fromCharCode(...new Uint8Array(32).fill(7)));
+const SIGNIN_KEY = "sample-signin-key-otter-0123456789-abcdef";
 
 function call(path: string, body?: unknown, token?: string, method = "POST") {
   const headers: Record<string, string> = { "content-type": "application/json", "cf-connecting-ip": "192.0.2.7" };
@@ -442,9 +442,9 @@ describe("signing in to Zoom", () => {
     // A sign-in sealed with a key that was replaced since is of no use to anyone.
     await signedIn(token);
     now += 2 * 3600;
-    env.SIGNIN_KEY = btoa(String.fromCharCode(...new Uint8Array(32).fill(9)));
+    env.SIGNIN_KEY = "another-sample-signin-key-heron-9876543210";
     expect((await call("/v1/zoom/zak", {}, token)).status).toBe(401);
-    for (const bad of [undefined, "too-short", "not base64 !!"]) {
+    for (const bad of [undefined, "too-short", "x".repeat(31), " ".repeat(40)]) {
       env.SIGNIN_KEY = bad;
       expect((await call("/v1/zoom/begin", { challenge: CHALLENGE }, token)).status).toBe(503);
       expect((await call("/v1/zoom/zak", {}, token)).status).toBe(503);

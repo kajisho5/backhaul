@@ -18,7 +18,7 @@ export interface Env {
   ZOOM_CLIENT_ID?: string;
   ZOOM_CLIENT_SECRET?: string;
   ADMIN_TOKEN?: string;
-  SIGNIN_KEY?: string; // 32 random bytes, base64: seals the licences' Zoom sign-ins
+  SIGNIN_KEY?: string; // random text, 32 characters or more: seals the licences' Zoom sign-ins
 }
 
 /** The outside world, so that tests can set the time and stand in for Zoom. */

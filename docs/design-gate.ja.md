@@ -199,4 +199,4 @@ tools/licence.py        キーの発行・一覧・停止（手元で使う）
   - Zoom の審査では「利用者のサインインを暗号化して預かる」ことを説明する。
 - **管理ページ** `https://backhaul-gate.seventh-well.com/admin`：iPhone で開いて、キーの発行・一覧・停止ができる。管理用の合言葉（`ADMIN_TOKEN`）を入れて使う。ページ自体には秘密は入っておらず、合言葉は端末のパスワード保存にだけ残る。
   - 技術の選び方：1画面だけの小さなページなので、React は使わず、1つの HTML（素の JavaScript）をサーバーからそのまま返す形にした。ビルドの手順と部品が増えず、サーバーと一緒に公開できるため。画面が増えるようなら React に作り替える。
-- Cloudflare に入れる秘密の値は4つになった：`ZOOM_CLIENT_ID`、`ZOOM_CLIENT_SECRET`、`ADMIN_TOKEN`、`SIGNIN_KEY`。
+- Cloudflare に入れる秘密の値は4つになった：`ZOOM_CLIENT_ID`、`ZOOM_CLIENT_SECRET`、`ADMIN_TOKEN`、`SIGNIN_KEY`。`SIGNIN_KEY` は32文字以上のでたらめな文字列なら何でもよい（サーバーが SHA-256 にかけて暗号の鍵にする。31文字以下は受け付けない）。途中で変えると、預かっているサインインは使えなくなり、サインインし直しになる。

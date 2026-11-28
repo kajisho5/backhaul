@@ -1,5 +1,9 @@
-// Encrypts what is kept of a Zoom sign-in. The key is the Worker secret SIGNIN_KEY:
-// 32 random bytes, base64. Each value gets its own random 12-byte start value (IV).
+// Encrypts what is kept of a Zoom sign-in. The Worker secret SIGNIN_KEY is any random text of
+// 32 characters or more; the AES key is its SHA-256. Each value gets its own random 12-byte
+// start value (IV).
+
+/** Shorter secrets are refused: they would be too easy to guess. */
+export const MIN_SIGNIN_KEY_LENGTH = 32;
 
 function fromBase64(text: string): Uint8Array | null {
   try {
@@ -18,10 +22,11 @@ function toBase64(bytes: Uint8Array): string {
 export class Vault {
   private constructor(private readonly key: CryptoKey) {}
 
-  /** Null when the secret is missing or is not 32 bytes of base64. */
+  /** Null when the secret is missing or shorter than MIN_SIGNIN_KEY_LENGTH. */
   static async open(secret: string | undefined): Promise<Vault | null> {
-    const raw = secret ? fromBase64(secret.trim()) : null;
-    if (raw === null || raw.length !== 32) return null;
+    const text = secret?.trim() ?? "";
+    if (text.length < MIN_SIGNIN_KEY_LENGTH) return null;
+    const raw = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
     return new Vault(await crypto.subtle.importKey("raw", raw, "AES-GCM", false, ["encrypt", "decrypt"]));
   }
 
