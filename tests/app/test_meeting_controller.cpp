@@ -612,6 +612,75 @@ static void testReturnRole() {
   CHECK(!b.returnAsShare() && b.videoDeviceName().isEmpty());
   old[QStringLiteral("return")] = QJsonObject{{QStringLiteral("device"), QStringLiteral("x")}, {QStringLiteral("as"), QStringLiteral("window")}};
   CHECK(!b.applySettings(old));
+
+  // ---- the all-in-one PC sends the return too, but only when its owner says so ----
+  {
+    AppState all;
+    all.loadDefaults();
+    all.setRole(QStringLiteral("all"));
+    all.setMeetingId(QStringLiteral("123 4567 8901"));
+    // Devices remembered from an earlier job on this PC.
+    all.setMicDeviceName(QStringLiteral("サンプル卓入力A"));
+    FrameStore allFrames;
+    ZoomCredentials keys{QStringLiteral("SampleClientId_01"), QStringLiteral("sample-secret")};
+    auto* allClient = new ScriptedClient;
+    MeetingController meeting(all, allFrames, std::unique_ptr<backhaul::MeetingClient>(allClient),
+                              std::make_unique<MemoryCredentials>(&keys));
+    auto* device = new FakeCapture;
+    ReturnController back(all, allFrames, std::unique_ptr<backhaul::VideoInput>(device));
+    back.setSender([&meeting](const std::uint8_t* i420, int w, int h) { return meeting.sendVideo(i420, w, h); });
+
+    // Off by default: remembered devices send nothing, and the capture device is left alone.
+    CHECK(!all.returnInAll() && !all.sendsVideo() && !all.sendsAudio() && all.playsAudio() && all.receivesAnything());
+    back.chooseDevice(1);
+    CHECK(!device->alive && back.deviceIndex() == 0);
+    meeting.join();
+    CHECK(allClient->lastRequest.sendVideo == backhaul::SendVideo::None && !allClient->lastRequest.sendAudio);
+    CHECK(allClient->lastRequest.receive && allClient->lastRequest.audio);
+    meeting.leave();
+
+    // Switched on: it sends the picture and the sound, and still receives everything.
+    int roleChanges = 0;
+    QObject::connect(&all, &AppState::roleChanged, &all, [&roleChanges] { ++roleChanges; });
+    all.setReturnInAll(true);
+    all.setReturnInAll(true);
+    CHECK(roleChanges == 1);
+    CHECK(all.sendsVideo() && all.sendsAudio() && all.playsAudio() && all.receivesVideo() && all.receivesAnything());
+    back.chooseDevice(1);
+    CHECK(device->alive && back.deviceIndex() == 1);
+    meeting.join();
+    CHECK(allClient->lastRequest.sendVideo == backhaul::SendVideo::Camera && allClient->lastRequest.sendAudio);
+    CHECK(allClient->lastRequest.receive && allClient->lastRequest.audio);
+    meeting.leave();
+
+    // Switched off again: the capture device is let go at once.
+    all.setReturnInAll(false);
+    CHECK(!device->alive && back.deviceIndex() == 0 && !all.sendsVideo());
+
+    // The switch means nothing to the other roles, and is kept in the settings.
+    all.setReturnInAll(true);
+    for (const char* role : {"camera", "twoshot", "slide"}) {
+      all.setRole(QString::fromLatin1(role));
+      CHECK(!all.sendsVideo() && !all.sendsAudio());
+    }
+    all.setRole(QStringLiteral("audio"));
+    CHECK(!all.sendsVideo() && all.sendsAudio());
+    all.setRole(QStringLiteral("all"));
+    AppState kept;
+    CHECK(kept.applySettings(all.settingsJson()));
+    CHECK(kept.returnInAll() && kept.sendsVideo());
+    all.setReturnInAll(false);
+    CHECK(kept.applySettings(all.settingsJson()));
+    CHECK(!kept.returnInAll());
+    QJsonObject damaged = all.settingsJson();
+    QJsonObject part = damaged.value(QStringLiteral("return")).toObject();
+    part[QStringLiteral("inAll")] = QStringLiteral("yes");
+    damaged[QStringLiteral("return")] = part;
+    CHECK(!kept.applySettings(damaged));
+    kept.setReturnInAll(true);
+    kept.loadDefaults();
+    CHECK(!kept.returnInAll());
+  }
 }
 
 // sound check: a test signal on chosen outputs, which never reaches the meeting and never lingers

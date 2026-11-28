@@ -32,6 +32,14 @@ void testRole() {
   CHECK(receivesAnything(Role::Audio) && receivesAnything(Role::Camera) && receivesAnything(Role::All));
   CHECK(!sendsVideo(Role::All) && !sendsVideo(Role::Audio) && !sendsVideo(Role::Camera));
 
+  // The all-in-one PC sends the return only when its owner switched that on; the switch
+  // means nothing to the other roles.
+  CHECK(sendsVideo(Role::All, true) && sendsAudio(Role::All, true));
+  CHECK(!sendsVideo(Role::All, false) && !sendsAudio(Role::All, false));
+  CHECK(sendsVideo(Role::Return, false) && sendsAudio(Role::Return, false) && sendsAudio(Role::Audio, false));
+  for (const Role r : {Role::Unset, Role::Camera, Role::TwoShot, Role::Slide}) CHECK(!sendsVideo(r, true) && !sendsAudio(r, true));
+  CHECK(!sendsVideo(Role::Audio, true));
+
   // Settings names go both ways; unknown names are refused and leave the value alone.
   for (const Role r : {Role::Unset, Role::All, Role::Camera, Role::TwoShot, Role::Slide, Role::Audio, Role::Return}) {
     Role back = r == Role::All ? Role::Camera : Role::All;

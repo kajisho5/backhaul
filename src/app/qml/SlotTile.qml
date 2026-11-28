@@ -16,7 +16,9 @@ Item {
     required property string sizeText
     required property double level
 
-    readonly property bool selected: app.selected === index
+    property bool quiet: false
+    signal picked()
+    readonly property bool selected: !quiet && app.selected === index
     readonly property color tint: Theme.stateColor(state)
 
     implicitHeight: body.implicitHeight
@@ -129,5 +131,5 @@ Item {
         }
     }
 
-    MouseArea { anchors.fill: parent; onClicked: { app.selected = root.index; root.forceActiveFocus() } }
+    MouseArea { anchors.fill: parent; onClicked: { app.selected = root.index; root.picked(); root.forceActiveFocus() } }
 }

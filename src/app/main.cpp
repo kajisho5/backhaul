@@ -47,8 +47,12 @@ int main(int argc, char* argv[]) {
   args.addOption(shotOpt);
   args.addOption(sizeOpt);
   const QCommandLineOption pageOpt(QStringLiteral("settings"),
-                                   QStringLiteral("Start on a settings page: zoom, slots, audio or video."), QStringLiteral("page"));
+                                   QStringLiteral("Start on a settings page: zoom, slots, audio, video, return or project."), QStringLiteral("page"));
   args.addOption(pageOpt);
+  const QCommandLineOption returnOpt(QStringLiteral("return"),
+                                     QStringLiteral("For pictures of the all-in-one role: select the return tile, sending on or off."),
+                                     QStringLiteral("on|off"));
+  args.addOption(returnOpt);
   const QCommandLineOption roleOpt(QStringLiteral("role"),
                                    QStringLiteral("Start in a role: all, camera, twoshot, slide, audio or return; \"ask\" shows the role question."),
                                    QStringLiteral("role"));
@@ -200,12 +204,22 @@ int main(int argc, char* argv[]) {
   if (args.isSet(pageOpt)) {
     const QString page = args.value(pageOpt);
     if (page != QStringLiteral("slots") && page != QStringLiteral("audio") && page != QStringLiteral("video") &&
-        page != QStringLiteral("zoom") && page != QStringLiteral("project")) {
-      std::fprintf(stderr, "--settings wants zoom, slots, audio, video or project\n");
+        page != QStringLiteral("zoom") && page != QStringLiteral("project") && page != QStringLiteral("return")) {
+      std::fprintf(stderr, "--settings wants zoom, slots, audio, video, return or project\n");
       return 5;
     }
     window->setProperty("settingsTab", page);
     window->setProperty("settingsOpen", true);
+  }
+
+  if (args.isSet(returnOpt)) {
+    const QString send = args.value(returnOpt);
+    if (send != QStringLiteral("on") && send != QStringLiteral("off")) {
+      std::fprintf(stderr, "--return wants on or off\n");
+      return 5;
+    }
+    state.setReturnInAll(send == QStringLiteral("on"));
+    window->setProperty("returnPicked", true);
   }
 
   if (args.isSet(shotOpt)) {

@@ -5,6 +5,15 @@ import QtQml
 import Backhaul
 
 Window {
+    id: win
+    // The all-in-one role: whether the return tile (not a slot) is the selected one.
+    property bool returnPicked: false
+    // What the return is doing: "off" | "paused" | "sending" | "noinput" | "idle".
+    readonly property bool returnSending: app.demo ? app.returnVideoOk : (meeting.sendingVideo || meeting.sendingAudio)
+    readonly property string returnState: !app.sendsVideo ? "off"
+        : returning.paused ? "paused"
+        : returnSending ? "sending"
+        : (!app.demo && returning.deviceIndex === 0 && audio.micIndex === 0) ? "noinput" : "idle"
     width: 1440
     height: 900
     minimumWidth: 1024
@@ -161,6 +170,8 @@ Window {
                         Repeater {
                             model: app.slotList
                             delegate: SlotTile {
+                                quiet: win.returnPicked
+                                onPicked: win.returnPicked = false
                                 required property int gridRow
                                 required property int gridColumn
                                 Layout.row: gridRow
@@ -171,6 +182,9 @@ Window {
                             }
                         }
                         ReturnTile {
+                            picked: win.returnPicked
+                            state: win.returnState
+                            onChosen: win.returnPicked = true
                             Layout.row: app.returnRow
                             Layout.column: 2
                             Layout.fillWidth: true
@@ -193,7 +207,13 @@ Window {
                 Layout.fillHeight: true
                 Layout.margins: 16
                 spacing: 18
-                DetailPanel { Layout.fillWidth: true }
+                DetailPanel { Layout.fillWidth: true; visible: !win.returnPicked }
+                ReturnDetail {
+                    Layout.fillWidth: true
+                    visible: win.returnPicked
+                    state: win.returnState
+                    onSettingsRequested: { settingsTab = "return"; settingsOpen = true }
+                }
                 ParticipantList { Layout.fillWidth: true; Layout.fillHeight: true }
             }
         }

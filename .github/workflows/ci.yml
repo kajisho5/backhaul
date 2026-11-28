@@ -120,6 +120,8 @@ jobs:
           ./build/src/app/backhaul --demo --settings video --screenshot settings-video-linux.png
           ./build/src/app/backhaul --demo --settings zoom --screenshot settings-zoom-linux.png
           ./build/src/app/backhaul --demo --settings project --screenshot settings-project-linux.png
+          ./build/src/app/backhaul --demo --role all --return on --settings return --screenshot settings-return-linux.png
+          ./build/src/app/backhaul --demo --role all --return on --screenshot role-all-return-linux.png
           ./build/src/app/backhaul --demo --role ask --screenshot role-ask-linux.png
           ./build/src/app/backhaul --demo --role camera --screenshot role-camera-linux.png
           ./build/src/app/backhaul --demo --role twoshot --screenshot role-twoshot-linux.png
