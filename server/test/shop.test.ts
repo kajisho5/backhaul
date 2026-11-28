@@ -237,6 +237,8 @@ describe("a paid subscription", () => {
       expect(form).toContain("JCB（末尾 0505）");
       expect(form).toContain("https://invoice.example.invalid/i/sample");
     }
+    // A Japanese buyer is pointed to the Japanese privacy policy.
+    expect(at(mails, 0).html).toContain('href="http://localhost/ja/privacy"');
     expect((await activate(keyIn(at(mails, 0).text), "sample-device-aaaaaaaa", "SAMPLE-PC-01")).status).toBe(200);
   });
 

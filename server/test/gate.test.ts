@@ -497,6 +497,36 @@ describe("the public pages", () => {
     expect((await app.request("/privacy/", {}, env)).status).toBe(404);
   });
 
+  it("privacy and terms exist in Japanese, each linked with its English twin", async () => {
+    for (const [ja, en] of [["/ja/privacy", "/privacy"], ["/ja/terms", "/terms"]] as const) {
+      const r = await app.request(ja, {}, env);
+      expect(r.status).toBe(200);
+      expect(r.headers.get("x-frame-options")).toBe("DENY");
+      const html = await r.text();
+      expect(html).toContain('<html lang="ja">');
+      expect(html).toContain("最終更新 2026年11月28日");
+      expect(html).toContain(`href="${en}" lang="en">English</a>`);
+      // The Japanese pages lead to each other, and to the English-only pages marked as English.
+      for (const other of ["/ja/privacy", "/ja/terms"]) if (other !== ja) expect(html).toContain(`href="${other}"`);
+      expect(html).toContain('<a href="/support">Support（英語）</a>');
+      expect(html).not.toContain("Last updated");
+      expect(html).not.toContain("<script");
+      const english = await (await app.request(en, {}, env)).text();
+      expect(english).toContain(`href="${ja}" lang="ja">日本語</a>`);
+      expect(english).not.toContain("（英語）");
+      // The two languages have the same sections.
+      expect(html.split("<h2>").length).toBe(english.split("<h2>").length);
+    }
+    const privacy = await (await app.request("/ja/privacy", {}, env)).text();
+    expect(privacy).toContain("AES-256-GCM");
+    expect(privacy).toContain("アクセス解析や広告を使わず");
+    const terms = await (await app.request("/ja/terms", {}, env)).text();
+    expect(terms).toContain("東京地方裁判所");
+    expect(terms).toContain("未払いの期間が始まってから3日後");
+    // Pages without a twin offer no language switch.
+    expect(await (await app.request("/support", {}, env)).text()).not.toContain("日本語</a>");
+  });
+
   it("says what is kept and how to remove the app", async () => {
     const privacy = await (await app.request("/privacy", {}, env)).text();
     expect(privacy).toContain("AES-256-GCM");

@@ -1,7 +1,8 @@
 # Sent with every page: what the pages may load and where they may be shown.
-# cloudflareinsights.com is Cloudflare's visitor counter (no cookies), which Cloudflare adds to the pages itself.
+# The privacy policy says that no analytics are used, so the visitor counter Cloudflare adds to pages by
+# itself (static.cloudflareinsights.com) is deliberately not allowed to load.
 /*
-  Content-Security-Policy: default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://backhaul-gate.seventh-well.com https://cloudflareinsights.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://backhaul-gate.seventh-well.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'
   Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
   X-Frame-Options: DENY
 

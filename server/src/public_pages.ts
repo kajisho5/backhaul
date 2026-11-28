@@ -1,10 +1,16 @@
 // Public pages the Zoom listing links to: privacy, terms, support and the guide.
 // Plain text in one layout; nothing here is secret and nothing is read from a request.
+// Privacy and terms also exist in Japanese (under /ja/), saying the same as the English ones:
+// change the two languages together.
 
 const UPDATED = "November 28, 2026";
+const UPDATED_JA = "2026年11月28日";
 const CONTACT = "backhaul@seventh-well.com";
 
-type Page = { path: string; title: string; lead: string; body: string };
+type Page = { path: string; lang?: "ja"; title: string; lead: string; body: string };
+
+/** The same page in the other language, where there is one. */
+const TWINS: Record<string, string> = { "/privacy": "/ja/privacy", "/terms": "/ja/terms", "/ja/privacy": "/privacy", "/ja/terms": "/terms" };
 
 const mail = `<a href="mailto:${CONTACT}">${CONTACT}</a>`;
 
@@ -157,14 +163,102 @@ const pages: Page[] = [
 <h2>Help</h2>
 <p>See <a href="/support">support</a>.</p>`,
   },
+  {
+    path: "/ja/privacy",
+    lang: "ja",
+    title: "プライバシーポリシー",
+    lead: "backhaul とそのライセンスサーバーが何を保存するか、なぜ保存するか、どうすれば削除できるかを説明します。",
+    body: `
+<h2>運営者</h2>
+<p>backhaul は SEVENTHWELL（東京）が開発・販売している Windows 用のアプリです。Zoom の会議に参加している人の映像と音を会場の機材へ出し、会場の映像と音を会議へ返します。連絡先：${mail}</p>
+
+<h2>お使いのPCの中に残るもの</h2>
+<p>会議の内容は、すべて backhaul を動かしているPCの中にとどまります。映像、音声、共有された画面、参加者の名前、会議のパスコードがこれに当たります。これらが当方やほかの誰かに送られることはなく、backhaul は会議を録画・録音しません。ライセンスキーと、PCが登録済みであることを示すトークンは、Windows の資格情報マネージャーに保存します。設定はPCの中のファイルに保存します。</p>
+
+<h2>ライセンスサーバーが保存するもの</h2>
+<ul>
+<li><b>ライセンス。</b> ライセンスキーの一方向ハッシュと末尾の4文字、当方の記録用のメモ（購入者の名前など）、使えるPCの台数、有効期限。登録したPCごとに、ランダムな端末ID、PCの名前、登録トークンのハッシュ、登録した日時と最後に使った日時。</li>
+<li><b>Zoom のサインイン（backhaul で Zoom にサインインした場合だけ）。</b> Zoom がお客様のアカウントについて当方に発行する OAuth トークンを、AES-256-GCM で暗号化して保存します。使う目的は1つだけです。お客様のPCが会議に参加するたびに、有効期間の短い Zoom Access Key（ZAK）を Zoom に求め、そのPCがどのユーザーとして参加するのかを Zoom に伝えます。ZAK はお客様のPCに渡し、サーバーには最長10分だけ保持します。当方は、お客様のプロフィール、会議、録画、連絡先、チャットを読みません。</li>
+<li><b>契約（購入した場合だけ）。</b> 支払いは Stripe が処理します。当方がカード番号を見ることも保存することもありません。サーバーはお客様の Stripe の契約のIDをライセンスと合わせて保存し、ライセンスキーを送るときに、お客様が Stripe に登録したメールアドレスを Stripe から読み取ります。キーがお客様に届くまで（支払いの直後に1回表示し、メールでも送ります）、暗号化したキーの控えを保持します。保持するのは、メールを送ってから最長1週間です。</li>
+<li><b>無料体験（申し込んだ場合だけ）。</b> 入力されたメールアドレスは体験用のキーを送るために1回だけ使います。同じアドレスの体験を1回に限るため、アドレスの一方向ハッシュを保存し、アドレスそのものは保存しません。</li>
+<li><b>技術的なログ。</b> 運用と不正利用の防止のため、ホスティング事業者が通常のアクセスログ（日時、アドレス、パス）を記録します。</li>
+</ul>
+<p>当方は、アクセス解析や広告を使わず、個人情報を販売せず、お客様のデータをAIモデルの学習に使いません。</p>
+
+<h2>処理を委託している事業者</h2>
+<p>ライセンスサーバーは Cloudflare（Workers と D1）の上で動いており、Cloudflare は当方に代わって上記のデータを処理します。Zoom Video Communications は、会議への参加と ZAK の取得のためにお客様のPCと当方のサーバーが送る要求を受け取ります。Stripe は当方の決済代行事業者として支払いを処理し、お客様の氏名、メールアドレス、請求先住所、支払い情報、請求書を保持します。Resend は、ライセンスキーを載せたメールを配送します。法令で求められる場合を除き、これら以外の第三者にデータを提供しません。</p>
+
+<h2>保存する期間</h2>
+<ul>
+<li>Zoom のサインインのトークン：backhaul で「サインアウト」を押すまで（Zoom 側でも無効になります）、Zoom のアカウントから backhaul を削除するまで（次に使おうとした時点でサーバーが破棄します）、または当方がライセンスを停止するまで保存します。期限の切れたライセンスに残ったトークンは、そのライセンスの記録と一緒に削除します。</li>
+<li>ライセンスとPCの記録：ライセンスが有効なあいだと、その後最長12か月、サポートと会計のために保存します。法令で保存が義務づけられている記録（請求書など）は、法令が定める期間、保存します。</li>
+</ul>
+
+<h2>お客様の権利</h2>
+<p>お客様は、当方が保有するお客様のデータについて、写しの提供、訂正、削除、利用の制限、利用への異議、ほかへ移せる形式での提供を求めることができます。${mail} までご連絡ください。30日以内に回答します。Zoom のサインインは、上に書いた方法でいつでも取り消せます。EEA または英国にお住まいの場合は、お住まいの国のデータ保護機関に苦情を申し立てることもできます。日本の個人情報の保護に関する法律に基づく請求も、同じ連絡先で受け付けます。</p>
+
+<h2>安全管理</h2>
+<p>通信はすべて TLS で保護します。ライセンスキーはハッシュだけを、Zoom のトークンは暗号化したものだけを保存し、暗号化の鍵はプラットフォームの秘密の値として別に保管します。サーバーを操作できるのは運営者だけです。</p>
+
+<h2>子ども</h2>
+<p>backhaul は業務用の道具であり、子どもを対象としていません。</p>
+
+<h2>変更</h2>
+<p>このポリシーを変更したときは、新しいものをこのページに掲載し、上の日付を改めます。</p>`,
+  },
+  {
+    path: "/ja/terms",
+    lang: "ja",
+    title: "利用規約",
+    lead: "backhaul の利用について、お客様と SEVENTHWELL のあいだで交わす契約です。",
+    body: `
+<h2>1. この契約</h2>
+<p>この規約は SEVENTHWELL（東京）の Windows 用アプリ backhaul をインストールまたは使用するときに適用されます。組織のために使用する場合は、その組織としてこの規約に同意したものとします。</p>
+
+<h2>2. ライセンス</h2>
+<p>ライセンスキーがあれば、購入時に示された台数のPCで、示された有効期限まで backhaul を動かせます。このライセンスは非独占的で、転売、貸与、所属する組織の外との共有はできません。この規約にかかわらず法令が認める場合を除き、ソフトウェアの複製、改変、リバースエンジニアリング、保護の解除はできません。</p>
+
+<h2>3. Zoom</h2>
+<p>backhaul は Zoom Meeting SDK を使用しています。Zoom がアカウントを求める場面では、お客様自身の Zoom のアカウントが必要です。Zoom の利用には、Zoom の規約が適用されます。会議のホストと参加者から許可を得ることは、お客様の責任です。これには、backhaul が映像と音を受け取る前に Zoom が求めるホストの同意も含まれます。Zoom は Zoom Video Communications, Inc. の商標です。backhaul は Zoom が作ったものでも、Zoom が推奨するものでもありません。</p>
+
+<h2>4. してはいけない使い方</h2>
+<p>参加する権限のない会議に参加すること、本人に知らせずに人を撮影・録音すること、法令に違反すること、Zoom のサービスや当方のライセンスサーバーを妨害することに、backhaul を使わないでください。</p>
+
+<h2>5. 料金と返金</h2>
+<p>価格、ライセンスの期間、支払い方法は、購入時に表示します。契約の料金は、月ごとまたは年ごとに Stripe を通じて前払いで支払い、解約するまで自動で更新されます。解約、プランの変更、カードの変更は、キーをお送りしたメールにある契約者用のページからいつでもできます。解約したあとも、支払い済みの期間の終わりまでライセンスは有効です。更新の料金を請求できなかった場合、ライセンスは未払いの期間が始まってから3日後に使えなくなり、支払いが完了すると再び使えるようになります。台数の少ないプランに変更したときは、長く使っていないPCから順に登録が外れます。無料体験のキーは、お客様1人につき1回、最大3台のPCで14日間使えます。</p>
+<p>法令がお客様に撤回の権利を認めている場合を除き、ライセンスキーの発行後は、料金を返金しません。backhaul が説明どおりに動かず、当方が相当の期間内に直せない場合は、ご連絡いただければ未使用の期間分を返金します。</p>
+
+<h2>6. 第三者のソフトウェア</h2>
+<p>backhaul には、第三者の部品（Qt、Zoom Meeting SDK、Steinberg VST 3 SDK など）が、それぞれのライセンスのもとで含まれています。各ライセンスの文面はソフトウェアに同梱しています。</p>
+
+<h2>7. 本番での利用</h2>
+<p>backhaul は、ネットワーク、Zoom のサービス、機材が止まることのあるライブの現場で使われます。予備の手段を用意し、イベントごとに事前のテストをしてください。</p>
+
+<h2>8. 保証と責任</h2>
+<p>backhaul は「現状のまま」提供します。法令が認める範囲で、当方は中断や誤りなく動作することを保証しません。いかなる請求についても、当方の責任の総額は、その請求の前の12か月間にお客様がライセンスに支払った料金の額を上限とします。当方は、逸失利益や、中止または支障の生じたイベントの費用など、間接的・派生的な損害について責任を負いません。故意または重大な過失による場合など、法令上制限できない責任は、この規約によって制限されません。</p>
+
+<h2>9. 終了</h2>
+<p>お客様は、いつでも backhaul の使用をやめることができます。この規約に対する重大な違反があった場合、当方はライセンスを停止または終了することがあります。ライセンスが終了したときは、ソフトウェアを削除してください。第6条、第8条、第10条は、終了後も適用されます。</p>
+
+<h2>10. 準拠法</h2>
+<p>この規約は日本法に準拠し、東京地方裁判所を第一審の専属的合意管轄裁判所とします。ただし、お住まいの国の法令がお客様に認めている消費者としての権利は、これによって失われません。</p>
+
+<h2>11. 変更と連絡先</h2>
+<p>当方は、この規約を変更することがあります。新しい規約は、新しい日付とともにこのページに掲載します。掲載のあとも使用を続けた場合は、新しい規約に同意したものとします。お問い合わせ：${mail}</p>`,
+  },
 ];
 
 function layout(page: Page): string {
-  const nav = pages
-    .map((p) => (p.path === page.path ? `<b aria-current="page">${p.title.split(":")[0]}</b>` : `<a href="${p.path}">${p.title.split(":")[0]}</a>`))
-    .join("");
+  const ja = page.lang === "ja";
+  // Japanese pages list the Japanese pages, and the English-only ones (support, guide) marked as such.
+  const listed = pages.filter((p) => (ja ? p.lang === "ja" || TWINS[p.path] === undefined : p.lang === undefined));
+  const label = (p: Page) => p.title.split(":")[0] + (ja && p.lang === undefined ? "（英語）" : "");
+  const twin = TWINS[page.path];
+  const nav =
+    listed.map((p) => (p.path === page.path ? `<b aria-current="page">${label(p)}</b>` : `<a href="${p.path}">${label(p)}</a>`)).join("") +
+    (twin === undefined ? "" : ja ? `<a href="${twin}" lang="en">English</a>` : `<a href="${twin}" lang="ja">日本語</a>`);
   return `<!doctype html>
-<html lang="en">
+<html lang="${ja ? "ja" : "en"}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -196,14 +290,14 @@ footer{margin-top:56px;padding-top:16px;border-top:1px solid var(--line);font-si
 </style>
 </head>
 <body>
-<header><span class="name">backhaul</span><nav aria-label="Pages">${nav}</nav></header>
+<header><span class="name">backhaul</span><nav aria-label="${ja ? "ページ" : "Pages"}">${nav}</nav></header>
 <main>
 <h1>${page.title}</h1>
 <p class="lead">${page.lead}</p>
-<p class="date">Last updated ${UPDATED}</p>
+<p class="date">${ja ? `最終更新 ${UPDATED_JA}` : `Last updated ${UPDATED}`}</p>
 ${page.body}
 </main>
-<footer>SEVENTHWELL, Tokyo, Japan. ${mail}</footer>
+<footer>${ja ? "SEVENTHWELL（東京）" : "SEVENTHWELL, Tokyo, Japan."} ${mail}</footer>
 </body>
 </html>`;
 }

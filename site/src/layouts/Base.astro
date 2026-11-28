@@ -69,8 +69,8 @@ const here = new URL(Astro.url.pathname, Astro.site).href;
     <main id="main" class="wrap"><slot /></main>
     <footer class="wrap">
       <div class="links">
-        <a href={`${GATE}/privacy`}>{t.footer.privacy}</a>
-        <a href={`${GATE}/terms`}>{t.footer.terms}</a>
+        <a href={`${GATE}${t.lang === "ja" ? "/ja" : ""}/privacy`}>{t.footer.privacy}</a>
+        <a href={`${GATE}${t.lang === "ja" ? "/ja" : ""}/terms`}>{t.footer.terms}</a>
         <a href={`${GATE}/support`}>{t.footer.support}</a>
         <a href={BILLING}>{t.footer.billing}</a>
         <a href="/ja/legal/" lang="ja">{t.footer.legal}</a>
