@@ -60,6 +60,14 @@ class LicenceController : public QObject {
   Q_INVOKABLE void deactivate();
   // Asks the server where the licence stands (seats in use, end, stopped).
   Q_INVOKABLE void refresh();
+  // The same question with a stopwatch, for the check before the show: whether the server
+  // answered at all (any answer counts), and after how many milliseconds. Also asked when
+  // this PC has no licence. `done` is called once, later.
+  void probe(std::function<void(bool reachable, int ms)> done);
+  // The licence stopped working (ended or stopped by the owner), as far as this PC knows.
+  bool stopped() const;
+  // Whole days until the licence ends; -1 when it has no end.
+  qint64 daysLeft() const;
   Q_INVOKABLE void signIn();
   Q_INVOKABLE void cancelSignIn();
   Q_INVOKABLE void signOut();
@@ -80,6 +88,7 @@ class LicenceController : public QObject {
 
  private:
   void post(const QString& path, const QJsonObject& body, GateClient::Done done);
+  void takeStatus(const GateReply& reply);
   QString explain(const GateReply& reply);
   void takeLicence(const QJsonObject& licence);
   void say(const QString& message, bool bad);
@@ -96,6 +105,7 @@ class LicenceController : public QObject {
   Clock clock_;
 
   QString deviceId_, deviceToken_, keyTail_, shownName_;
+  bool stoppedByOwner_ = false;  // as the server last said
   int seats_ = 0, used_ = 0;
   qint64 expiresAt_ = 0;  // 0 = no end
   QString message_, zoomMessage_;

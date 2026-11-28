@@ -27,6 +27,12 @@ Window {
     property string settingsTab: "slots"
     // Set from the command line for pictures of the "coming back" strip.
     property bool recoverSample: false
+    // Every way into the settings and the role question goes through here: not while locked.
+    function openSettings(page) {
+        if (app.locked) return
+        if (page.length > 0) settingsTab = page
+        settingsOpen = true
+    }
     // The role question: always while no role is chosen, otherwise when asked for.
     property bool roleOpen: false
     readonly property bool roleAsked: !settingsOpen && (roleOpen || app.role.length === 0)
@@ -97,7 +103,7 @@ Window {
         spacing: 0
         visible: !settingsOpen && !roleAsked
 
-        TopBar { Layout.fillWidth: true; onSettingsRequested: settingsOpen = true; onRoleRequested: roleOpen = true }
+        TopBar { Layout.fillWidth: true; onSettingsRequested: openSettings(""); onRoleRequested: if (!app.locked) roleOpen = true }
 
         // Something dropped out and is being brought back (the meeting, a device).
         RecoverStrip {
@@ -105,7 +111,7 @@ Window {
             visible: shown
             Layout.fillWidth: true
             Layout.preferredHeight: visible ? implicitHeight : 0
-            onDeviceRequested: (page) => { settingsTab = page; settingsOpen = true }
+            onDeviceRequested: (page) => openSettings(page)
         }
 
         // A newer version is available (never shown during a meeting).
@@ -113,7 +119,7 @@ Window {
             visible: updates.noticeVisible
             Layout.fillWidth: true
             Layout.preferredHeight: visible ? implicitHeight : 0
-            onNotesRequested: { settingsTab = "software"; settingsOpen = true }
+            onNotesRequested: openSettings("software")
         }
 
         // A test signal is sounding: said on every screen, with the way to stop it.
@@ -231,7 +237,7 @@ Window {
                     Layout.fillWidth: true
                     visible: win.returnPicked
                     state: win.returnState
-                    onSettingsRequested: { settingsTab = "return"; settingsOpen = true }
+                    onSettingsRequested: openSettings("return")
                 }
                 ParticipantList { Layout.fillWidth: true; Layout.fillHeight: true; slotOnShow: !win.returnPicked }
             }

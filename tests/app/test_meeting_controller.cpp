@@ -57,6 +57,8 @@ class ScriptedClient final : public backhaul::MeetingClient {
     firstByte = i420[0];
     return true;
   }
+  backhaul::LineQuality line;
+  backhaul::LineQuality lineQuality() const override { return line; }
   bool sendingVideo() const override { return taking; }
   std::string sendVideoNote() const override { return note; }
   int pictures = 0, pictureWidth = 0, pictureHeight = 0, firstByte = -1;
@@ -256,6 +258,90 @@ static void testRejoin() {
   drop(MeetingState::Failed, EndCause::Connection);
   CHECK(!m.rejoining() && m.failed() && !m.busy());
   a.setRejoins(true);
+}
+
+// how good the line is: this PC's own, and each person's
+static void testLine() {
+  AppState a;
+  a.loadDefaults();
+  a.setRole(QStringLiteral("all"));
+  a.setZoomName(0, QStringLiteral("Kakuu Ichiro"));
+  a.setZoomName(1, QStringLiteral("Mihon Hanako"));
+  a.setMeetingId(QStringLiteral("123 4567 8901"));
+  FrameStore frames;
+  ZoomCredentials saved{QStringLiteral("SampleClientId_01"), QStringLiteral("sample-secret")};
+  auto* client = new ScriptedClient;
+  MeetingController m(a, frames, std::unique_ptr<backhaul::MeetingClient>(client),
+                      std::make_unique<MemoryCredentials>(&saved));
+  qint64 now = 1'000'000;
+  m.setClock([&now] { return now; });
+  Participant self = person(1, "会場 PC");
+  self.isSelf = true;
+  Participant ichiro = person(10, "Kakuu Ichiro"), hanako = person(11, "Mihon Hanako");
+
+  // Not in a meeting: nothing is known, nothing is shown.
+  client->line = {5, 0};
+  m.refreshLine();
+  CHECK(m.line().isEmpty());
+
+  m.join();
+  client->events->onMeetingState(MeetingState::Receiving, {});
+  client->events->onParticipants({self, ichiro, hanako});
+  m.refreshLine();
+  CHECK(m.line() == QStringLiteral("good"));
+  client->line = {3, 0};  // "not good" on the way in
+  m.refreshLine();
+  CHECK(m.line() == QStringLiteral("fair"));
+  client->line = {5, 2};  // fine on the way in, bad on the way out: the worse one counts
+  m.refreshLine();
+  CHECK(m.line() == QStringLiteral("poor"));
+  client->line = {0, 0};  // the meeting says nothing: nothing is claimed
+  m.refreshLine();
+  CHECK(m.line().isEmpty());
+
+  // One person's line turns bad: unstable after two seconds, not at once, and only that person.
+  ichiro.lineStep = 2;
+  hanako.lineStep = 5;
+  client->events->onParticipants({self, ichiro, hanako});
+  CHECK(slotData(a, 0, SlotModel::StateRole).toString() == QStringLiteral("ok"));
+  now += 1900;
+  m.refreshLine();
+  CHECK(slotData(a, 0, SlotModel::StateRole).toString() == QStringLiteral("ok"));
+  now += 200;
+  m.refreshLine();
+  CHECK(slotData(a, 0, SlotModel::StateRole).toString() == QStringLiteral("unstable"));
+  CHECK(slotData(a, 1, SlotModel::StateRole).toString() == QStringLiteral("ok"));
+  // "Not good" is not "bad": no mark for that.
+  hanako.lineStep = 3;
+  client->events->onParticipants({self, ichiro, hanako});
+  now += 5000;
+  m.refreshLine();
+  CHECK(slotData(a, 1, SlotModel::StateRole).toString() == QStringLiteral("ok"));
+  // Better again: the mark goes at once.
+  ichiro.lineStep = 4;
+  client->events->onParticipants({self, ichiro, hanako});
+  CHECK(slotData(a, 0, SlotModel::StateRole).toString() == QStringLiteral("ok"));
+  // A short dip leaves no mark.
+  ichiro.lineStep = 1;
+  client->events->onParticipants({self, ichiro, hanako});
+  now += 1000;
+  ichiro.lineStep = 5;
+  client->events->onParticipants({self, ichiro, hanako});
+  now += 5000;
+  m.refreshLine();
+  CHECK(slotData(a, 0, SlotModel::StateRole).toString() == QStringLiteral("ok"));
+
+  // Out of the meeting: nothing of it stays.
+  ichiro.lineStep = 1;
+  client->events->onParticipants({self, ichiro, hanako});
+  now += 3000;
+  m.refreshLine();
+  CHECK(slotData(a, 0, SlotModel::StateRole).toString() == QStringLiteral("unstable"));
+  client->line = {5, 5};
+  m.refreshLine();
+  CHECK(m.line() == QStringLiteral("good"));
+  m.leave();
+  CHECK(m.line().isEmpty() && slotData(a, 0, SlotModel::StateRole).toString() == QStringLiteral("unassigned"));
 }
 
 // devices that go away come back by themselves; what the operator switched off stays off
@@ -1448,6 +1534,7 @@ int main(int argc, char* argv[]) {
 
 
   testRejoin();
+  testLine();
   testDevicesComeBack();
   testCameraRole();
   testTwoShotRole();

@@ -20,13 +20,15 @@ add_library(backhaul_app_state STATIC
   file_pick.cpp file_pick.h
   settings_saver.cpp settings_saver.h
   slot_model.cpp slot_model.h
+  check_controller.cpp check_controller.h
+  system_facts.cpp system_facts.h
   update_controller.cpp update_controller.h
 )
 target_include_directories(backhaul_app_state PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(backhaul_app_state PUBLIC backhaul_core backhaul_audio backhaul_video backhaul_plugins backhaul_update Qt6::Gui Qt6::Network)
 target_include_directories(backhaul_app_state PUBLIC ${CMAKE_SOURCE_DIR}/src)
 if(WIN32)
-  target_link_libraries(backhaul_app_state PRIVATE advapi32 comdlg32)
+  target_link_libraries(backhaul_app_state PRIVATE advapi32 comdlg32 shell32)
 endif()
 backhaul_warnings(backhaul_app_state app)
 
@@ -82,6 +84,7 @@ qt_add_qml_module(backhaul
     qml/SettingsProject.qml
     qml/SettingsSoftware.qml
     qml/RecoverStrip.qml
+    qml/SettingsCheck.qml
     qml/UpdateStrip.qml
 )
 

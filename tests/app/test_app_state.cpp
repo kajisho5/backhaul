@@ -167,6 +167,16 @@ int main(int argc, char* argv[]) {
     a.setCropSlides(false);
     a.addPersonSlot();
 
+    // The show lock is for this run only: it is never written to the settings.
+    {
+      const QJsonObject before = a.settingsJson();
+      CHECK(!a.locked());
+      a.setLocked(true);
+      CHECK(a.locked() && a.settingsJson() == before);
+      AppState fresh;
+      CHECK(fresh.applySettings(a.settingsJson()) && !fresh.locked());
+      a.setLocked(false);
+    }
     // Coming back after a dropped line: on unless switched off, and kept with the Zoom settings.
     CHECK(a.rejoins() && !a.settingsJson().value(QStringLiteral("zoom")).toObject().contains(QStringLiteral("rejoin")));
     a.setRejoins(false);
@@ -321,8 +331,19 @@ int main(int argc, char* argv[]) {
     a.setGridChoice(7);
     CHECK(a.gridChoice() == 2);
 
+    // The monitors chosen as outputs, for the check before the show: two here, both connected.
+    int chosen = -1, missing = -1;
+    a.outputMonitors(&chosen, &missing);
+    CHECK(chosen == 2 && missing == 0);
+    a.setGridMode(true);  // the grid goes to one monitor of its own
+    a.outputMonitors(&chosen, &missing);
+    CHECK(chosen == 1 && missing == 0);
+    a.setGridMode(false);
+
     // An unplugged monitor is remembered and comes back with its slot.
     a.setScreens({{QStringLiteral("op"), QStringLiteral("サンプルモニターA"), QString()}}, QStringLiteral("op"));
+    a.outputMonitors(&chosen, &missing);
+    CHECK(chosen == 2 && missing == 2);
     CHECK(slotData(a, 0, SlotModel::DisplayRole).toString().isEmpty());
     AppState b;
     CHECK(b.applySettings(a.settingsJson()));

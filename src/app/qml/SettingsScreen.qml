@@ -11,6 +11,7 @@ Rectangle {
     color: Theme.bg
 
     readonly property var pages: [
+        { key: "check", title: qsTr("本番前チェック"), ready: true },
         { key: "zoom", title: qsTr("Zoom接続"), ready: true },
         { key: "slots", title: qsTr("枠"), ready: true },
         { key: "video", title: qsTr("映像出力"), ready: true },
@@ -95,6 +96,12 @@ Rectangle {
                                 color: navItem.on ? Theme.bg : Theme.ink
                                 font.family: app.sansFamily; font.pixelSize: 14; font.bold: navItem.on
                             }
+                            // The last check found something that will stop the show.
+                            Rectangle {
+                                visible: navItem.modelData.key === "check" && check.badCount > 0
+                                implicitWidth: 8; implicitHeight: 8
+                                color: Theme.lost
+                            }
                             // A newer version is waiting on the "Software" page.
                             Rectangle {
                                 visible: navItem.modelData.key === "software" && updates.status === "available"
@@ -127,9 +134,15 @@ Rectangle {
                 clip: true
                 readonly property real pageWidth: Math.max(width, 760)
                 contentWidth: pageWidth
-                contentHeight: (root.tab === "audio" ? audioPage.implicitHeight : root.tab === "video" ? videoPage.implicitHeight : root.tab === "zoom" ? zoomPage.implicitHeight : root.tab === "project" ? projectPage.implicitHeight : root.tab === "return" ? returnPage.implicitHeight : root.tab === "software" ? softwarePage.implicitHeight : slotsPage.implicitHeight) + 56
+                contentHeight: (root.tab === "audio" ? audioPage.implicitHeight : root.tab === "video" ? videoPage.implicitHeight : root.tab === "zoom" ? zoomPage.implicitHeight : root.tab === "project" ? projectPage.implicitHeight : root.tab === "return" ? returnPage.implicitHeight : root.tab === "software" ? softwarePage.implicitHeight : root.tab === "check" ? checkPage.implicitHeight : slotsPage.implicitHeight) + 56
                 boundsBehavior: Flickable.StopAtBounds
 
+                SettingsCheck {
+                    id: checkPage
+                    visible: root.tab === "check"
+                    x: 32; y: 28
+                    width: scroller.pageWidth - 64
+                }
                 SettingsAudio {
                     id: audioPage
                     visible: root.tab === "audio"

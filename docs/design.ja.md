@@ -90,6 +90,9 @@
 ## 自動で戻す（バージョン0.3.0）
 機器が抜けたとき・回線で会議から落ちたときに、オペレーターが何もしなくても戻る。決まりと画面は `docs/auto-recover.ja.md`。機能追加の候補は `docs/ideas.ja.md`。
 
+## 本番ロック・回線の品質・本番前チェック・スリープ止め（バージョン0.4.0）
+決まりと画面は `docs/steady.ja.md`。判定は `src/core/line_quality.*` と `src/core/preshow_check.*`、Windowsに触れる部分は `src/app/system_facts.*` にある。
+
 ## 画面デザイン
 
 ![操作画面](design/operator.png)
