@@ -11,12 +11,12 @@ Rectangle {
     color: Theme.bg
 
     readonly property var pages: [
-        { key: "zoom", title: "Zoom接続", ready: true },
-        { key: "slots", title: "枠", ready: true },
-        { key: "video", title: "映像出力", ready: true },
-        { key: "audio", title: "音声出力", ready: true },
-        { key: "return", title: "返し", ready: true },
-        { key: "project", title: "プロジェクト", ready: true }
+        { key: "zoom", title: qsTr("Zoom接続"), ready: true },
+        { key: "slots", title: qsTr("枠"), ready: true },
+        { key: "video", title: qsTr("映像出力"), ready: true },
+        { key: "audio", title: qsTr("音声出力"), ready: true },
+        { key: "return", title: qsTr("返し"), ready: true },
+        { key: "project", title: qsTr("プロジェクト"), ready: true }
     ]
 
     ColumnLayout {
@@ -33,17 +33,25 @@ Rectangle {
                 anchors.rightMargin: 16
                 spacing: 18
                 Text { text: "backhaul"; color: Theme.ink; font.family: app.monoFamily; font.pixelSize: 13; font.bold: true; font.letterSpacing: 1 }
-                Text { text: "設定"; color: Theme.ink; font.family: app.sansFamily; font.pixelSize: 13; font.bold: true }
+                Text { text: qsTr("設定"); color: Theme.ink; font.family: app.sansFamily; font.pixelSize: 13; font.bold: true }
                 Text {
                     Layout.fillWidth: true
                     elide: Text.ElideRight
                     text: app.notice.length > 0 ? app.notice
-                        : app.savesSettings ? "変更はすぐ反映され、自動で保存されます"
-                        : "デモ表示のため、変更は保存されません"
+                        : app.savesSettings ? qsTr("変更はすぐ反映され、自動で保存されます")
+                        : qsTr("デモ表示のため、変更は保存されません")
                     color: app.notice.length > 0 ? Theme.lost : (app.savesSettings ? Theme.mute : Theme.muted)
                     font.family: app.sansFamily; font.pixelSize: 13
                 }
-                PlainButton { text: "操作画面へ戻る"; strong: true; textSize: 13; implicitHeight: 32; onClicked: root.closed() }
+                Segmented {
+                    implicitHeight: 32
+                    Accessible.name: "Language"
+                    firstText: "English"
+                    secondText: "日本語"
+                    first: app.language === "en"
+                    onChosen: (first) => app.language = first ? "en" : "ja"
+                }
+                PlainButton { text: qsTr("操作画面へ戻る"); strong: true; textSize: 13; implicitHeight: 32; onClicked: root.closed() }
             }
         }
 
@@ -73,7 +81,7 @@ Rectangle {
                         opacity: modelData.ready ? 1.0 : 0.4
                         activeFocusOnTab: modelData.ready
                         Accessible.role: Accessible.PageTab
-                        Accessible.name: modelData.title + (modelData.ready ? "" : "（準備中）")
+                        Accessible.name: modelData.title + (modelData.ready ? "" : qsTr("（準備中）"))
                         Keys.onReturnPressed: if (modelData.ready) root.tab = modelData.key
                         Keys.onSpacePressed: if (modelData.ready) root.tab = modelData.key
                         RowLayout {
@@ -88,7 +96,7 @@ Rectangle {
                             }
                             Text {
                                 visible: !navItem.modelData.ready
-                                text: "準備中"
+                                text: qsTr("準備中")
                                 color: Theme.ink
                                 font.family: app.sansFamily; font.pixelSize: 11
                             }

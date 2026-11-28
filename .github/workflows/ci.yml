@@ -114,7 +114,9 @@ jobs:
           QT_QPA_PLATFORM: offscreen
           QT_QUICK_BACKEND: software
         run: |
+          python3 tools/check_texts.py
           ./build/src/app/backhaul --demo --screenshot operator-linux.png
+          ./build/src/app/backhaul --demo --language ja --screenshot operator-ja-linux.png
           ./build/src/app/backhaul --demo --settings slots --screenshot settings-slots-linux.png
           ./build/src/app/backhaul --demo --settings audio --screenshot settings-audio-linux.png
           ./build/src/app/backhaul --demo --settings video --screenshot settings-video-linux.png

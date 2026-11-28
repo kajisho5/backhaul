@@ -1,4 +1,5 @@
 #include "meeting_controller.h"
+#include "dictionary_translator.h"
 
 #include <QDateTime>
 #include <algorithm>
@@ -85,15 +86,15 @@ bool MeetingController::busy() const {
 }
 
 QString MeetingController::statusText() const {
-  if (preparing_) return QStringLiteral("入場券を取っています…");
+  if (preparing_) return T("入場券を取っています…");
   switch (state_) {
-    case MeetingState::Idle: return QStringLiteral("未接続");
-    case MeetingState::Authenticating: return QStringLiteral("鍵を確認中");
-    case MeetingState::Joining: return QStringLiteral("参加しています…");
-    case MeetingState::WaitingForPermission: return QStringLiteral("参加中（許可待ち）");
-    case MeetingState::Receiving: return QStringLiteral("参加中");
-    case MeetingState::Failed: return QStringLiteral("失敗");
-    case MeetingState::Ended: return QStringLiteral("会議が終わりました");
+    case MeetingState::Idle: return T("未接続");
+    case MeetingState::Authenticating: return T("鍵を確認中");
+    case MeetingState::Joining: return T("参加しています…");
+    case MeetingState::WaitingForPermission: return T("参加中（許可待ち）");
+    case MeetingState::Receiving: return T("参加中");
+    case MeetingState::Failed: return T("失敗");
+    case MeetingState::Ended: return T("会議が終わりました");
   }
   return QString();
 }
@@ -206,7 +207,7 @@ void MeetingController::clearCredentials() {
 
 void MeetingController::onMeetingState(MeetingState state, const std::string& detail) {
   state_ = state;
-  detail_ = QString::fromStdString(detail);
+  detail_ = T(detail);  // said in Japanese by the Zoom part
   if (state == MeetingState::Joining) authenticated_ = true;
   const bool live = busy();
   if (live && !pollTimer_.isActive()) {
@@ -275,7 +276,7 @@ void MeetingController::applyShares() {
       for (const backhaul::Participant& p : everyone_) {
         if (p.id == sharer) name = QString::fromStdString(p.name);
       }
-      const QString text = name.isEmpty() ? QStringLiteral("共有中") : QStringLiteral("共有：%1").arg(name);
+      const QString text = name.isEmpty() ? T("共有中") : T("共有：%1").arg(name);
       if (!now.situation.assigned || !now.situation.connected || !now.situation.videoOn || now.zoomName != text) {
         app_.slotList()->update(row, [&text](SlotRow& r) {
           r.zoomName = text;
@@ -339,7 +340,7 @@ void MeetingController::applyParticipants() {
     row.id = p.id;
     row.name = QString::fromStdString(p.name);
     row.isSelf = p.isSelf;
-    row.role = p.isSelf ? QStringLiteral("自分") : p.isHost ? QStringLiteral("主催") : p.isCoHost ? QStringLiteral("共同") : QString();
+    row.role = p.isSelf ? T("自分") : p.isHost ? T("主催") : p.isCoHost ? T("共同") : QString();
     people.push_back(row);
   }
 
@@ -467,9 +468,9 @@ void MeetingController::putFrame(int slot, const backhaul::VideoFrame& frame) {
 void MeetingController::everySecond() {
   if (client_ != nullptr) {
     const bool sending = client_->sendingAudio();
-    const QString note = QString::fromStdString(client_->sendAudioNote());
+    const QString note = T(client_->sendAudioNote());
     const bool picture = client_->sendingVideo();
-    const QString pictureNote = QString::fromStdString(client_->sendVideoNote());
+    const QString pictureNote = T(client_->sendVideoNote());
     if (sending != sendingAudio_ || note != sendNote_ || picture != sendingVideo_ || pictureNote != sendVideoNote_) {
       sendingAudio_ = sending;
       sendNote_ = note;

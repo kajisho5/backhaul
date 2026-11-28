@@ -9,12 +9,12 @@ Rectangle {
     color: Theme.bg
 
     readonly property var roles: [
-        { key: "camera", title: "カメラ（1人）", text: "1人の映像を、つないだモニターへ全画面で出す", a: "受け取り：1人・最大1080p", b: "音声：扱わない", ready: true },
-        { key: "twoshot", title: "2ショット", text: "2人を左右に並べて、1枚の映像で出す", a: "受け取り：2人・各720p", b: "音声：扱わない", ready: true },
-        { key: "slide", title: "スライド", text: "共有されている画面を全画面で出す", a: "受け取り：共有画面", b: "音声：扱わない", ready: true },
-        { key: "audio", title: "音声", text: "Zoomの声を卓へ出し、卓のマイナスワンをZoomへ送る", a: "映像：扱わない", b: "音声：受けはこのPCだけ", ready: true },
-        { key: "return", title: "返し（映像・音声）", text: "スイッチャーの出力をZoomへ送る。カメラとしても、画面共有としても送れる", a: "送り：カメラ／画面共有", b: "音声：送りだけ（選べる）", ready: true },
-        { key: "all", title: "1台でぜんぶ", text: "枠を並べて、映像も音もこの1台で扱う", a: "受け取り：人数に合わせて自動", b: "音声：扱う", ready: true }
+        { key: "camera", title: qsTr("カメラ（1人）"), text: qsTr("1人の映像を、つないだモニターへ全画面で出す"), a: qsTr("受け取り：1人・最大1080p"), b: qsTr("音声：扱わない"), ready: true },
+        { key: "twoshot", title: qsTr("2ショット"), text: qsTr("2人を左右に並べて、1枚の映像で出す"), a: qsTr("受け取り：2人・各720p"), b: qsTr("音声：扱わない"), ready: true },
+        { key: "slide", title: qsTr("スライド"), text: qsTr("共有されている画面を全画面で出す"), a: qsTr("受け取り：共有画面"), b: qsTr("音声：扱わない"), ready: true },
+        { key: "audio", title: qsTr("音声"), text: qsTr("Zoomの声を卓へ出し、卓のマイナスワンをZoomへ送る"), a: qsTr("映像：扱わない"), b: qsTr("音声：受けはこのPCだけ"), ready: true },
+        { key: "return", title: qsTr("返し（映像・音声）"), text: qsTr("スイッチャーの出力をZoomへ送る。カメラとしても、画面共有としても送れる"), a: qsTr("送り：カメラ／画面共有"), b: qsTr("音声：送りだけ（選べる）"), ready: true },
+        { key: "all", title: qsTr("1台でぜんぶ"), text: qsTr("枠を並べて、映像も音もこの1台で扱う"), a: qsTr("受け取り：人数に合わせて自動"), b: qsTr("音声：扱う"), ready: true }
     ]
 
     Rectangle {
@@ -33,7 +33,7 @@ Rectangle {
             anchors.verticalCenter: parent.verticalCenter
             anchors.right: parent.right
             anchors.rightMargin: 16
-            text: "変えずに戻る"
+            text: qsTr("変えずに戻る")
             onClicked: root.closed()
         }
     }
@@ -54,11 +54,11 @@ Rectangle {
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: 8
-                Text { text: "このPCの役割"; color: Theme.ink; font.family: app.sansFamily; font.pixelSize: 26; font.bold: true }
+                Text { text: qsTr("このPCの役割"); color: Theme.ink; font.family: app.sansFamily; font.pixelSize: 26; font.bold: true }
                 Text {
                     Layout.fillWidth: true
                     wrapMode: Text.WordWrap
-                    text: "PCごとに1つ選びます。会議に入っていない間は、上のバーからいつでも変えられます。Zoomの声を会場へ出すPCは、会議の中で1台だけにしてください。"
+                    text: qsTr("PCごとに1つ選びます。会議に入っていない間は、上のバーからいつでも変えられます。Zoomの声を会場へ出すPCは、会議の中で1台だけにしてください。")
                     color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 14
                 }
             }
@@ -93,7 +93,7 @@ Rectangle {
                             root.closed()
                         }
                         Accessible.role: Accessible.Button
-                        Accessible.name: modelData.title + "。" + modelData.text + (modelData.ready ? "" : "（準備中）")
+                        Accessible.name: modelData.title + "。" + modelData.text + (modelData.ready ? "" : qsTr("（準備中）"))
                         Accessible.onPressAction: choose()
                         Keys.onReturnPressed: choose()
                         Keys.onSpacePressed: choose()
@@ -116,7 +116,7 @@ Rectangle {
                                 }
                                 Text {
                                     visible: card.current || !card.modelData.ready
-                                    text: card.modelData.ready ? "今の役割" : "準備中"
+                                    text: card.modelData.ready ? qsTr("今の役割") : qsTr("準備中")
                                     color: card.modelData.ready ? Theme.ok : Theme.mute
                                     font.family: app.sansFamily; font.pixelSize: 11; font.bold: true
                                 }

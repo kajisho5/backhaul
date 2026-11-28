@@ -12,6 +12,7 @@ add_library(backhaul_app_state STATIC
   meeting_controller.cpp meeting_controller.h
   return_controller.cpp return_controller.h
   demo_source.cpp demo_source.h
+  dictionary_translator.cpp dictionary_translator.h dictionary_en.cpp
   display_model.cpp display_model.h
   participant_model.cpp participant_model.h
   plugin_controller.cpp plugin_controller.h

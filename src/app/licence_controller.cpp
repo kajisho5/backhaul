@@ -1,4 +1,5 @@
 #include "licence_controller.h"
+#include "dictionary_translator.h"
 
 #include <QCryptographicHash>
 #include <QDateTime>
@@ -67,7 +68,7 @@ qint64 LicenceController::now() const { return clock_ ? clock_() : QDateTime::cu
 
 QString LicenceController::expiresText() const {
   if (!active()) return QString();
-  return expiresAt_ > 0 ? dayOf(expiresAt_) + QStringLiteral(" まで") : QStringLiteral("期限なし");
+  return expiresAt_ > 0 ? dayOf(expiresAt_) + T(" まで") : T("期限なし");
 }
 
 void LicenceController::say(const QString& message, bool bad) {
@@ -96,29 +97,29 @@ void LicenceController::post(const QString& path, const QJsonObject& body, GateC
 // this PC's state: the server no longer knows this PC.
 QString LicenceController::explain(const GateReply& reply) {
   if (!reply.transport.isEmpty()) {
-    return QStringLiteral("ライセンスのサーバーに届きません。ネットを確かめてください（%1）").arg(reply.transport);
+    return T("ライセンスのサーバーに届きません。ネットを確かめてください（%1）").arg(reply.transport);
   }
   const QString error = reply.body.value(QStringLiteral("error")).toString();
-  if (error == QStringLiteral("unknown_key")) return QStringLiteral("このライセンスキーは見つかりません");
+  if (error == QStringLiteral("unknown_key")) return T("このライセンスキーは見つかりません");
   if (error == QStringLiteral("seats_full")) {
     QStringList names;
     for (const QJsonValue& v : reply.body.value(QStringLiteral("devices")).toArray()) names.push_back(v.toString());
-    return QStringLiteral("このキーは%1台すべて使用中です（%2）。ほかのPCで「このPCを外す」を押すと空きます")
+    return T("このキーは%1台すべて使用中です（%2）。ほかのPCで「このPCを外す」を押すと空きます")
         .arg(reply.body.value(QStringLiteral("seats")).toInt())
         .arg(names.join(QStringLiteral("、")));
   }
-  if (error == QStringLiteral("revoked")) return QStringLiteral("このキーは止められています");
+  if (error == QStringLiteral("revoked")) return T("このキーは止められています");
   if (error == QStringLiteral("expired")) {
     const qint64 end = static_cast<qint64>(reply.body.value(QStringLiteral("expiresAt")).toDouble());
-    return end > 0 ? QStringLiteral("期限が切れています（%1 まで）").arg(dayOf(end)) : QStringLiteral("期限が切れています");
+    return end > 0 ? T("期限が切れています（%1 まで）").arg(dayOf(end)) : T("期限が切れています");
   }
-  if (error == QStringLiteral("slow_down")) return QStringLiteral("試した回数が多すぎます。10分ほど待ってからもう一度どうぞ");
-  if (error == QStringLiteral("not_configured")) return QStringLiteral("サーバー側の準備がまだ終わっていません（Zoomの鍵が入っていません）");
+  if (error == QStringLiteral("slow_down")) return T("試した回数が多すぎます。10分ほど待ってからもう一度どうぞ");
+  if (error == QStringLiteral("not_configured")) return T("サーバー側の準備がまだ終わっていません（Zoomの鍵が入っていません）");
   if (error == QStringLiteral("unknown_device")) {
     forgetLicence();
-    return QStringLiteral("このPCの登録が外れています。ライセンスキーを入れ直してください");
+    return T("このPCの登録が外れています。ライセンスキーを入れ直してください");
   }
-  return QStringLiteral("サーバーが思わぬ返事をしました（%1 %2）").arg(reply.status).arg(error);
+  return T("サーバーが思わぬ返事をしました（%1 %2）").arg(reply.status).arg(error);
 }
 
 void LicenceController::takeLicence(const QJsonObject& licence) {
@@ -142,7 +143,7 @@ void LicenceController::saveLicence() {
   o[QStringLiteral("expiresAt")] = static_cast<double>(expiresAt_);
   o[QStringLiteral("zoomSignedIn")] = zoomSignedIn_;
   if (!licenceStore_->save(QJsonDocument(o).toJson(QJsonDocument::Compact))) {
-    say(QStringLiteral("ライセンスをこのPCに保存できませんでした。次に起動したとき、もう一度キーが必要です"), true);
+    say(T("ライセンスをこのPCに保存できませんでした。次に起動したとき、もう一度キーが必要です"), true);
   }
 }
 
@@ -188,11 +189,11 @@ void LicenceController::deactivate() {
   post(QStringLiteral("/v1/deactivate"), {}, [this](const GateReply& reply) {
     // 401: the server has already forgotten this PC, which is what was asked for.
     if (reply.status != 200 && reply.status != 401) {
-      say(explain(reply) + QStringLiteral("　このPCはまだ登録されたままです"), true);
+      say(explain(reply) + T("　このPCはまだ登録されたままです"), true);
       return;
     }
     forgetLicence();
-    say(QStringLiteral("このPCを外しました"), false);
+    say(T("このPCを外しました"), false);
   });
 }
 
@@ -206,9 +207,9 @@ void LicenceController::refresh() {
     takeLicence(reply.body.value(QStringLiteral("licence")).toObject());
     const QString problem = reply.body.value(QStringLiteral("problem")).toString();
     if (problem == QStringLiteral("revoked")) {
-      say(QStringLiteral("このキーは止められています"), true);
+      say(T("このキーは止められています"), true);
     } else if (problem == QStringLiteral("expired")) {
-      say(QStringLiteral("期限が切れています（%1 まで）").arg(dayOf(expiresAt_)), true);
+      say(T("期限が切れています（%1 まで）").arg(dayOf(expiresAt_)), true);
     } else {
       say(QString(), false);
     }
@@ -219,7 +220,7 @@ void LicenceController::refresh() {
 
 void LicenceController::signIn() {
   if (!available() || !active() || zoomWaiting()) {
-    if (available() && !active()) sayZoom(QStringLiteral("先にライセンスキーを入れてください"), true);
+    if (available() && !active()) sayZoom(T("先にライセンスキーを入れてください"), true);
     return;
   }
   const QString verifier = randomVerifier();
@@ -234,18 +235,18 @@ void LicenceController::signIn() {
     }
     // Only Zoom's own sign-in page is ever opened, whatever the answer says.
     if (url.scheme() != QStringLiteral("https") || url.host() != QStringLiteral("zoom.us")) {
-      sayZoom(QStringLiteral("サーバーが思わぬ行き先を返したため、開きませんでした"), true);
+      sayZoom(T("サーバーが思わぬ行き先を返したため、開きませんでした"), true);
       return;
     }
     if (!openUrl_ || !openUrl_(url)) {
-      sayZoom(QStringLiteral("ブラウザを開けませんでした"), true);
+      sayZoom(T("ブラウザを開けませんでした"), true);
       return;
     }
     loginState_ = state;
     loginVerifier_ = verifier;
     loginDeadline_ = now() + kSignInSeconds;
     loginTimer_.start();
-    sayZoom(QStringLiteral("ブラウザでサインインして「許可」を押してください。終わるとここが変わります"), false);
+    sayZoom(T("ブラウザでサインインして「許可」を押してください。終わるとここが変わります"), false);
   });
 }
 
@@ -261,7 +262,7 @@ void LicenceController::pollSignIn() {
   if (!zoomWaiting() || busy()) return;
   if (now() > loginDeadline_) {
     cancelSignIn();
-    sayZoom(QStringLiteral("時間内にサインインが終わりませんでした。もう一度どうぞ"), true);
+    sayZoom(T("時間内にサインインが終わりませんでした。もう一度どうぞ"), true);
     return;
   }
   QJsonObject body;
@@ -279,11 +280,11 @@ void LicenceController::pollSignIn() {
       saveLicence();
       sayZoom(QString(), false);
     } else if (reply.status == 410) {
-      sayZoom(QStringLiteral("許可されなかったため、サインインしていません"), true);
+      sayZoom(T("許可されなかったため、サインインしていません"), true);
     } else if (reply.status == 404) {
-      sayZoom(QStringLiteral("時間内にサインインが終わりませんでした。もう一度どうぞ"), true);
+      sayZoom(T("時間内にサインインが終わりませんでした。もう一度どうぞ"), true);
     } else if (reply.body.value(QStringLiteral("error")).toString() == QStringLiteral("zoom_failed")) {
-      sayZoom(QStringLiteral("Zoomがサインインを受け付けませんでした（%1）").arg(reply.body.value(QStringLiteral("detail")).toString()), true);
+      sayZoom(T("Zoomがサインインを受け付けませんでした（%1）").arg(reply.body.value(QStringLiteral("detail")).toString()), true);
     } else {
       sayZoom(explain(reply), true);
     }
@@ -294,15 +295,15 @@ void LicenceController::signOut() {
   if (!available() || !active() || !zoomSignedIn() || busy()) return;
   post(QStringLiteral("/v1/zoom/signout"), {}, [this](const GateReply& reply) {
     if (reply.status != 200) {
-      sayZoom(explain(reply) + QStringLiteral("　サインインはそのままです"), true);
+      sayZoom(explain(reply) + T("　サインインはそのままです"), true);
       return;
     }
     zoomSignedIn_ = false;
     saveLicence();
     // Signed out for every PC of the licence either way; say so when Zoom could not be told.
     sayZoom(reply.body.value(QStringLiteral("revoked")).toBool()
-                ? QStringLiteral("サインアウトしました（このライセンスのPCすべて）")
-                : QStringLiteral("サインアウトしました（Zoom側の取り消しは確認できませんでした）"),
+                ? T("サインアウトしました（このライセンスのPCすべて）")
+                : T("サインアウトしました（Zoom側の取り消しは確認できませんでした）"),
             false);
   });
 }
@@ -312,7 +313,7 @@ void LicenceController::signOut() {
 void LicenceController::prepareJoin(std::function<void(const Entry&)> done) {
   Entry entry;
   if (!available() || !active()) {
-    entry.error = QStringLiteral("ライセンスキーが入っていません");
+    entry.error = T("ライセンスキーが入っていません");
     done(entry);
     return;
   }
@@ -355,10 +356,10 @@ void LicenceController::addZak(Entry entry, std::function<void(const Entry&)> do
     } else if (error == QStringLiteral("signed_out") || error == QStringLiteral("not_signed_in")) {
       zoomSignedIn_ = false;
       saveLicence();
-      entry.notice = QStringLiteral("Zoomのサインインが切れました。ほかのアカウントの会議に入るには、もう一度サインインしてください");
+      entry.notice = T("Zoomのサインインが切れました。ほかのアカウントの会議に入るには、もう一度サインインしてください");
       sayZoom(entry.notice, true);
     } else {
-      entry.notice = QStringLiteral("Zoomの許可（ZAK）を取れませんでした。ほかのアカウントの会議には入れないことがあります（%1）")
+      entry.notice = T("Zoomの許可（ZAK）を取れませんでした。ほかのアカウントの会議には入れないことがあります（%1）")
                          .arg(reply.transport.isEmpty() ? reply.body.value(QStringLiteral("detail")).toString() : reply.transport);
       sayZoom(entry.notice, true);
     }

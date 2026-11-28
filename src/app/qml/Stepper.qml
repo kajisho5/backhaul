@@ -24,7 +24,7 @@ RowLayout {
         implicitWidth: 44
         implicitHeight: 44
         color: Theme.control
-        Accessible.name: root.label + "を下げる"
+        Accessible.name: root.label + qsTr("を下げる")
         onClicked: root.step(-1)
     }
     Item {
@@ -56,7 +56,7 @@ RowLayout {
         implicitWidth: 44
         implicitHeight: 44
         color: Theme.control
-        Accessible.name: root.label + "を上げる"
+        Accessible.name: root.label + qsTr("を上げる")
         onClicked: root.step(1)
     }
 }

@@ -8,14 +8,14 @@ ColumnLayout {
     spacing: 0
     readonly property int textWidth: Math.min(width, 720)
 
-    Text { text: "プロジェクト"; color: Theme.ink; font.family: app.sansFamily; font.pixelSize: 22; font.bold: true; Layout.bottomMargin: 20 }
+    Text { text: qsTr("プロジェクト"); color: Theme.ink; font.family: app.sansFamily; font.pixelSize: 22; font.bold: true; Layout.bottomMargin: 20 }
 
     Text {
         Layout.fillWidth: true
         Layout.maximumWidth: root.textWidth
         Layout.bottomMargin: 18
         wrapMode: Text.WordWrap
-        text: "今の設定をまるごと1つのファイルに保存し、あとで開けます。案件ごと・会場ごとに作っておけます。"
+        text: qsTr("今の設定をまるごと1つのファイルに保存し、あとで開けます。案件ごと・会場ごとに作っておけます。")
         color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 13
     }
 
@@ -23,7 +23,7 @@ ColumnLayout {
         Layout.bottomMargin: 14
         spacing: 12
         PlainButton {
-            text: "ファイルに保存"
+            text: qsTr("ファイルに保存")
             strong: true
             textSize: 13
             implicitHeight: 40
@@ -31,7 +31,7 @@ ColumnLayout {
             onClicked: project.save()
         }
         PlainButton {
-            text: "ファイルから開く"
+            text: qsTr("ファイルから開く")
             textSize: 13
             implicitHeight: 40
             color: Theme.control
@@ -53,8 +53,8 @@ ColumnLayout {
         Layout.bottomMargin: 18
         wrapMode: Text.WordWrap
         text: project.message.length > 0 ? project.message
-              : !project.canPick ? (app.demo ? "デモ表示では保存と読み込みはできません。" : "このPCではファイルを選ぶ窓を出せません。")
-              : meeting.busy ? "会議に入っている間は、開くことはできません（保存はできます）。"
+              : !project.canPick ? (app.demo ? qsTr("デモ表示では保存と読み込みはできません。") : qsTr("このPCではファイルを選ぶ窓を出せません。"))
+              : meeting.busy ? qsTr("会議に入っている間は、開くことはできません（保存はできます）。")
               : ""
         color: project.message.length > 0 ? (project.failed ? Theme.lost : Theme.ok) : Theme.mute
         font.family: app.sansFamily; font.pixelSize: 13
@@ -64,9 +64,9 @@ ColumnLayout {
 
     Repeater {
         model: [
-            { k: "入るもの", v: "役割、枠（名前・音量・遅延・出力先）、映像出力、音声の機器と音質、返し、プラグインとその中の設定、会議ID、表示名" },
-            { k: "入らないもの", v: "Zoomの鍵（Client ID・Secret）、パスコード。これらはファイルにも設定にも書きません" },
-            { k: "別のPCで開くとき", v: "機器やプラグインは名前と場所で探します。そのPCに無いものは、行に「見つかりません」と出て、設定は消さずに残します" }
+            { k: qsTr("入るもの"), v: qsTr("役割、枠（名前・音量・遅延・出力先）、映像出力、音声の機器と音質、返し、プラグインとその中の設定、会議ID、表示名") },
+            { k: qsTr("入らないもの"), v: qsTr("Zoomの鍵（Client ID・Secret）、パスコード。これらはファイルにも設定にも書きません") },
+            { k: qsTr("別のPCで開くとき"), v: qsTr("機器やプラグインは名前と場所で探します。そのPCに無いものは、行に「見つかりません」と出て、設定は消さずに残します") }
         ]
         delegate: RowLayout {
             required property var modelData

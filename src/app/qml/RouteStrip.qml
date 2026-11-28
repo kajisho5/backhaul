@@ -14,7 +14,7 @@ Rectangle {
         id: column
         anchors { left: parent.left; right: parent.right; top: parent.top; margins: 14; leftMargin: 16; rightMargin: 16 }
         spacing: 12
-        Text { text: "音声の割り当て"; color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 13 }
+        Text { text: qsTr("音声の割り当て"); color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 13 }
         RowLayout {
             Layout.fillWidth: true
             spacing: 20

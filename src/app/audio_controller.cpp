@@ -1,4 +1,5 @@
 #include "audio_controller.h"
+#include "dictionary_translator.h"
 
 #include <algorithm>
 #include <chrono>
@@ -88,7 +89,7 @@ void AudioController::setAsio(bool asio) {
 }
 
 QStringList AudioController::deviceNames() const {
-  QStringList names{QStringLiteral("出さない")};
+  QStringList names{T("出さない")};
   for (const backhaul::AudioDevice& d : devices_) names.push_back(QString::fromStdString(d.name));
   return names;
 }
@@ -112,7 +113,7 @@ void AudioController::refreshDevices() {
 bool AudioController::startDevice(int index) {
   if (active() == nullptr || index < 1 || index > static_cast<int>(devices_.size())) return false;
   if (!wantsOutput()) {
-    problem_ = QStringLiteral("このPCの役割では音を出しません（役割を「音声」か「1台でぜんぶ」にすると出せます）");
+    problem_ = T("このPCの役割では音を出しません（役割を「音声」か「1台でぜんぶ」にすると出せます）");
     emit changed();
     return false;
   }
@@ -121,7 +122,7 @@ bool AudioController::startDevice(int index) {
   std::string error;
   if (!active()->start(device.id, &mixer_, &error)) {
     deviceIndex_ = 0;
-    problem_ = QStringLiteral("この機器から音を出せませんでした：%1").arg(QString::fromStdString(error));
+    problem_ = T("この機器から音を出せませんでした：%1").arg(QString::fromStdString(error));
     app_.audioOk_ = false;
     app_.notifyChanged();
     emit changed();
@@ -164,8 +165,8 @@ void AudioController::startSaved() {
   if (!app_.audioAsio() && app_.sendsAudio() && micIndex_ == 0) startSavedMic();
   if (app_.audioDeviceName_.isEmpty() || !wantsOutput()) return;
   if (active() == nullptr) {
-    problem_ = app_.audioAsio() ? QStringLiteral("このプログラムにはASIOが入っていません。方式を選び直してください")
-                                : QStringLiteral("このPCでは音を出せません");
+    problem_ = app_.audioAsio() ? T("このプログラムにはASIOが入っていません。方式を選び直してください")
+                                : T("このPCでは音を出せません");
     emit changed();
     return;
   }
@@ -176,7 +177,7 @@ void AudioController::startSaved() {
       return;
     }
   }
-  problem_ = QStringLiteral("前回の機器「%1」が見つかりません").arg(app_.audioDeviceName_);
+  problem_ = T("前回の機器「%1」が見つかりません").arg(app_.audioDeviceName_);
   emit changed();
 }
 
@@ -202,9 +203,9 @@ void AudioController::reloadSaved() {
 bool AudioController::micAvailable() const { return app_.audioAsio() ? asio_ != nullptr : input_ != nullptr; }
 
 QStringList AudioController::micNames() const {
-  QStringList names{QStringLiteral("使わない")};
+  QStringList names{T("使わない")};
   if (app_.audioAsio()) {
-    for (int i = 0; i < micPairs_; ++i) names.push_back(QStringLiteral("入力 %1-%2").arg(i * 2 + 1).arg(i * 2 + 2));
+    for (int i = 0; i < micPairs_; ++i) names.push_back(T("入力 %1-%2").arg(i * 2 + 1).arg(i * 2 + 2));
   } else {
     for (const backhaul::AudioDevice& d : mics_) names.push_back(QString::fromStdString(d.name));
   }
@@ -242,14 +243,14 @@ void AudioController::stopMic() {
 
 bool AudioController::startMic(int index) {
   if (!app_.sendsAudio()) {
-    micProblem_ = QStringLiteral("このPCの今の設定ではZoomへ音を送りません（役割「音声」「返し」か、「1台でぜんぶ」で設定の「返し」を「送る」にすると送れます）");
+    micProblem_ = T("このPCの今の設定ではZoomへ音を送りません（役割「音声」「返し」か、「1台でぜんぶ」で設定の「返し」を「送る」にすると送れます）");
     emit changed();
     return false;
   }
   if (app_.audioAsio()) {
     if (asio_ == nullptr || !asio_->running() || index < 1 || index > micPairs_) {
       micIndex_ = 0;
-      micProblem_ = QStringLiteral("ASIOの入力は、スピーカー側の機器を選んでから選べます");
+      micProblem_ = T("ASIOの入力は、スピーカー側の機器を選んでから選べます");
       emit changed();
       return false;
     }
@@ -261,7 +262,7 @@ bool AudioController::startMic(int index) {
     std::string error;
     if (!input_->start(mics_[static_cast<std::size_t>(index - 1)].id, &sink_, &error)) {
       micIndex_ = 0;
-      micProblem_ = QStringLiteral("この機器から音を取り込めませんでした：%1").arg(QString::fromStdString(error));
+      micProblem_ = T("この機器から音を取り込めませんでした：%1").arg(QString::fromStdString(error));
       emit changed();
       return false;
     }
@@ -296,7 +297,7 @@ void AudioController::startSavedMic() {
   }
   // With ASIO the inputs appear once the output device runs; that start calls this again.
   if (app_.audioAsio() && (asio_ == nullptr || !asio_->running())) return;
-  micProblem_ = QStringLiteral("前回の入力「%1」が見つかりません").arg(app_.micDeviceName());
+  micProblem_ = T("前回の入力「%1」が見つかりません").arg(app_.micDeviceName());
   emit changed();
 }
 
@@ -456,14 +457,14 @@ void AudioController::tick() {
   // A recording device can disappear on its own too.
   if (micIndex_ > 0 && !app_.audioAsio() && input_ != nullptr && !input_->running()) {
     micIndex_ = 0;
-    micProblem_ = QStringLiteral("入力の機器が止まりました。機器を選び直してください");
+    micProblem_ = T("入力の機器が止まりました。機器を選び直してください");
     emit changed();
   }
   // The device can disappear on its own (unplugged, driver restarted).
   if (active() != nullptr && deviceIndex_ > 0 && !active()->running()) {
     stopTest();
     deviceIndex_ = 0;
-    problem_ = QStringLiteral("音声の機器が止まりました。機器を選び直してください");
+    problem_ = T("音声の機器が止まりました。機器を選び直してください");
     app_.audioOk_ = false;
     app_.notifyChanged();
     emit changed();

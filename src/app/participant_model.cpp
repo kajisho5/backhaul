@@ -1,4 +1,5 @@
 #include "participant_model.h"
+#include "dictionary_translator.h"
 
 ParticipantModel::ParticipantModel(QObject* parent) : QAbstractListModel(parent) {}
 
@@ -12,7 +13,7 @@ QVariant ParticipantModel::data(const QModelIndex& index, int role) const {
   switch (role) {
     case NameRole: return r.name;
     case TagRole:
-      if (r.slot >= 0 && r.slot < slotNumbers_.size()) return QStringLiteral("枠%1").arg(slotNumbers_[r.slot]);
+      if (r.slot >= 0 && r.slot < slotNumbers_.size()) return T("枠%1").arg(slotNumbers_[r.slot]);
       return r.role;
     case CanAssignRole: return r.slot < 0 && r.role.isEmpty() && !r.isSelf;
     case InSlotRole: return r.slot >= 0;

@@ -7,6 +7,7 @@
 #include "app_state.h"
 #include "check.h"
 #include "demo_source.h"
+#include "dictionary_translator.h"
 #include "settings_saver.h"
 
 namespace {
@@ -495,6 +496,44 @@ int main(int argc, char* argv[]) {
     CHECK(slotData(b, 1, SlotModel::ZoomNameRole).toString() == QStringLiteral("Mihon Hanako"));
     CHECK(personData(b, 1, ParticipantModel::InSlotRole).toBool() == false);
     CHECK(personData(b, 0, ParticipantModel::InSlotRole).toBool());
+  }
+
+  {  // language: English unless chosen otherwise; the texts in the code are Japanese
+    AppState a;
+    a.loadDefaults();
+    CHECK(a.language() == QStringLiteral("en"));
+    int changes = 0;
+    QObject::connect(&a, &AppState::languageChanged, &a, [&changes] { ++changes; });
+    a.setLanguage(QStringLiteral("fr"));  // not offered
+    a.setLanguage(QStringLiteral("en"));  // no change
+    CHECK(changes == 0 && a.language() == QStringLiteral("en"));
+    a.setLanguage(QStringLiteral("ja"));
+    CHECK(changes == 1 && a.language() == QStringLiteral("ja"));
+    AppState kept;
+    CHECK(kept.applySettings(a.settingsJson()));
+    CHECK(kept.language() == QStringLiteral("ja"));
+    QJsonObject old = a.settingsJson();
+    old.remove(QStringLiteral("language"));  // a file from before there was a choice
+    CHECK(kept.applySettings(old) && kept.language() == QStringLiteral("ja"));
+    old[QStringLiteral("language")] = QStringLiteral("xx");
+    CHECK(!kept.applySettings(old));
+
+    // Without the dictionary a text is what the code says; with it, English.
+    CHECK(T("会議に入る") == QString::fromUtf8("会議に入る"));
+    DictionaryTranslator english;
+    CHECK(!english.isEmpty() && english.size() > 400);
+    CHECK(english.translate("Anything", "会議に入る", nullptr, -1) == QStringLiteral("Join"));
+    CHECK(english.translate("SettingsZoom", "参加者", nullptr, -1) == QStringLiteral("Participant"));
+    CHECK(english.translate("ParticipantList", "参加者", nullptr, -1) == QStringLiteral("Participants"));  // per screen
+    CHECK(english.translate("Anything", "辞書にない文", nullptr, -1).isEmpty());  // unknown: shown as it is
+    CHECK(english.translate("Anything", "毎秒", nullptr, -1) == QString(QChar(0x200b)));  // a fragment English has no word for
+    QCoreApplication::installTranslator(&english);
+    CHECK(T("会議に入る") == QStringLiteral("Join"));
+    CHECK(T(std::string("会議に入れませんでした")) == QStringLiteral("Could not join the meeting"));
+    CHECK(T(std::string("辞書にない文")) == QString::fromUtf8("辞書にない文"));
+    CHECK(T("入力 %1-%2").arg(3).arg(4) == QStringLiteral("Input 3-4"));
+    QCoreApplication::removeTranslator(&english);
+    CHECK(T("会議に入る") == QString::fromUtf8("会議に入る"));
   }
 
   if (testing::failures() == 0) {

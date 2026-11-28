@@ -27,8 +27,8 @@ Item {
             x: 2; y: 2
             width: parent.width - 4
             height: width * 9 / 16
-            OutputView { anchors.fill: parent; visible: !root.twoShot; slotRow: app.roleRow; hideCursor: false; placeholder: root.slide ? "共有画面" : "映像" }
-            TwoShotView { anchors.fill: parent; visible: root.twoShot; hideCursor: false; placeholder: "映像" }
+            OutputView { anchors.fill: parent; visible: !root.twoShot; slotRow: app.roleRow; hideCursor: false; placeholder: root.slide ? qsTr("共有画面") : qsTr("映像") }
+            TwoShotView { anchors.fill: parent; visible: root.twoShot; hideCursor: false; placeholder: qsTr("映像") }
         }
 
         RowLayout {
@@ -63,7 +63,7 @@ Item {
 
                     Text {
                         Layout.fillWidth: true
-                        text: one.zoomName.length > 0 ? one.zoomName : (one.isShare ? "共有なし" : "未選択")
+                        text: one.zoomName.length > 0 ? one.zoomName : (one.isShare ? qsTr("共有なし") : qsTr("未選択"))
                         elide: Text.ElideRight
                         color: one.zoomName.length > 0 ? Theme.ink : Theme.mute
                         font.family: app.sansFamily; font.pixelSize: 16; font.bold: true
@@ -77,7 +77,7 @@ Item {
                         color: Theme.stateColor(one.state)
                         implicitWidth: badge.implicitWidth + 20
                         implicitHeight: 22
-                        Text { id: badge; anchors.centerIn: parent; text: one.isShare && one.state === "lost" ? "共有停止" : one.stateText; color: Theme.bg; font.family: app.sansFamily; font.pixelSize: 12; font.bold: true }
+                        Text { id: badge; anchors.centerIn: parent; text: one.isShare && one.state === "lost" ? qsTr("共有停止") : one.stateText; color: Theme.bg; font.family: app.sansFamily; font.pixelSize: 12; font.bold: true }
                     }
                 }
             }

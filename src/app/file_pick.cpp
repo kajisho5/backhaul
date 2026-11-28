@@ -7,7 +7,7 @@
 
 namespace {
 
-const wchar_t kFilter[] = L"backhaul プロジェクト (*.backhaul)\0*.backhaul\0すべてのファイル (*.*)\0*.*\0";
+const wchar_t kFilter[] = L"backhaul project (*.backhaul)\0*.backhaul\0All files (*.*)\0*.*\0";
 
 QString pick(const QString& title, const QString& suggestedName, bool save) {
   wchar_t path[4096] = {};

@@ -12,8 +12,8 @@ ColumnLayout {
     RowLayout {
         Layout.fillWidth: true
         Layout.bottomMargin: 4
-        Text { Layout.fillWidth: true; text: "参加者"; color: Theme.ink; font.family: app.sansFamily; font.pixelSize: 14; font.bold: true }
-        Text { text: app.participantCount + "人"; color: Theme.mute; font.family: app.monoFamily; font.pixelSize: 12 }
+        Text { Layout.fillWidth: true; text: qsTr("参加者"); color: Theme.ink; font.family: app.sansFamily; font.pixelSize: 14; font.bold: true }
+        Text { text: app.participantCount + qsTr("人"); color: Theme.mute; font.family: app.monoFamily; font.pixelSize: 12 }
     }
     Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: Theme.line }
 
@@ -47,10 +47,10 @@ ColumnLayout {
                 visible: canAssign && list.slotOnShow
                 anchors.verticalCenter: parent.verticalCenter
                 anchors.right: parent.right
-                text: "この枠へ"
+                text: qsTr("この枠へ")
                 strong: true
                 implicitHeight: 28
-                Accessible.name: name + "を選択中の枠へ割り当てる"
+                Accessible.name: name + qsTr("を選択中の枠へ割り当てる")
                 onClicked: app.assignToSelected(index)
             }
             Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Theme.line }

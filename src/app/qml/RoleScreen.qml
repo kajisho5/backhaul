@@ -37,26 +37,26 @@ RowLayout {
                 spacing: 24
                 Row {
                     spacing: 8
-                    Text { text: "出力先"; color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 13 }
+                    Text { text: qsTr("出力先"); color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 13 }
                     Text {
-                        text: app.roleOutputChoice > 0 ? app.roleOutputChoices[app.roleOutputChoice] : "未設定"
+                        text: app.roleOutputChoice > 0 ? app.roleOutputChoices[app.roleOutputChoice] : qsTr("未設定")
                         color: Theme.ink; font.family: app.sansFamily; font.pixelSize: 13; font.bold: true
                     }
                     Text {
-                        text: app.roleOutputChoice > 0 ? "出力中" : "出していません"
+                        text: app.roleOutputChoice > 0 ? qsTr("出力中") : qsTr("出していません")
                         color: app.roleOutputChoice > 0 ? Theme.ok : Theme.muted
                         font.family: app.sansFamily; font.pixelSize: 13; font.bold: true
                     }
                 }
                 Row {
                     spacing: 8
-                    Text { text: "受け取り"; color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 13 }
+                    Text { text: qsTr("受け取り"); color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 13 }
                     Text {
-                        text: root.slide ? "共有画面" : root.twoShot ? "2人・各720pまで" : (app.qualityAuto ? "1人・1080pまで" : "1人・720pまで")
+                        text: root.slide ? qsTr("共有画面") : root.twoShot ? qsTr("2人・各720pまで") : (app.qualityAuto ? qsTr("1人・1080pまで") : qsTr("1人・720pまで"))
                         color: Theme.ink; font.family: app.sansFamily; font.pixelSize: 13
                     }
                 }
-                Text { text: "音声：このPCでは扱いません"; color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 13 }
+                Text { text: qsTr("音声：このPCでは扱いません"); color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 13 }
             }
         }
         Item { Layout.fillHeight: true }
@@ -84,11 +84,11 @@ RowLayout {
                 visible: root.slide
                 Layout.fillWidth: true
                 spacing: 8
-                Text { text: "スライド"; color: Theme.ink; font.family: app.sansFamily; font.pixelSize: 14; font.bold: true }
+                Text { text: qsTr("スライド"); color: Theme.ink; font.family: app.sansFamily; font.pixelSize: 14; font.bold: true }
                 Text {
                     Layout.fillWidth: true
                     wrapMode: Text.WordWrap
-                    text: "だれかが画面共有を始めると、その画面を出します。共有する人が替わると、自動で新しい共有に切り替わります。"
+                    text: qsTr("だれかが画面共有を始めると、その画面を出します。共有する人が替わると、自動で新しい共有に切り替わります。")
                     color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 12
                 }
             }
@@ -101,8 +101,8 @@ RowLayout {
                 RowLayout {
                     Layout.fillWidth: true
                     Layout.bottomMargin: 4
-                    Text { Layout.fillWidth: true; text: "出す人"; color: Theme.ink; font.family: app.sansFamily; font.pixelSize: 14; font.bold: true }
-                    Text { text: app.participantCount + "人"; color: Theme.mute; font.family: app.monoFamily; font.pixelSize: 12 }
+                    Text { Layout.fillWidth: true; text: qsTr("出す人"); color: Theme.ink; font.family: app.sansFamily; font.pixelSize: 14; font.bold: true }
+                    Text { text: app.participantCount + qsTr("人"); color: Theme.mute; font.family: app.monoFamily; font.pixelSize: 12 }
                 }
                 Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: Theme.line }
                 Text {
@@ -110,7 +110,7 @@ RowLayout {
                     Layout.fillWidth: true
                     Layout.topMargin: 12
                     wrapMode: Text.WordWrap
-                    text: app.connected ? "まだだれもいません。" : "会議に参加すると、ここに参加者が並びます（設定 → Zoom接続）。"
+                    text: app.connected ? qsTr("まだだれもいません。") : qsTr("会議に参加すると、ここに参加者が並びます（設定 → Zoom接続）。")
                     color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 13
                 }
                 Repeater {
@@ -137,13 +137,13 @@ RowLayout {
                             visible: !person.canShow
                             anchors.verticalCenter: parent.verticalCenter
                             anchors.right: parent.right
-                            text: person.inSlot ? "出力中" : person.tag
+                            text: person.inSlot ? qsTr("出力中") : person.tag
                             color: person.inSlot ? Theme.ok : Theme.mute
                             font.family: app.sansFamily; font.pixelSize: 12; font.bold: person.inSlot
                         }
                         Text {
                             id: roleTag
-                            visible: person.canShow && (person.tag === "主催" || person.tag === "共同")
+                            visible: person.canShow && (person.tag === qsTr("主催") || person.tag === qsTr("共同"))
                             anchors.verticalCenter: parent.verticalCenter
                             anchors.right: showButton.left
                             anchors.rightMargin: 8
@@ -155,10 +155,10 @@ RowLayout {
                             visible: person.canShow
                             anchors.verticalCenter: parent.verticalCenter
                             anchors.right: parent.right
-                            text: "この人を出す"
+                            text: qsTr("この人を出す")
                             strong: true
                             implicitHeight: 28
-                            Accessible.name: person.name + "を出す"
+                            Accessible.name: person.name + qsTr("を出す")
                             onClicked: app.assignTo(0, person.index)
                         }
                         Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Theme.line }
@@ -172,12 +172,12 @@ RowLayout {
                 Layout.fillWidth: true
                 spacing: 8
                 z: 3
-                Text { text: "並べる2人"; color: Theme.ink; font.family: app.sansFamily; font.pixelSize: 14; font.bold: true }
-                Text { text: "左"; color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 12 }
+                Text { text: qsTr("並べる2人"); color: Theme.ink; font.family: app.sansFamily; font.pixelSize: 14; font.bold: true }
+                Text { text: qsTr("左"); color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 12 }
                 Dropdown {
                     Layout.fillWidth: true
                     z: open ? 20 : 0
-                    name: "左に出す人"
+                    name: qsTr("左に出す人")
                     options: app.pickNames
                     current: app.twoShotLeftPick
                     dimmed: current === 0
@@ -186,15 +186,15 @@ RowLayout {
                 PlainButton {
                     Layout.alignment: Qt.AlignHCenter
                     Layout.topMargin: 4
-                    text: "⇅ 左右を入れ替える"
+                    text: qsTr("⇅ 左右を入れ替える")
                     implicitHeight: 32
                     onClicked: app.swapTwoShot()
                 }
-                Text { text: "右"; color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 12 }
+                Text { text: qsTr("右"); color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 12 }
                 Dropdown {
                     Layout.fillWidth: true
                     z: open ? 20 : 0
-                    name: "右に出す人"
+                    name: qsTr("右に出す人")
                     options: app.pickNames
                     current: app.twoShotRightPick
                     dimmed: current === 0
@@ -209,16 +209,16 @@ RowLayout {
                 Layout.fillWidth: true
                 spacing: 14
                 z: 2
-                Text { text: "この出力"; color: Theme.ink; font.family: app.sansFamily; font.pixelSize: 14; font.bold: true }
+                Text { text: qsTr("この出力"); color: Theme.ink; font.family: app.sansFamily; font.pixelSize: 14; font.bold: true }
 
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: 6
                     z: 5
-                    Text { text: "出力先のモニター"; color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 12 }
+                    Text { text: qsTr("出力先のモニター"); color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 12 }
                     Dropdown {
                         Layout.fillWidth: true
-                        name: "出力先のモニター"
+                        name: qsTr("出力先のモニター")
                         options: app.roleOutputChoices
                         current: app.roleOutputChoice
                         dimmed: current === 0
@@ -228,7 +228,7 @@ RowLayout {
                         visible: app.roleOutputChoices.length < 2 && !app.demo
                         Layout.fillWidth: true
                         wrapMode: Text.WordWrap
-                        text: "出力に使えるモニターがつながっていません。"
+                        text: qsTr("出力に使えるモニターがつながっていません。")
                         color: Theme.muted; font.family: app.sansFamily; font.pixelSize: 12
                     }
                 }
@@ -241,24 +241,24 @@ RowLayout {
                         required property int index
                         required property string label
                         required property bool freezeOnLoss
-                        readonly property string side: !root.twoShot ? "" : (index === app.twoShotLeft ? "左：" : "右：")
+                        readonly property string side: !root.twoShot ? "" : (index === app.twoShotLeft ? qsTr("左：") : qsTr("右："))
                         visible: root.twoShot ? index < 2 : index === app.roleRow
                         Layout.fillWidth: true
                         spacing: 10
                         LabeledInput {
                             visible: !root.slide
                             Layout.fillWidth: true
-                            label: one.side + "名前（待機中・カメラオフ時に表示）"
+                            label: one.side + qsTr("名前（待機中・カメラオフ時に表示）")
                             value: one.label
                             maxLength: 40
                             onEdited: (text) => app.setLabel(one.index, text)
                         }
                         RowLayout {
                             Layout.fillWidth: true
-                            Text { Layout.fillWidth: true; text: root.slide ? "共有が止まったとき" : one.side + "回線切れ時"; color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 12 }
+                            Text { Layout.fillWidth: true; text: root.slide ? qsTr("共有が止まったとき") : one.side + qsTr("回線切れ時"); color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 12 }
                             Segmented {
-                                firstText: root.slide ? "最後の画面で静止" : "静止"
-                                secondText: root.slide ? "黒" : "名前カード"
+                                firstText: root.slide ? qsTr("最後の画面で静止") : qsTr("静止")
+                                secondText: root.slide ? qsTr("黒") : qsTr("名前カード")
                                 first: one.freezeOnLoss
                                 onChosen: (first) => app.setFreezeOnLoss(one.index, first)
                             }
@@ -269,7 +269,7 @@ RowLayout {
                 LabeledInput {
                     visible: root.slide
                     Layout.fillWidth: true
-                    label: "まだ共有がないときに出す文字（空にすると黒）"
+                    label: qsTr("まだ共有がないときに出す文字（空にすると黒）")
                     value: app.standbyText
                     maxLength: 24
                     onEdited: (text) => app.standbyText = text
@@ -278,10 +278,10 @@ RowLayout {
                     visible: root.slide
                     Layout.fillWidth: true
                     spacing: 6
-                    Text { text: "画面の形が16:9でないとき"; color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 12 }
+                    Text { text: qsTr("画面の形が16:9でないとき"); color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 12 }
                     Segmented {
-                        firstText: "全体を見せる（黒帯）"
-                        secondText: "16:9に切る"
+                        firstText: qsTr("全体を見せる（黒帯）")
+                        secondText: qsTr("16:9に切る")
                         first: !app.cropSlides
                         onChosen: (first) => app.cropSlides = !first
                     }
@@ -290,10 +290,10 @@ RowLayout {
                     visible: root.twoShot
                     Layout.fillWidth: true
                     spacing: 6
-                    Text { text: "並べ方"; color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 12 }
+                    Text { text: qsTr("並べ方"); color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 12 }
                     Segmented {
-                        firstText: "縦長に切って大きく"
-                        secondText: "16:9のまま並べる"
+                        firstText: qsTr("縦長に切って大きく")
+                        secondText: qsTr("16:9のまま並べる")
                         first: app.twoShotFill
                         onChosen: (first) => app.twoShotFill = first
                     }
@@ -302,10 +302,10 @@ RowLayout {
                     visible: root.twoShot
                     Layout.fillWidth: true
                     spacing: 6
-                    Text { text: "片方がカメラオフのとき"; color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 12 }
+                    Text { text: qsTr("片方がカメラオフのとき"); color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 12 }
                     Segmented {
-                        firstText: "名前カード"
-                        secondText: "もう1人を全画面"
+                        firstText: qsTr("名前カード")
+                        secondText: qsTr("もう1人を全画面")
                         first: !app.twoShotSolo
                         onChosen: (first) => app.twoShotSolo = !first
                     }

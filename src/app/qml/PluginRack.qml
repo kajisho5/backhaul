@@ -15,12 +15,12 @@ ColumnLayout {
 
     RowLayout {
         Layout.fillWidth: true
-        Text { text: "プラグイン"; color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 13 }
+        Text { text: qsTr("プラグイン"); color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 13 }
         Text {
             Layout.fillWidth: true
             horizontalAlignment: Text.AlignRight
             visible: root.rack.length > 0
-            text: root.delayMs > 0.05 ? "遅れ ＋" + root.delayMs.toFixed(1) + " ms" : "遅れなし"
+            text: root.delayMs > 0.05 ? qsTr("遅れ ＋") + root.delayMs.toFixed(1) + " ms" : qsTr("遅れなし")
             color: root.delayMs > 0.05 ? Theme.muted : Theme.mute
             font.family: app.monoFamily; font.pixelSize: 12
         }
@@ -51,29 +51,29 @@ ColumnLayout {
                 }
                 PlainButton {
                     visible: row.modelData.hasEditor
-                    text: "画面"
+                    text: qsTr("画面")
                     implicitWidth: 44
-                    Accessible.name: row.modelData.name + "の画面を開く"
+                    Accessible.name: row.modelData.name + qsTr("の画面を開く")
                     onClicked: plugins.openEditor(root.target, row.index)
                 }
                 PlainButton {
                     visible: row.modelData.loaded
-                    text: row.modelData.bypassed ? "切" : "入"
+                    text: row.modelData.bypassed ? qsTr("切") : qsTr("入")
                     strong: !row.modelData.bypassed
                     tint: row.modelData.bypassed ? Theme.mute : Theme.ok
                     implicitWidth: 34
-                    Accessible.name: row.modelData.name + (row.modelData.bypassed ? "を入れる（今はバイパス）" : "をバイパスする（今は入）")
+                    Accessible.name: row.modelData.name + (row.modelData.bypassed ? qsTr("を入れる（今はバイパス）") : qsTr("をバイパスする（今は入）"))
                     onClicked: plugins.setBypassed(root.target, row.index, !row.modelData.bypassed)
                 }
                 PlainButton {
                     visible: !row.modelData.loaded
-                    text: "もう一度試す"
+                    text: qsTr("もう一度試す")
                     onClicked: plugins.retry(root.target, row.index)
                 }
                 PlainButton {
                     text: "×"
                     implicitWidth: 30
-                    Accessible.name: row.modelData.name + "を外す"
+                    Accessible.name: row.modelData.name + qsTr("を外す")
                     onClicked: plugins.remove(root.target, row.index)
                 }
             }
@@ -93,7 +93,7 @@ ColumnLayout {
         visible: plugins.choiceTarget === root.target && plugins.choices.length > 0
         Layout.fillWidth: true
         spacing: 4
-        Text { text: "このファイルには複数入っています。どれを使いますか"; color: Theme.muted; font.family: app.sansFamily; font.pixelSize: 12 }
+        Text { text: qsTr("このファイルには複数入っています。どれを使いますか"); color: Theme.muted; font.family: app.sansFamily; font.pixelSize: 12 }
         Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: Math.min(choiceColumn.height, 190) + 2
@@ -113,13 +113,13 @@ ColumnLayout {
                 }
             }
         }
-        PlainButton { text: "やめる"; onClicked: plugins.cancelChoice() }
+        PlainButton { text: qsTr("やめる"); onClicked: plugins.cancelChoice() }
     }
 
     PlainButton {
         visible: plugins.available && !root.full
         Layout.fillWidth: true
-        text: root.picking ? "閉じる" : "＋ プラグインを追加"
+        text: root.picking ? qsTr("閉じる") : qsTr("＋ プラグインを追加")
         onClicked: {
             if (!root.picking) plugins.refreshModules()
             root.picking = !root.picking
@@ -155,9 +155,9 @@ ColumnLayout {
         visible: text.length > 0
         Layout.fillWidth: true
         wrapMode: Text.WordWrap
-        text: !plugins.available ? (app.demo ? "" : "このプログラムではプラグインを使えません。")
-              : root.picking && plugins.moduleNames.length === 0 ? "VST3プラグインが見つかりません（置き場所：C:\\Program Files\\Common Files\\VST3）"
-              : root.full ? "1か所に入れられるのは" + plugins.maxPerRack + "個までです。"
+        text: !plugins.available ? (app.demo ? "" : qsTr("このプログラムではプラグインを使えません。"))
+              : root.picking && plugins.moduleNames.length === 0 ? qsTr("VST3プラグインが見つかりません（置き場所：C:\\Program Files\\Common Files\\VST3）")
+              : root.full ? qsTr("1か所に入れられるのは") + plugins.maxPerRack + qsTr("個までです。")
               : ""
         color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 11
     }

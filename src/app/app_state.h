@@ -3,6 +3,7 @@
 #pragma once
 
 #include <QJsonObject>
+#include "dictionary_translator.h"
 #include <QMap>
 #include <QObject>
 #include <QString>
@@ -36,6 +37,7 @@ class AppState : public QObject {
   // Picture sent into the meeting (the return role): the capture device by name, and
   // whether it goes out as a shared screen instead of as this PC's camera.
   Q_PROPERTY(QString videoDeviceName READ videoDeviceName NOTIFY changed)
+  Q_PROPERTY(QString language READ language WRITE setLanguage NOTIFY languageChanged)
   Q_PROPERTY(bool returnAsShare READ returnAsShare WRITE setReturnAsShare NOTIFY changed)
   Q_PROPERTY(bool returnInAll READ returnInAll WRITE setReturnInAll NOTIFY roleChanged)
   Q_PROPERTY(bool sendsVideo READ sendsVideo NOTIFY roleChanged)
@@ -112,6 +114,10 @@ class AppState : public QObject {
   bool receivesAnything() const { return backhaul::receivesAnything(role_); }
   QString videoDeviceName() const { return videoDeviceName_; }
   void setVideoDeviceName(const QString& name);
+  // "en" (the default) or "ja". The texts in the code are Japanese; main.cpp installs the
+  // English dictionary while this says "en".
+  QString language() const { return language_; }
+  void setLanguage(const QString& language);
   bool returnAsShare() const { return returnAsShare_; }
   void setReturnAsShare(bool share);
   // "Send the return from the all-in-one PC too". Off unless the owner switched it on, so
@@ -220,6 +226,7 @@ class AppState : public QObject {
   void notifyChanged() { emit changed(); }
 
  signals:
+  void languageChanged();
   void changed();
   // Something that settingsJson() covers was changed by the operator.
   void settingsEdited();
@@ -237,6 +244,7 @@ class AppState : public QObject {
   bool sendStereo_ = false;
   QString videoDeviceName_;
   bool returnAsShare_ = false;
+  QString language_ = QStringLiteral("en");
   bool returnInAll_ = false;
   QString roleScreen_;
   bool twoShotSwapped_ = false, twoShotFill_ = true, twoShotSolo_ = false;
@@ -261,7 +269,7 @@ class AppState : public QObject {
   QMap<QString, int> slotByScreen_;
   QString gridScreen_;
   QString meetingId_;
-  QString joinName_ = QStringLiteral("会場（backhaul）");
+  QString joinName_ = T("会場（backhaul）");
   bool qualityAuto_ = true;
   void edited(int row);
 };

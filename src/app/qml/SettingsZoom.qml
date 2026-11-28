@@ -17,7 +17,7 @@ ColumnLayout {
     readonly property bool zSignedIn: sample || licence.zoomSignedIn
     readonly property bool wide: width >= 820
 
-    Text { text: "Zoom接続"; color: Theme.ink; font.family: app.sansFamily; font.pixelSize: 22; font.bold: true; Layout.bottomMargin: 20 }
+    Text { text: qsTr("Zoom接続"); color: Theme.ink; font.family: app.sansFamily; font.pixelSize: 22; font.bold: true; Layout.bottomMargin: 20 }
 
     Rectangle {
         visible: !meeting.available
@@ -36,8 +36,8 @@ ColumnLayout {
             anchors.leftMargin: 12
             anchors.rightMargin: 12
             wrapMode: Text.WordWrap
-            text: app.demo ? "デモ表示では会議に参加しません。"
-                           : "このプログラムには、Zoomにつなぐ部品が入っていません（Zoom Meeting SDKなしで作られたものです）。"
+            text: app.demo ? qsTr("デモ表示では会議に参加しません。")
+                           : qsTr("このプログラムには、Zoomにつなぐ部品が入っていません（Zoom Meeting SDKなしで作られたものです）。")
             color: Theme.muted; font.family: app.sansFamily; font.pixelSize: 13
         }
     }
@@ -58,7 +58,7 @@ ColumnLayout {
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: 14
-                Text { text: "会議"; color: Theme.ink; font.family: app.sansFamily; font.pixelSize: 15; font.bold: true }
+                Text { text: qsTr("会議"); color: Theme.ink; font.family: app.sansFamily; font.pixelSize: 15; font.bold: true }
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: 16
@@ -66,7 +66,7 @@ ColumnLayout {
                         Layout.fillWidth: false
                         Layout.preferredWidth: 220
                         Layout.maximumWidth: 220
-                        label: "会議ID"
+                        label: qsTr("会議ID")
                         value: app.meetingId
                         placeholder: "123 4567 8901"
                         maxLength: 20
@@ -77,7 +77,7 @@ ColumnLayout {
                         Layout.fillWidth: false
                         Layout.preferredWidth: 160
                         Layout.maximumWidth: 160
-                        label: "パスコード"
+                        label: qsTr("パスコード")
                         value: meeting.passcode
                         secret: true
                         maxLength: 64
@@ -88,7 +88,7 @@ ColumnLayout {
                 }
                 LabeledInput {
                     Layout.fillWidth: true
-                    label: "参加するときの名前"
+                    label: qsTr("参加するときの名前")
                     value: app.joinName
                     maxLength: 40
                     readOnly: meeting.busy
@@ -98,7 +98,7 @@ ColumnLayout {
                     spacing: 12
                     PlainButton {
                         visible: !meeting.busy
-                        text: "会議に入る"
+                        text: qsTr("会議に入る")
                         strong: true
                         textSize: 14
                         implicitHeight: 44
@@ -107,7 +107,7 @@ ColumnLayout {
                     }
                     PlainButton {
                         visible: meeting.busy
-                        text: "会議から出る"
+                        text: qsTr("会議から出る")
                         tint: Theme.lost
                         textSize: 14
                         implicitHeight: 44
@@ -142,11 +142,11 @@ ColumnLayout {
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: 14
-                Text { text: "ライセンス"; color: Theme.ink; font.family: app.sansFamily; font.pixelSize: 15; font.bold: true }
+                Text { text: qsTr("ライセンス"); color: Theme.ink; font.family: app.sansFamily; font.pixelSize: 15; font.bold: true }
                 Text {
                     Layout.fillWidth: true
                     wrapMode: Text.WordWrap
-                    text: "購入時に届いたライセンスキーを入れると、会議に入るための鍵をこのアプリが自動で受け取ります。キーはこのPCの資格情報の保管場所に入れ、設定ファイルやプロジェクトには書きません。"
+                    text: qsTr("購入時に届いたライセンスキーを入れると、会議に入るための鍵をこのアプリが自動で受け取ります。キーはこのPCの資格情報の保管場所に入れ、設定ファイルやプロジェクトには書きません。")
                     color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 13
                 }
                 Rectangle {
@@ -165,7 +165,7 @@ ColumnLayout {
                             Layout.fillWidth: true
                             spacing: 14
                             Text {
-                                text: licence.messageBad ? "要確認" : "有効"
+                                text: licence.messageBad ? qsTr("要確認") : qsTr("有効")
                                 color: licence.messageBad ? Theme.muted : Theme.ok
                                 font.family: app.sansFamily; font.pixelSize: 13; font.bold: true
                             }
@@ -175,14 +175,14 @@ ColumnLayout {
                                 text: "BH-····-····-····-·" + (root.sample ? "7Q2M" : licence.keyTail)
                                 color: Theme.ink; font.family: app.monoFamily; font.pixelSize: 13
                             }
-                            PlainButton { text: "入れ直す"; textSize: 13; implicitHeight: 32; enabled: !meeting.busy && !licence.busy; onClicked: root.editingLicence = true }
-                            PlainButton { text: "このPCを外す"; textSize: 13; implicitHeight: 32; enabled: !meeting.busy && !licence.busy; onClicked: licence.deactivate() }
+                            PlainButton { text: qsTr("入れ直す"); textSize: 13; implicitHeight: 32; enabled: !meeting.busy && !licence.busy; onClicked: root.editingLicence = true }
+                            PlainButton { text: qsTr("このPCを外す"); textSize: 13; implicitHeight: 32; enabled: !meeting.busy && !licence.busy; onClicked: licence.deactivate() }
                         }
                         Text {
                             Layout.fillWidth: true
                             elide: Text.ElideRight
-                            text: root.sample ? "PC 2 / 5台　・　2027-11-30 まで　・　このPC：SAMPLE-PC-02"
-                                  : "PC " + licence.used + " / " + licence.seats + "台　・　" + licence.expiresText + "　・　このPC：" + licence.deviceName
+                            text: root.sample ? qsTr("PC 2 / 5台　・　2027-11-30 まで　・　このPC：SAMPLE-PC-02")
+                                  : "PC " + licence.used + " / " + licence.seats + qsTr("台　・　") + licence.expiresText + qsTr("　・　このPC：") + licence.deviceName
                             color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 12
                         }
                     }
@@ -191,10 +191,10 @@ ColumnLayout {
                     visible: licence.available && (!root.lActive || root.editingLicence)
                     Layout.fillWidth: true
                     spacing: 8
-                    LabeledInput { id: keyInput; Layout.fillWidth: true; label: "ライセンスキー"; placeholder: "BH-XXXXX-XXXXX-XXXXX-XXXXX"; maxLength: 64; readOnly: licence.busy }
+                    LabeledInput { id: keyInput; Layout.fillWidth: true; label: qsTr("ライセンスキー"); placeholder: "BH-XXXXX-XXXXX-XXXXX-XXXXX"; maxLength: 64; readOnly: licence.busy }
                     PlainButton {
                         Layout.alignment: Qt.AlignBottom
-                        text: licence.busy ? "確かめています…" : "確かめて保存"
+                        text: licence.busy ? qsTr("確かめています…") : qsTr("確かめて保存")
                         strong: true
                         textSize: 13
                         implicitHeight: 40
@@ -204,7 +204,7 @@ ColumnLayout {
                     PlainButton {
                         Layout.alignment: Qt.AlignBottom
                         visible: root.editingLicence
-                        text: "やめる"
+                        text: qsTr("やめる")
                         textSize: 13
                         implicitHeight: 40
                         onClicked: { keyInput.text = ""; root.editingLicence = false }
@@ -224,17 +224,17 @@ ColumnLayout {
                     visible: text.length > 0
                     Layout.fillWidth: true
                     wrapMode: Text.WordWrap
-                    text: root.sample ? "" : !licence.available ? "このPCではライセンスを保管できないため、使えません（Windowsで使ってください）。" : licence.message
+                    text: root.sample ? "" : !licence.available ? qsTr("このPCではライセンスを保管できないため、使えません（Windowsで使ってください）。") : licence.message
                     color: licence.messageBad ? Theme.lost : Theme.mute
                     font.family: app.sansFamily; font.pixelSize: 13
                 }
                 Text {
-                    text: "自分で作ったZoomアプリの鍵（Client ID・Secret）を使う　" + (root.ownKeysOpen ? "▾" : "▸")
+                    text: qsTr("自分で作ったZoomアプリの鍵（Client ID・Secret）を使う　") + (root.ownKeysOpen ? "▾" : "▸")
                     color: ownKeysArea.containsMouse || activeFocus ? Theme.ink : Theme.mute
                     font.family: app.sansFamily; font.pixelSize: 12
                     activeFocusOnTab: true
                     Accessible.role: Accessible.Button
-                    Accessible.name: "自分で作ったZoomアプリの鍵を使う欄を" + (root.ownKeysOpen ? "閉じる" : "開く")
+                    Accessible.name: qsTr("自分で作ったZoomアプリの鍵を使う欄を") + (root.ownKeysOpen ? qsTr("閉じる") : qsTr("開く"))
                     Accessible.onPressAction: root.ownKeysOpen = !root.ownKeysOpen
                     Keys.onReturnPressed: root.ownKeysOpen = !root.ownKeysOpen
                     Keys.onSpacePressed: root.ownKeysOpen = !root.ownKeysOpen
@@ -245,8 +245,8 @@ ColumnLayout {
                     Layout.fillWidth: true
                     wrapMode: Text.WordWrap
                     text: meeting.credentialsSupported
-                        ? "Zoomの開発者ページで自分で作ったアプリの鍵です。入っている間は、ライセンスよりこちらを使います。このPCの資格情報の保管場所に入れ、設定ファイルには書きません。"
-                        : "このOSでは鍵を安全に保管できないため、保存できません（Windowsで使ってください）。"
+                        ? qsTr("Zoomの開発者ページで自分で作ったアプリの鍵です。入っている間は、ライセンスよりこちらを使います。このPCの資格情報の保管場所に入れ、設定ファイルには書きません。")
+                        : qsTr("このOSでは鍵を安全に保管できないため、保存できません（Windowsで使ってください）。")
                     color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 13
                 }
                 ColumnLayout {
@@ -266,15 +266,15 @@ ColumnLayout {
                             anchors.leftMargin: 14
                             anchors.rightMargin: 14
                             spacing: 12
-                            Text { text: "保存済み"; color: Theme.ok; font.family: app.sansFamily; font.pixelSize: 13; font.bold: true }
+                            Text { text: qsTr("保存済み"); color: Theme.ok; font.family: app.sansFamily; font.pixelSize: 13; font.bold: true }
                             Text {
                                 Layout.fillWidth: true
                                 elide: Text.ElideRight
                                 text: "ID：" + meeting.credentialHint
                                 color: Theme.mute; font.family: app.monoFamily; font.pixelSize: 13
                             }
-                            PlainButton { text: "入れ直す"; textSize: 13; implicitHeight: 36; enabled: !meeting.busy; onClicked: root.editingKeys = true }
-                            PlainButton { text: "消す"; textSize: 13; implicitHeight: 36; enabled: !meeting.busy; onClicked: meeting.clearCredentials() }
+                            PlainButton { text: qsTr("入れ直す"); textSize: 13; implicitHeight: 36; enabled: !meeting.busy; onClicked: root.editingKeys = true }
+                            PlainButton { text: qsTr("消す"); textSize: 13; implicitHeight: 36; enabled: !meeting.busy; onClicked: meeting.clearCredentials() }
                         }
                     }
                     ColumnLayout {
@@ -286,7 +286,7 @@ ColumnLayout {
                         RowLayout {
                             spacing: 8
                             PlainButton {
-                                text: "保存する"
+                                text: qsTr("保存する")
                                 strong: true
                                 textSize: 13
                                 implicitHeight: 36
@@ -304,7 +304,7 @@ ColumnLayout {
                             }
                             PlainButton {
                                 visible: meeting.credentialsSaved
-                                text: "やめる"
+                                text: qsTr("やめる")
                                 textSize: 13
                                 implicitHeight: 36
                                 onClicked: {
@@ -313,7 +313,7 @@ ColumnLayout {
                                     root.editingKeys = false
                                 }
                             }
-                            Text { id: saveError; visible: false; text: "保存できませんでした"; color: Theme.lost; font.family: app.sansFamily; font.pixelSize: 13 }
+                            Text { id: saveError; visible: false; text: qsTr("保存できませんでした"); color: Theme.lost; font.family: app.sansFamily; font.pixelSize: 13 }
                         }
                     }
                 }
@@ -323,11 +323,11 @@ ColumnLayout {
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: 14
-                Text { text: "Zoomアカウント"; color: Theme.ink; font.family: app.sansFamily; font.pixelSize: 15; font.bold: true }
+                Text { text: qsTr("Zoomアカウント"); color: Theme.ink; font.family: app.sansFamily; font.pixelSize: 15; font.bold: true }
                 Text {
                     Layout.fillWidth: true
                     wrapMode: Text.WordWrap
-                    text: "どれか1台でサインインすれば、同じライセンスのPCすべてに効きます。ほかのアカウントが開いた会議に入るための許可（ZAK）を、入るたびにアプリが自動で取ります。自分のアカウントの会議だけなら、サインインは要りません。"
+                    text: qsTr("どれか1台でサインインすれば、同じライセンスのPCすべてに効きます。ほかのアカウントが開いた会議に入るための許可（ZAK）を、入るたびにアプリが自動で取ります。自分のアカウントの会議だけなら、サインインは要りません。")
                     color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 13
                 }
                 Rectangle {
@@ -345,20 +345,20 @@ ColumnLayout {
                         RowLayout {
                             Layout.fillWidth: true
                             spacing: 14
-                            Text { Layout.fillWidth: true; text: "サインイン済み"; color: Theme.ok; font.family: app.sansFamily; font.pixelSize: 13; font.bold: true }
-                            PlainButton { text: "サインアウト"; textSize: 13; implicitHeight: 32; enabled: !meeting.busy; onClicked: licence.signOut() }
+                            Text { Layout.fillWidth: true; text: qsTr("サインイン済み"); color: Theme.ok; font.family: app.sansFamily; font.pixelSize: 13; font.bold: true }
+                            PlainButton { text: qsTr("サインアウト"); textSize: 13; implicitHeight: 32; enabled: !meeting.busy; onClicked: licence.signOut() }
                         }
                         Text {
                             Layout.fillWidth: true
                             elide: Text.ElideRight
-                            text: "このライセンスのPCすべてで有効です。サインアウトも全PCに効きます"
+                            text: qsTr("このライセンスのPCすべてで有効です。サインアウトも全PCに効きます")
                             color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 12
                         }
                     }
                 }
                 PlainButton {
                     visible: licence.available && !root.zSignedIn
-                    text: licence.zoomWaiting ? "やめる" : "Zoomにサインイン"
+                    text: licence.zoomWaiting ? qsTr("やめる") : qsTr("Zoomにサインイン")
                     strong: !licence.zoomWaiting
                     textSize: 13
                     implicitHeight: 40
@@ -372,18 +372,18 @@ ColumnLayout {
                     text: root.sample ? ""
                           : licence.zoomMessage.length > 0 ? licence.zoomMessage
                           : !licence.available || root.zSignedIn ? ""
-                          : !root.lActive ? "サインインは、ライセンスキーを入れてからできます。"
-                          : "ブラウザが開きます。サインインして「許可」を押すと、この画面に戻ります。"
+                          : !root.lActive ? qsTr("サインインは、ライセンスキーを入れてからできます。")
+                          : qsTr("ブラウザが開きます。サインインして「許可」を押すと、この画面に戻ります。")
                     color: licence.zoomMessageBad ? Theme.lost : Theme.mute
                     font.family: app.sansFamily; font.pixelSize: 12
                 }
                 Text {
-                    text: "サインインできないときは、許可コード（ZAK）を手で貼る　" + (root.manualZakOpen ? "▾" : "▸")
+                    text: qsTr("サインインできないときは、許可コード（ZAK）を手で貼る　") + (root.manualZakOpen ? "▾" : "▸")
                     color: zakArea.containsMouse || activeFocus ? Theme.ink : Theme.mute
                     font.family: app.sansFamily; font.pixelSize: 12
                     activeFocusOnTab: true
                     Accessible.role: Accessible.Button
-                    Accessible.name: "許可コードを手で貼る欄を" + (root.manualZakOpen ? "閉じる" : "開く")
+                    Accessible.name: qsTr("許可コードを手で貼る欄を") + (root.manualZakOpen ? qsTr("閉じる") : qsTr("開く"))
                     Accessible.onPressAction: root.manualZakOpen = !root.manualZakOpen
                     Keys.onReturnPressed: root.manualZakOpen = !root.manualZakOpen
                     Keys.onSpacePressed: root.manualZakOpen = !root.manualZakOpen
@@ -396,12 +396,12 @@ ColumnLayout {
                     Text {
                         Layout.fillWidth: true
                         wrapMode: Text.WordWrap
-                        text: "その日かぎりで使い、保存しません。サインイン済みのときは、自動で取ったものを優先します。"
+                        text: qsTr("その日かぎりで使い、保存しません。サインイン済みのときは、自動で取ったものを優先します。")
                         color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 13
                     }
                     LabeledInput {
                         Layout.fillWidth: true
-                        label: "許可コード（ZAK）"
+                        label: qsTr("許可コード（ZAK）")
                         value: meeting.zak
                         secret: true
                         maxLength: 2000
@@ -415,17 +415,17 @@ ColumnLayout {
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: 10
-                Text { text: "受け取る映像の大きさ"; color: Theme.ink; font.family: app.sansFamily; font.pixelSize: 15; font.bold: true }
+                Text { text: qsTr("受け取る映像の大きさ"); color: Theme.ink; font.family: app.sansFamily; font.pixelSize: 15; font.bold: true }
                 Text {
                     Layout.fillWidth: true
                     wrapMode: Text.WordWrap
-                    text: "Zoomの決まりで、同時に受け取れるのは 1080p なら1人、720p なら2人、360p なら4人までです。「自動」は映している人数に合わせて一番大きいものを選びます。"
+                    text: qsTr("Zoomの決まりで、同時に受け取れるのは 1080p なら1人、720p なら2人、360p なら4人までです。「自動」は映している人数に合わせて一番大きいものを選びます。")
                     color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 13
                 }
                 Segmented {
                     implicitHeight: 38
-                    firstText: "自動"
-                    secondText: "720pまで"
+                    firstText: qsTr("自動")
+                    secondText: qsTr("720pまで")
                     first: app.qualityAuto
                     onChosen: (first) => app.qualityAuto = first
                 }
@@ -438,15 +438,15 @@ ColumnLayout {
             Layout.maximumWidth: 420
             Layout.alignment: Qt.AlignTop
             spacing: 0
-            Text { text: "つながるまでの流れ"; color: Theme.ink; font.family: app.sansFamily; font.pixelSize: 15; font.bold: true; Layout.bottomMargin: 6 }
+            Text { text: qsTr("つながるまでの流れ"); color: Theme.ink; font.family: app.sansFamily; font.pixelSize: 15; font.bold: true; Layout.bottomMargin: 6 }
             Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: Theme.line }
             Repeater {
                 model: [
-                    { at: 1, title: "Zoomの鍵が通った", note: "ライセンス（または自分の鍵）で作った入場券をZoomが確認すると進みます" },
-                    { at: 2, title: "会議に入った", note: meeting.step >= 2 ? app.meetingName : "" },
-                    { at: 3, title: meeting.step === 2 ? "映像と音を受け取る許可を待っています" : "映像と音を受け取る許可が出た",
-                      note: meeting.step >= 3 ? "" : "ホストに、この参加者「" + app.joinName + "」を共同ホストにしてもらってください" },
-                    { at: 3, title: "映像と音を受け取っている", note: meeting.step >= 3 ? "" : "許可が出ると自動で始まります" }
+                    { at: 1, title: qsTr("Zoomの鍵が通った"), note: qsTr("ライセンス（または自分の鍵）で作った入場券をZoomが確認すると進みます") },
+                    { at: 2, title: qsTr("会議に入った"), note: meeting.step >= 2 ? app.meetingName : "" },
+                    { at: 3, title: meeting.step === 2 ? qsTr("映像と音を受け取る許可を待っています") : qsTr("映像と音を受け取る許可が出た"),
+                      note: meeting.step >= 3 ? "" : qsTr("ホストに、この参加者「") + app.joinName + qsTr("」を共同ホストにしてもらってください") },
+                    { at: 3, title: qsTr("映像と音を受け取っている"), note: meeting.step >= 3 ? "" : qsTr("許可が出ると自動で始まります") }
                 ]
                 delegate: ColumnLayout {
                     id: stepRow
