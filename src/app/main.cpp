@@ -1,4 +1,5 @@
 #include <QCommandLineParser>
+#include "dictionary_translator.h"
 #include <QDesktopServices>
 #include <QFileInfo>
 #include <QSysInfo>
@@ -49,6 +50,8 @@ int main(int argc, char* argv[]) {
   const QCommandLineOption pageOpt(QStringLiteral("settings"),
                                    QStringLiteral("Start on a settings page: zoom, slots, audio, video, return or project."), QStringLiteral("page"));
   args.addOption(pageOpt);
+  const QCommandLineOption languageOpt(QStringLiteral("language"), QStringLiteral("For pictures: en or ja."), QStringLiteral("en|ja"));
+  args.addOption(languageOpt);
   const QCommandLineOption returnOpt(QStringLiteral("return"),
                                      QStringLiteral("For pictures of the all-in-one role: select the return tile, sending on or off."),
                                      QStringLiteral("on|off"));
@@ -68,6 +71,11 @@ int main(int argc, char* argv[]) {
     }
   }
 
+  // English unless the settings say Japanese. Installed before anything makes a text, so
+  // that names made up for a first start are English too.
+  DictionaryTranslator english;
+  QCoreApplication::installTranslator(&english);
+
   AppState state;
   std::unique_ptr<SettingsSaver> saver;
   if (args.isSet(demoOpt)) {
@@ -78,8 +86,8 @@ int main(int argc, char* argv[]) {
     state.savesSettings_ = true;
     if (saver->load() == SettingsSaver::LoadResult::Unreadable) {
       state.notice_ = saver->asidePath().isEmpty()
-                          ? QStringLiteral("設定ファイルを読めませんでした。初期設定で動いています（保存はしません）")
-                          : QStringLiteral("設定ファイルを読めなかったため、初期設定に戻しました（元のファイルは残してあります）");
+                          ? T("設定ファイルを読めませんでした。初期設定で動いています（保存はしません）")
+                          : T("設定ファイルを読めなかったため、初期設定に戻しました（元のファイルは残してあります）");
     }
     state.notifyChanged();
     QObject::connect(&qtApp, &QCoreApplication::aboutToQuit, saver.get(), [&saver] { saver->flush(); });
@@ -144,6 +152,17 @@ int main(int argc, char* argv[]) {
   });
 
   QQmlApplicationEngine engine;
+  const auto applyLanguage = [&state, &english, &engine] {
+    if (state.language() == QStringLiteral("ja")) {
+      QCoreApplication::removeTranslator(&english);
+    } else {
+      QCoreApplication::installTranslator(&english);
+    }
+    engine.retranslate();  // texts already on screen follow at once
+  };
+  QObject::connect(&state, &AppState::languageChanged, &qtApp, applyLanguage);
+  if (args.isSet(languageOpt)) state.setLanguage(args.value(languageOpt));
+  applyLanguage();
   engine.rootContext()->setContextProperty(QStringLiteral("meeting"), &meeting);
   engine.rootContext()->setContextProperty(QStringLiteral("audio"), &audio);
   engine.rootContext()->setContextProperty(QStringLiteral("returning"), &returning);
@@ -170,7 +189,7 @@ int main(int argc, char* argv[]) {
         const int number = static_cast<int>(list.size()) + 1;
         // Some systems give no name; the position in the list is then the only handle.
         const QString key = s->name().isEmpty() ? QStringLiteral("monitor-%1").arg(number) : s->name();
-        QString title = s->name().isEmpty() ? QStringLiteral("モニター%1").arg(number) : s->name();
+        QString title = s->name().isEmpty() ? T("モニター%1").arg(number) : s->name();
         if (title.startsWith(QStringLiteral("\\\\.\\"))) title.remove(0, 4);  // "\\.\DISPLAY2" -> "DISPLAY2"
         if (!s->model().isEmpty() && s->model() != s->name()) title += QStringLiteral("（%1）").arg(s->model());
         const QSize pixels = s->size() * s->devicePixelRatio();

@@ -13,12 +13,12 @@ Item {
     readonly property bool on: state !== "off"
     readonly property color tint: state === "sending" ? Theme.ok : state === "paused" || state === "idle" ? Theme.muted
                                   : state === "noinput" ? Theme.lost : Theme.line
-    readonly property string stateText: state === "sending" ? "送信中" : state === "paused" ? "停止中"
-                                        : state === "noinput" ? "入力なし" : state === "idle" ? "未送信" : "送らない"
+    readonly property string stateText: state === "sending" ? qsTr("送信中") : state === "paused" ? qsTr("停止中")
+                                        : state === "noinput" ? qsTr("入力なし") : state === "idle" ? qsTr("未送信") : qsTr("送らない")
     implicitHeight: body.implicitHeight
     activeFocusOnTab: true
     Accessible.role: Accessible.Button
-    Accessible.name: "Zoomへの返し " + stateText
+    Accessible.name: qsTr("Zoomへの返し ") + stateText
     Accessible.onPressAction: root.chosen()
     Keys.onReturnPressed: root.chosen()
     Keys.onSpacePressed: root.chosen()
@@ -54,8 +54,8 @@ Item {
                 color: Theme.picture
                 Text {
                     anchors.centerIn: parent
-                    text: !root.on ? "返しは送らない設定です"
-                          : returning.deviceIndex === 0 && !app.demo ? "映像の入力を選んでいません" : "会場の映像"
+                    text: !root.on ? qsTr("返しは送らない設定です")
+                          : returning.deviceIndex === 0 && !app.demo ? qsTr("映像の入力を選んでいません") : qsTr("会場の映像")
                     color: "#6f757d"; font.family: app.sansFamily; font.pixelSize: 12; font.letterSpacing: 1.5
                 }
                 FrameItem { anchors.fill: parent; slot: 1000; visible: root.on }
@@ -71,12 +71,12 @@ Item {
                     x: 8; y: parent.height - height - 8
                     color: "#b3000000"
                     width: wayLabel.implicitWidth + 12; height: wayLabel.implicitHeight + 4
-                    Text { id: wayLabel; anchors.centerIn: parent; text: app.returnAsShare ? "画面共有として" : "カメラとして"; color: Theme.ink; font.family: app.sansFamily; font.pixelSize: 11 }
+                    Text { id: wayLabel; anchors.centerIn: parent; text: app.returnAsShare ? qsTr("画面共有として") : qsTr("カメラとして"); color: Theme.ink; font.family: app.sansFamily; font.pixelSize: 11 }
                 }
                 Rectangle {
                     visible: root.on
                     Accessible.role: Accessible.Indicator
-                    Accessible.name: "送る音のメーター"
+                    Accessible.name: qsTr("送る音のメーター")
                     anchors { right: parent.right; top: parent.top; bottom: parent.bottom; margins: 8 }
                     width: 6
                     color: "#1d2024"
@@ -97,8 +97,8 @@ Item {
                     anchors.leftMargin: 12
                     anchors.rightMargin: 12
                     spacing: 10
-                    Text { text: "返"; color: root.picked ? "#3a3d42" : Theme.mute; font.family: app.sansFamily; font.pixelSize: 13 }
-                    Text { Layout.fillWidth: true; text: "Zoomへの返し"; elide: Text.ElideRight; color: root.picked ? Theme.bg : Theme.ink; font.family: app.sansFamily; font.pixelSize: 15; font.bold: true }
+                    Text { text: qsTr("返"); color: root.picked ? "#3a3d42" : Theme.mute; font.family: app.sansFamily; font.pixelSize: 13 }
+                    Text { Layout.fillWidth: true; text: qsTr("Zoomへの返し"); elide: Text.ElideRight; color: root.picked ? Theme.bg : Theme.ink; font.family: app.sansFamily; font.pixelSize: 15; font.bold: true }
                     Rectangle {
                         color: root.on ? root.tint : "transparent"
                         border.width: root.on ? 0 : 1

@@ -42,7 +42,7 @@ RowLayout {
                     color: "black"
                     Text {
                         anchors.centerIn: parent
-                        text: root.picking || app.demo ? "スイッチャーの出力（取り込み中の映像）" : "映像の機器を選んでください"
+                        text: root.picking || app.demo ? qsTr("スイッチャーの出力（取り込み中の映像）") : qsTr("映像の機器を選んでください")
                         color: "#6f757d"
                         font.family: app.sansFamily; font.pixelSize: 13; font.letterSpacing: 1.5
                     }
@@ -52,7 +52,7 @@ RowLayout {
                         x: 10; y: 10
                         color: "#b3000000"
                         width: inputLabel.implicitWidth + 12; height: inputLabel.implicitHeight + 4
-                        Text { id: inputLabel; anchors.centerIn: parent; text: "入力 " + returning.inputText; color: Theme.ink; font.family: app.monoFamily; font.pixelSize: 12 }
+                        Text { id: inputLabel; anchors.centerIn: parent; text: qsTr("入力 ") + returning.inputText; color: Theme.ink; font.family: app.monoFamily; font.pixelSize: 12 }
                     }
                 }
                 RowLayout {
@@ -62,15 +62,15 @@ RowLayout {
                     height: 44
                     spacing: 12
                     Text {
-                        text: returning.paused ? "送信を止めています"
-                              : meeting.sendingVideo ? "Zoomへ送信中"
-                              : app.connected ? "まだ送れていません" : "会議に入っていません"
+                        text: returning.paused ? qsTr("送信を止めています")
+                              : meeting.sendingVideo ? qsTr("Zoomへ送信中")
+                              : app.connected ? qsTr("まだ送れていません") : qsTr("会議に入っていません")
                         color: Theme.ink; font.family: app.sansFamily; font.pixelSize: 16; font.bold: true
                     }
                     Text {
                         Layout.fillWidth: true
                         elide: Text.ElideRight
-                        text: app.returnAsShare ? "画面共有として" : "カメラとして"
+                        text: app.returnAsShare ? qsTr("画面共有として") : qsTr("カメラとして")
                         color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 13
                     }
                     Rectangle {
@@ -78,7 +78,7 @@ RowLayout {
                         color: returning.paused ? Theme.muted : Theme.ok
                         implicitWidth: sendBadge.implicitWidth + 20
                         implicitHeight: 22
-                        Text { id: sendBadge; anchors.centerIn: parent; text: returning.paused ? "停止中" : "送信中"; color: Theme.bg; font.family: app.sansFamily; font.pixelSize: 12; font.bold: true }
+                        Text { id: sendBadge; anchors.centerIn: parent; text: returning.paused ? qsTr("停止中") : qsTr("送信中"); color: Theme.bg; font.family: app.sansFamily; font.pixelSize: 12; font.bold: true }
                     }
                 }
             }
@@ -98,28 +98,28 @@ RowLayout {
                 spacing: 24
                 Row {
                     spacing: 8
-                    Text { text: "映像"; color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 13 }
+                    Text { text: qsTr("映像"); color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 13 }
                     Text {
-                        text: meeting.sendingVideo && !returning.paused ? "送信中" : "送っていません"
+                        text: meeting.sendingVideo && !returning.paused ? qsTr("送信中") : qsTr("送っていません")
                         color: meeting.sendingVideo && !returning.paused ? Theme.ok : Theme.muted
                         font.family: app.sansFamily; font.pixelSize: 13; font.bold: true
                     }
                     Text {
                         visible: meeting.sendingVideo && !returning.paused
-                        text: "毎秒" + returning.sentPerSecond + "コマ"
+                        text: qsTr("毎秒") + returning.sentPerSecond + qsTr("コマ")
                         color: Theme.ink; font.family: app.monoFamily; font.pixelSize: 13
                     }
                 }
                 Row {
                     spacing: 8
-                    Text { text: "音声"; color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 13 }
+                    Text { text: qsTr("音声"); color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 13 }
                     Text {
-                        text: audio.micIndex === 0 ? "送りません" : (meeting.sendingAudio && !returning.paused ? "送信中" : "送っていません")
+                        text: audio.micIndex === 0 ? qsTr("送りません") : (meeting.sendingAudio && !returning.paused ? qsTr("送信中") : qsTr("送っていません"))
                         color: audio.micIndex === 0 ? Theme.mute : (meeting.sendingAudio && !returning.paused ? Theme.ok : Theme.muted)
                         font.family: app.sansFamily; font.pixelSize: 13; font.bold: audio.micIndex > 0
                     }
                 }
-                Text { text: "Zoomの声：このPCでは出しません"; color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 13 }
+                Text { text: qsTr("Zoomの声：このPCでは出しません"); color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 13 }
             }
         }
         Item { Layout.fillHeight: true }
@@ -147,21 +147,21 @@ RowLayout {
                 Layout.fillWidth: true
                 spacing: 8
                 z: 6
-                Text { text: "映像の送り方"; color: Theme.ink; font.family: app.sansFamily; font.pixelSize: 14; font.bold: true }
+                Text { text: qsTr("映像の送り方"); color: Theme.ink; font.family: app.sansFamily; font.pixelSize: 14; font.bold: true }
                 Segmented {
-                    firstText: "カメラとして"
-                    secondText: "画面共有として"
+                    firstText: qsTr("カメラとして")
+                    secondText: qsTr("画面共有として")
                     first: !app.returnAsShare
                     onChosen: (first) => app.returnAsShare = !first
                 }
                 Text {
                     Layout.fillWidth: true
                     wrapMode: Text.WordWrap
-                    text: app.returnAsShare ? "共有画面として大きく見えます。入力のコマ数のまま、毎秒60コマまで送ります。ほかの人が共有している間は送れません。"
-                                            : "参加者の1人の映像として見えます。毎秒30コマまでです（Zoomのカメラ映像の上限）。"
+                    text: app.returnAsShare ? qsTr("共有画面として大きく見えます。入力のコマ数のまま、毎秒60コマまで送ります。ほかの人が共有している間は送れません。")
+                                            : qsTr("参加者の1人の映像として見えます。毎秒30コマまでです（Zoomのカメラ映像の上限）。")
                     color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 12
                 }
-                Text { Layout.topMargin: 6; text: "映像の入力（USBキャプチャー）"; color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 12 }
+                Text { Layout.topMargin: 6; text: qsTr("映像の入力（USBキャプチャー）"); color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 12 }
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: 8
@@ -169,7 +169,7 @@ RowLayout {
                     Dropdown {
                         id: videoPick
                         Layout.fillWidth: true
-                        name: "映像の入力"
+                        name: qsTr("映像の入力")
                         enabled: returning.available
                         options: returning.deviceNames
                         current: returning.deviceIndex
@@ -178,9 +178,9 @@ RowLayout {
                     }
                     PlainButton {
                         visible: returning.available
-                        text: "探し直す"
+                        text: qsTr("探し直す")
                         implicitHeight: 40
-                        Accessible.name: "映像の機器を探し直す"
+                        Accessible.name: qsTr("映像の機器を探し直す")
                         onClicked: returning.refreshDevices()
                     }
                 }
@@ -190,14 +190,14 @@ RowLayout {
                     wrapMode: Text.WordWrap
                     text: returning.problem.length > 0 ? returning.problem
                           : meeting.sendVideoNote.length > 0 ? meeting.sendVideoNote
-                          : (!returning.available && !app.demo) ? "このPCには映像を取り込める機器がありません。"
-                          : meeting.busy ? "機器と送り方の変更は、次に会議へ入るときから効きます。" : ""
+                          : (!returning.available && !app.demo) ? qsTr("このPCには映像を取り込める機器がありません。")
+                          : meeting.busy ? qsTr("機器と送り方の変更は、次に会議へ入るときから効きます。") : ""
                     color: returning.problem.length > 0 ? Theme.lost : meeting.sendVideoNote.length > 0 ? Theme.muted : Theme.mute
                     font.family: app.sansFamily; font.pixelSize: 12
                 }
                 RowLayout {
                     Layout.fillWidth: true
-                    Text { text: "Zoomでの名前"; color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 12 }
+                    Text { text: qsTr("Zoomでの名前"); color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 12 }
                     Text {
                         Layout.fillWidth: true
                         horizontalAlignment: Text.AlignRight
@@ -215,17 +215,17 @@ RowLayout {
                 Layout.fillWidth: true
                 spacing: 8
                 z: 5
-                Text { text: "音声も送る"; color: Theme.ink; font.family: app.sansFamily; font.pixelSize: 14; font.bold: true }
+                Text { text: qsTr("音声も送る"); color: Theme.ink; font.family: app.sansFamily; font.pixelSize: 14; font.bold: true }
                 ColumnLayout {
                     visible: app.audioAsio
                     Layout.fillWidth: true
                     spacing: 6
                     z: asioPick.open ? 10 : 0
-                    Text { text: "ASIOの機器"; color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 12 }
+                    Text { text: qsTr("ASIOの機器"); color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 12 }
                     Dropdown {
                         id: asioPick
                         Layout.fillWidth: true
-                        name: "ASIOの機器"
+                        name: qsTr("ASIOの機器")
                         enabled: audio.available
                         options: audio.deviceNames
                         current: audio.deviceIndex
@@ -233,7 +233,7 @@ RowLayout {
                         onPicked: (i) => audio.chooseDevice(i)
                     }
                 }
-                Text { text: "音声の入力"; color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 12 }
+                Text { text: qsTr("音声の入力"); color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 12 }
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: 8
@@ -241,7 +241,7 @@ RowLayout {
                     Dropdown {
                         id: micPick
                         Layout.fillWidth: true
-                        name: "音声の入力"
+                        name: qsTr("音声の入力")
                         enabled: audio.micAvailable
                         options: audio.micNames
                         current: audio.micIndex
@@ -250,33 +250,33 @@ RowLayout {
                     }
                     PlainButton {
                         visible: audio.micAvailable && !app.audioAsio
-                        text: "探し直す"
+                        text: qsTr("探し直す")
                         implicitHeight: 40
-                        Accessible.name: "音声の機器を探し直す"
+                        Accessible.name: qsTr("音声の機器を探し直す")
                         onClicked: audio.refreshMics()
                     }
                 }
                 LevelBar { Layout.fillWidth: true; label: "L"; level: audio.micLevels[0] }
                 LevelBar { Layout.fillWidth: true; label: "R"; level: audio.micLevels[1] }
                 PluginRack { Layout.fillWidth: true; target: -1 }
-                Text { text: "音質"; color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 12 }
+                Text { text: qsTr("音質"); color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 12 }
                 Dropdown {
                     id: qualityPick
                     Layout.fillWidth: true
                     z: open ? 10 : 0
-                    name: "Zoomへ送る音質"
-                    options: ["会話向け（Zoomの標準の加工）", "原音（加工なし）", "原音・高音質（音楽向け）"]
+                    name: qsTr("Zoomへ送る音質")
+                    options: [qsTr("会話向け（Zoomの標準の加工）"), qsTr("原音（加工なし）"), qsTr("原音・高音質（音楽向け）")]
                     current: app.sendQuality
                     onPicked: (i) => app.sendQuality = i
                 }
                 RowLayout {
                     Layout.fillWidth: true
-                    Text { Layout.fillWidth: true; text: "チャンネル"; color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 12 }
+                    Text { Layout.fillWidth: true; text: qsTr("チャンネル"); color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 12 }
                     Segmented {
                         enabled: app.sendQuality > 0
                         opacity: enabled ? 1.0 : 0.4
-                        firstText: "モノラル"
-                        secondText: "ステレオ"
+                        firstText: qsTr("モノラル")
+                        secondText: qsTr("ステレオ")
                         first: !app.sendStereo
                         onChosen: (first) => app.sendStereo = !first
                     }
@@ -287,8 +287,8 @@ RowLayout {
                     text: audio.micProblem.length > 0 ? audio.micProblem
                           : audio.problem.length > 0 && app.audioAsio ? audio.problem
                           : meeting.sendNote.length > 0 ? meeting.sendNote
-                          : app.audioAsio && audio.micNames.length < 2 ? "ASIOの入力は、ASIOの機器を選ぶとここに並びます。WASAPIとの切り替えは「設定 → 音声出力」にあります。"
-                          : "送るのは、演者の声を抜いた会場の音（マイナスワン）にしてください。「使わない」を選ぶと音は送りません。"
+                          : app.audioAsio && audio.micNames.length < 2 ? qsTr("ASIOの入力は、ASIOの機器を選ぶとここに並びます。WASAPIとの切り替えは「設定 → 音声出力」にあります。")
+                          : qsTr("送るのは、演者の声を抜いた会場の音（マイナスワン）にしてください。「使わない」を選ぶと音は送りません。")
                     color: audio.micProblem.length > 0 || (audio.problem.length > 0 && app.audioAsio) ? Theme.lost
                            : meeting.sendNote.length > 0 ? Theme.muted : Theme.mute
                     font.family: app.sansFamily; font.pixelSize: 12
@@ -300,14 +300,14 @@ RowLayout {
                 Layout.topMargin: 4
                 implicitHeight: 40
                 textSize: 13
-                text: returning.paused ? "送信を再開する" : "送信を止める"
+                text: returning.paused ? qsTr("送信を再開する") : qsTr("送信を止める")
                 tint: returning.paused ? Theme.ok : Theme.lost
                 onClicked: returning.paused = !returning.paused
             }
             Text {
                 Layout.fillWidth: true
                 wrapMode: Text.WordWrap
-                text: "「送信を止める」は、会議に入ったまま映像と音だけを止めます。"
+                text: qsTr("「送信を止める」は、会議に入ったまま映像と音だけを止めます。")
                 color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 12
             }
         }

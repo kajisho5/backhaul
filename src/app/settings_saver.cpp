@@ -1,4 +1,5 @@
 #include "settings_saver.h"
+#include "dictionary_translator.h"
 
 #include <QDateTime>
 #include <QDir>
@@ -54,12 +55,12 @@ bool SettingsSaver::flush() {
   timer_.stop();
   if (!pending_) return true;
   if (!write()) {
-    app_.notice_ = QStringLiteral("設定を保存できませんでした");
+    app_.notice_ = T("設定を保存できませんでした");
     app_.notifyChanged();
     return false;
   }
   pending_ = false;
-  if (app_.notice_ == QStringLiteral("設定を保存できませんでした")) {
+  if (app_.notice_ == T("設定を保存できませんでした")) {
     app_.notice_.clear();
     app_.notifyChanged();
   }

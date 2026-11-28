@@ -7,7 +7,7 @@ ColumnLayout {
     id: root
     spacing: 0
 
-    Text { text: "枠"; color: Theme.ink; font.family: app.sansFamily; font.pixelSize: 22; font.bold: true; Layout.bottomMargin: 20 }
+    Text { text: qsTr("枠"); color: Theme.ink; font.family: app.sansFamily; font.pixelSize: 22; font.bold: true; Layout.bottomMargin: 20 }
 
     RowLayout {
         Layout.fillWidth: true
@@ -35,7 +35,7 @@ ColumnLayout {
                     border.color: on || activeFocus ? Theme.ink : Theme.line
                     activeFocusOnTab: true
                     Accessible.role: Accessible.ListItem
-                    Accessible.name: "枠" + number + " " + label
+                    Accessible.name: qsTr("枠") + number + " " + label
                     Keys.onReturnPressed: app.selected = index
                     Keys.onSpacePressed: app.selected = index
                     Row {
@@ -64,7 +64,7 @@ ColumnLayout {
                 opacity: app.canAddSlot ? 1.0 : 0.4
                 activeFocusOnTab: app.canAddSlot
                 Accessible.role: Accessible.Button
-                Accessible.name: "枠を追加"
+                Accessible.name: qsTr("枠を追加")
                 Keys.onReturnPressed: app.addPersonSlot()
                 Keys.onSpacePressed: app.addPersonSlot()
                 // Dashed outline
@@ -82,7 +82,7 @@ ColumnLayout {
                         ctx.strokeRect(0.5, 0.5, width - 1, height - 1)
                     }
                 }
-                Text { anchors.centerIn: parent; text: "＋ 枠を追加"; color: Theme.ink; font.family: app.sansFamily; font.pixelSize: 14 }
+                Text { anchors.centerIn: parent; text: qsTr("＋ 枠を追加"); color: Theme.ink; font.family: app.sansFamily; font.pixelSize: 14 }
                 MouseArea { id: addArea; anchors.fill: parent; enabled: app.canAddSlot; onClicked: app.addPersonSlot() }
             }
         }
@@ -121,7 +121,7 @@ ColumnLayout {
                             spacing: 16
                             LabeledInput {
                                 Layout.fillWidth: true
-                                label: one.isShare ? "本番用の名前" : "本番用の名前（名前カードに出ます）"
+                                label: one.isShare ? qsTr("本番用の名前") : qsTr("本番用の名前（名前カードに出ます）")
                                 value: one.label
                                 maxLength: 40
                                 onEdited: (text) => app.setLabel(one.index, text)
@@ -129,18 +129,18 @@ ColumnLayout {
                             LabeledInput {
                                 Layout.fillWidth: true
                                 visible: !one.isShare
-                                label: "Zoom上の名前（復帰したとき、この枠へ自動で戻します）"
+                                label: qsTr("Zoom上の名前（復帰したとき、この枠へ自動で戻します）")
                                 value: one.zoomName
                                 maxLength: 100
                                 onEdited: (text) => app.setZoomName(one.index, text)
                             }
                             ColumnLayout {
                                 spacing: 6
-                                Text { text: "回線が切れたとき"; color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 12 }
+                                Text { text: qsTr("回線が切れたとき"); color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 12 }
                                 Segmented {
                                     implicitHeight: 38
-                                    firstText: "最後の映像で静止"
-                                    secondText: one.isShare ? "黒" : "名前カード"
+                                    firstText: qsTr("最後の映像で静止")
+                                    secondText: one.isShare ? qsTr("黒") : qsTr("名前カード")
                                     first: one.freezeOnLoss
                                     onChosen: (first) => app.setFreezeOnLoss(one.index, first)
                                 }
@@ -156,7 +156,7 @@ ColumnLayout {
                             Text {
                                 Layout.fillWidth: true
                                 wrapMode: Text.WordWrap
-                                text: "名前カードの見本（カメラオフのとき出力に出ます）"
+                                text: qsTr("名前カードの見本（カメラオフのとき出力に出ます）")
                                 color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 12
                             }
                             Rectangle {
@@ -199,17 +199,17 @@ ColumnLayout {
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: 8
-                Text { text: "スライドの出し方"; color: Theme.ink; font.family: app.sansFamily; font.pixelSize: 15; font.bold: true }
+                Text { text: qsTr("スライドの出し方"); color: Theme.ink; font.family: app.sansFamily; font.pixelSize: 15; font.bold: true }
                 Text {
                     Layout.fillWidth: true
                     wrapMode: Text.WordWrap
-                    text: "共有が16:9でないとき（16:10など）の出し方です。切り取ると上下あわせて高さの10%が切れます。"
+                    text: qsTr("共有が16:9でないとき（16:10など）の出し方です。切り取ると上下あわせて高さの10%が切れます。")
                     color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 13
                 }
                 Segmented {
                     implicitHeight: 38
-                    firstText: "16:9に切り取る"
-                    secondText: "全体を出して黒帯を付ける"
+                    firstText: qsTr("16:9に切り取る")
+                    secondText: qsTr("全体を出して黒帯を付ける")
                     first: app.cropSlides
                     onChosen: (first) => app.cropSlides = first
                 }

@@ -8,7 +8,7 @@ Item {
     property real level: 0
     implicitHeight: 14
     Accessible.role: Accessible.Indicator
-    Accessible.name: "レベル " + label
+    Accessible.name: qsTr("レベル ") + label
 
     Text {
         id: caption

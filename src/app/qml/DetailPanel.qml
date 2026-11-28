@@ -33,20 +33,20 @@ Item {
                 width: stack.width
                 spacing: 4
 
-                Text { text: "選択中"; color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 11 }
+                Text { text: qsTr("選択中"); color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 11 }
                 Text {
                     Layout.fillWidth: true
                     Layout.bottomMargin: 6
-                    text: "枠 " + one.number + "　" + one.label
+                    text: qsTr("枠 ") + one.number + "　" + one.label
                     elide: Text.ElideRight
                     color: Theme.ink; font.family: app.sansFamily; font.pixelSize: 20; font.bold: true
                 }
 
                 Repeater {
                     model: [
-                        { k: "参加者", v: one.zoomName.length > 0 ? one.zoomName : "未割り当て", mono: false },
-                        { k: "映像", v: one.sizeText + (one.detailText.length > 0 ? "・" + one.detailText : ""), mono: true },
-                        { k: "出力先", v: [one.display, one.channelText].filter(t => t.length > 0).join(" ／ ") || "未設定", mono: true }
+                        { k: qsTr("参加者"), v: one.zoomName.length > 0 ? one.zoomName : qsTr("未割り当て"), mono: false },
+                        { k: qsTr("映像"), v: one.sizeText + (one.detailText.length > 0 ? "・" + one.detailText : ""), mono: true },
+                        { k: qsTr("出力先"), v: [one.display, one.channelText].filter(t => t.length > 0).join(" ／ ") || qsTr("未設定"), mono: true }
                     ]
                     delegate: Item {
                         required property var modelData
@@ -71,7 +71,7 @@ Item {
                 Stepper {
                     Layout.fillWidth: true
                     Layout.topMargin: 8
-                    label: "音量"
+                    label: qsTr("音量")
                     valueText: (one.gainDb > 0 ? "+" : "") + one.gainDb.toFixed(1)
                     unit: "dB"
                     onStep: (direction) => app.nudgeGain(one.index, direction)
@@ -80,7 +80,7 @@ Item {
                 Stepper {
                     Layout.fillWidth: true
                     Layout.topMargin: 8
-                    label: "遅延"
+                    label: qsTr("遅延")
                     valueText: one.delayMs.toString()
                     unit: "ms"
                     onStep: (direction) => app.nudgeDelay(one.index, direction)
@@ -98,10 +98,10 @@ Item {
                 RowLayout {
                     Layout.fillWidth: true
                     Layout.topMargin: 8
-                    Text { Layout.fillWidth: true; text: "回線切れ時"; color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 13 }
+                    Text { Layout.fillWidth: true; text: qsTr("回線切れ時"); color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 13 }
                     Segmented {
-                        firstText: "静止"
-                        secondText: one.isShare ? "黒" : "名前カード"
+                        firstText: qsTr("静止")
+                        secondText: one.isShare ? qsTr("黒") : qsTr("名前カード")
                         first: one.freezeOnLoss
                         onChosen: (first) => app.setFreezeOnLoss(one.index, first)
                     }

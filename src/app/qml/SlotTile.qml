@@ -24,7 +24,7 @@ Item {
     implicitHeight: body.implicitHeight
     activeFocusOnTab: true
     Accessible.role: Accessible.Button
-    Accessible.name: "枠" + number + " " + label + " " + stateText
+    Accessible.name: qsTr("枠") + number + " " + label + " " + stateText
     Accessible.onPressAction: { app.selected = index; root.picked() }
     Keys.onReturnPressed: { app.selected = index; root.picked() }
     Keys.onSpacePressed: { app.selected = index; root.picked() }
@@ -65,7 +65,7 @@ Item {
                 Text {
                     visible: root.videoOut === "live" || root.videoOut === "freeze"
                     anchors.centerIn: parent
-                    text: root.videoOut === "freeze" ? "静止" : (root.isShare ? "スライド" : "映像")
+                    text: root.videoOut === "freeze" ? qsTr("静止") : (root.isShare ? qsTr("スライド") : qsTr("映像"))
                     color: "#6f757d"
                     font.family: app.sansFamily; font.pixelSize: 12; font.letterSpacing: 1.5
                 }
@@ -85,7 +85,7 @@ Item {
                 }
                 Rectangle {
                     Accessible.role: Accessible.Indicator
-                    Accessible.name: "音量メーター"
+                    Accessible.name: qsTr("音量メーター")
                     anchors { right: parent.right; top: parent.top; bottom: parent.bottom; margins: 8 }
                     width: 6
                     color: "#1d2024"
@@ -119,7 +119,7 @@ Item {
                         visible: root.alsoMuted
                         color: Theme.muted
                         implicitWidth: alsoText.implicitWidth + 16; implicitHeight: 22
-                        Text { id: alsoText; anchors.centerIn: parent; text: "ミュート"; color: Theme.bg; font.family: app.sansFamily; font.pixelSize: 12; font.bold: true }
+                        Text { id: alsoText; anchors.centerIn: parent; text: qsTr("ミュート"); color: Theme.bg; font.family: app.sansFamily; font.pixelSize: 12; font.bold: true }
                     }
                     Rectangle {
                         color: root.tint

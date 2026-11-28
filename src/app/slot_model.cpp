@@ -1,4 +1,5 @@
 #include "slot_model.h"
+#include "dictionary_translator.h"
 
 using backhaul::SlotDecision;
 using backhaul::UiState;
@@ -24,12 +25,12 @@ QString SlotModel::stateKey(UiState s) {
 
 QString SlotModel::stateText(UiState s) {
   switch (s) {
-    case UiState::Unassigned: return QStringLiteral("未割り当て");
-    case UiState::Ok: return QStringLiteral("正常");
-    case UiState::CameraOff: return QStringLiteral("カメラオフ");
-    case UiState::Muted: return QStringLiteral("ミュート");
-    case UiState::Unstable: return QStringLiteral("回線不安定");
-    case UiState::Lost: return QStringLiteral("切断");
+    case UiState::Unassigned: return T("未割り当て");
+    case UiState::Ok: return T("正常");
+    case UiState::CameraOff: return T("カメラオフ");
+    case UiState::Muted: return T("ミュート");
+    case UiState::Unstable: return T("回線不安定");
+    case UiState::Lost: return T("切断");
   }
   return QString();
 }
@@ -58,13 +59,13 @@ QVariant SlotModel::data(const QModelIndex& index, int role) const {
     case IsShareRole: return share;
     case SizeTextRole:
       if (d.video == VideoOut::Live && r.width > 0) return QStringLiteral("%1×%2").arg(r.width).arg(r.height);
-      if (d.video == VideoOut::NameCard) return QStringLiteral("名前カード");
-      if (d.video == VideoOut::Freeze) return QStringLiteral("静止");
-      return share ? QStringLiteral("共有なし") : QStringLiteral("映像なし");
+      if (d.video == VideoOut::NameCard) return T("名前カード");
+      if (d.video == VideoOut::Freeze) return T("静止");
+      return share ? T("共有なし") : T("映像なし");
     case DetailTextRole:
       if (d.video != VideoOut::Live) return QString();
-      if (share) return r.cropTo169 ? QStringLiteral("16:9に切り取り") : QStringLiteral("全体を表示");
-      return r.fps > 0 ? QStringLiteral("%1コマ").arg(r.fps) : QString();
+      if (share) return r.cropTo169 ? T("16:9に切り取り") : T("全体を表示");
+      return r.fps > 0 ? T("%1コマ").arg(r.fps) : QString();
     case LevelRole: return d.audio ? r.level : 0.0;
     case GainRole: return r.gainDb;
     case DelayRole: return r.delayMs;

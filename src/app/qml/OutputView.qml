@@ -30,7 +30,7 @@ Rectangle {
             Text {
                 visible: root.placeholder.length > 0 && (one.videoOut === "live" || one.videoOut === "freeze")
                 anchors.centerIn: parent
-                text: one.videoOut === "freeze" ? "静止" : root.placeholder
+                text: one.videoOut === "freeze" ? qsTr("静止") : root.placeholder
                 color: "#6f757d"
                 font.family: app.sansFamily; font.pixelSize: 13; font.letterSpacing: 1.5
             }

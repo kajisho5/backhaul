@@ -1,4 +1,5 @@
 #include "return_controller.h"
+#include "dictionary_translator.h"
 
 #include <QImage>
 
@@ -29,7 +30,7 @@ ReturnController::~ReturnController() {
 }
 
 QStringList ReturnController::deviceNames() const {
-  QStringList names{QStringLiteral("使わない")};
+  QStringList names{T("使わない")};
   for (const backhaul::VideoDevice& d : devices_) names.push_back(QString::fromStdString(d.name));
   return names;
 }
@@ -38,7 +39,7 @@ QString ReturnController::inputText() const {
   if (input_ == nullptr || deviceIndex_ == 0 || !input_->running()) return QString();
   const int milli = input_->milliFps();
   const QString rate = milli % 1000 == 0 ? QString::number(milli / 1000) : QString::number(milli / 1000.0, 'f', 2);
-  return QStringLiteral("%1×%2・%3コマ").arg(input_->width()).arg(input_->height()).arg(rate);
+  return T("%1×%2・%3コマ").arg(input_->width()).arg(input_->height()).arg(rate);
 }
 
 void ReturnController::setPaused(bool paused) {
@@ -71,14 +72,14 @@ void ReturnController::stopDevice() {
 bool ReturnController::startDevice(int index) {
   if (input_ == nullptr || index < 1 || index > static_cast<int>(devices_.size())) return false;
   if (!app_.sendsVideo()) {
-    problem_ = QStringLiteral("このPCの役割ではZoomへ映像を送りません（役割を「返し」にすると送れます）");
+    problem_ = T("このPCの役割ではZoomへ映像を送りません（役割を「返し」にすると送れます）");
     emit changed();
     return false;
   }
   std::string error;
   if (!input_->start(devices_[static_cast<std::size_t>(index - 1)].id, this, &error)) {
     deviceIndex_ = 0;
-    problem_ = QStringLiteral("この機器から映像を取り込めませんでした：%1").arg(QString::fromStdString(error));
+    problem_ = T("この機器から映像を取り込めませんでした：%1").arg(QString::fromStdString(error));
     frames_.clear(kPreviewSlot);
     emit changed();
     return false;
@@ -110,7 +111,7 @@ void ReturnController::startSaved() {
       return;
     }
   }
-  problem_ = QStringLiteral("前回の機器「%1」が見つかりません").arg(app_.videoDeviceName());
+  problem_ = T("前回の機器「%1」が見つかりません").arg(app_.videoDeviceName());
   emit changed();
 }
 
@@ -126,7 +127,7 @@ void ReturnController::tick() {
   // The device can disappear on its own (unplugged, signal lost and renegotiated).
   if (input_ != nullptr && deviceIndex_ > 0 && !input_->running()) {
     deviceIndex_ = 0;
-    problem_ = QStringLiteral("映像の機器が止まりました。機器を選び直してください");
+    problem_ = T("映像の機器が止まりました。機器を選び直してください");
     frames_.clear(kPreviewSlot);
     moved = true;
   }

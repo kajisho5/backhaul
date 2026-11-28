@@ -1,4 +1,5 @@
 #include "plugin_controller.h"
+#include "dictionary_translator.h"
 
 #include <QDir>
 #include <QFile>
@@ -166,11 +167,11 @@ void PluginController::rebuild(int target) {
 
 bool PluginController::load(int target, Entry& entry) {
   if (host_ == nullptr) {
-    entry.note = QStringLiteral("このプログラムではプラグインを使えません");
+    entry.note = T("このプログラムではプラグインを使えません");
     return false;
   }
   if (!QFileInfo::exists(QString::fromStdString(entry.path))) {
-    entry.note = QStringLiteral("このPCに見つかりません");
+    entry.note = T("このPCに見つかりません");
     return false;
   }
   std::string error;
@@ -178,14 +179,14 @@ bool PluginController::load(int target, Entry& entry) {
   std::shared_ptr<backhaul::PluginInstance> instance = host_->create(entry.path, entry.classId, channelsOf(target), &error);
   if (instance != nullptr && !entry.saved.isEmpty() && !instance->setState(fromBytes(entry.saved))) {
     // It runs, with its own defaults. Say so instead of pretending the old settings are back.
-    entry.note = QStringLiteral("保存してあった設定を戻せませんでした（初期状態で動いています）");
+    entry.note = T("保存してあった設定を戻せませんでした（初期状態で動いています）");
   } else {
     entry.note.clear();
   }
   clearLoading();
   if (instance == nullptr) {
-    entry.note = error == "the plug-in only works in mono" ? QStringLiteral("モノラル専用のため、Zoomへ送る側では使えません")
-                                                           : QStringLiteral("読み込めませんでした：%1").arg(QString::fromStdString(error));
+    entry.note = error == "the plug-in only works in mono" ? T("モノラル専用のため、Zoomへ送る側では使えません")
+                                                           : T("読み込めませんでした：%1").arg(QString::fromStdString(error));
     return false;
   }
   entry.instance = std::move(instance);
@@ -205,7 +206,7 @@ void PluginController::add(int target, int moduleIndex) {
   clearLoading();
   cancelChoice();
   if (classes.empty()) {
-    problem_ = QStringLiteral("「%1」を読み込めませんでした：%2")
+    problem_ = T("「%1」を読み込めませんでした：%2")
                    .arg(QFileInfo(QString::fromStdString(path)).completeBaseName(), QString::fromStdString(error));
     emit changed();
     return;
@@ -286,9 +287,9 @@ void PluginController::openEditor(int target, int index) {
   if (r == nullptr || index < 0 || index >= static_cast<int>(r->size())) return;
   Entry& entry = (*r)[static_cast<std::size_t>(index)];
   if (entry.instance == nullptr) return;
-  const QString where = target == kMic ? QStringLiteral("マイク") : QStringLiteral("枠%1").arg(target + 1);
+  const QString where = target == kMic ? T("マイク") : T("枠%1").arg(target + 1);
   if (!entry.instance->openEditor(QStringLiteral("%1 — %2").arg(entry.name, where).toStdString())) {
-    problem_ = QStringLiteral("「%1」の画面を開けませんでした").arg(entry.name);
+    problem_ = T("「%1」の画面を開けませんでした").arg(entry.name);
     emit changed();
   }
 }
@@ -408,7 +409,7 @@ void PluginController::restore() {
       if (!crashedPath.isEmpty() && QString::fromStdString(e.path) == crashedPath) e.blocked = true;
       if (endedBadly) e.bypassed = true;
       if (e.blocked) {
-        e.note = QStringLiteral("前回、読み込み中にアプリが落ちたため外してあります");
+        e.note = T("前回、読み込み中にアプリが落ちたため外してあります");
         continue;
       }
       load(target, e);
@@ -431,10 +432,10 @@ void PluginController::restore() {
   for (int row = 0; row < static_cast<int>(slotRacks_.size()); ++row) bring(row, slotRacks_[static_cast<std::size_t>(row)]);
 
   if (!crashedPath.isEmpty()) {
-    problem_ = QStringLiteral("前回「%1」の読み込み中にアプリが落ちました。このプラグインは外してあります（行の「もう一度試す」で戻せます）。")
+    problem_ = T("前回「%1」の読み込み中にアプリが落ちました。このプラグインは外してあります（行の「もう一度試す」で戻せます）。")
                    .arg(QFileInfo(crashedPath).completeBaseName());
   } else if (endedBadly && any) {
-    problem_ = QStringLiteral("前回、プラグインを使っている最中にアプリが正しく終わりませんでした。安全のため、すべてバイパスにして開いています。");
+    problem_ = T("前回、プラグインを使っている最中にアプリが正しく終わりませんでした。安全のため、すべてバイパスにして開いています。");
   }
   store();
   emit changed();

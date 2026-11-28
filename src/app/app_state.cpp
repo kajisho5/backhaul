@@ -1,4 +1,5 @@
 #include "app_state.h"
+#include "dictionary_translator.h"
 
 #include <QFontDatabase>
 #include <QJsonArray>
@@ -46,7 +47,7 @@ void AppState::setRole(const QString& key) {
   if (role_ == backhaul::Role::Slide && shareRow() < 0) {  // a slide PC needs a slide slot
     SlotRow slide;
     slide.number = QStringLiteral("S");
-    slide.label = QStringLiteral("スライド");
+    slide.label = T("スライド");
     slide.situation.kind = backhaul::SlotKind::Share;
     slide.cropTo169 = true;
     slots_.insertRow(static_cast<int>(slots_.rows().size()), slide);
@@ -143,7 +144,7 @@ QVector<int> AppState::pickRows() const {
 }
 
 QStringList AppState::pickNames() const {
-  QStringList names{QStringLiteral("（だれも出さない）")};
+  QStringList names{T("（だれも出さない）")};
   for (const int row : pickRows()) names.push_back(participants_.rows()[row].name);
   return names;
 }
@@ -357,7 +358,7 @@ void AppState::addPersonSlot() {
   const int number = static_cast<int>(rows.size()) - slots_.shareCount() + 1;
   SlotRow row;
   row.number = QString::number(number);
-  row.label = QStringLiteral("演者%1").arg(number);
+  row.label = T("演者%1").arg(number);
   row.situation.kind = backhaul::SlotKind::Person;
   slots_.insertRow(at, row);
   participants_.slotInserted(at, slotNumbers());
@@ -424,6 +425,7 @@ QJsonObject AppState::settingsJson() const {
   root[QStringLiteral("return")] = returning;
   root[QStringLiteral("standbyText")] = standbyText_;
   if (!pluginSettings_.isEmpty()) root[QStringLiteral("plugins")] = pluginSettings_;
+  root[QStringLiteral("language")] = language_;
   root[QStringLiteral("role")] = role();
   root[QStringLiteral("roleScreen")] = roleScreen_;
   QJsonObject twoShot;
@@ -574,6 +576,13 @@ bool AppState::applySettings(const QJsonObject& settings) {
 
   // Return picture: absent in files written before that role existed.
   QString videoDevice;
+  // Language: absent in files written before there was a choice; those PCs keep what they show now.
+  QString language = language_;
+  const QJsonValue languageValue = settings.value(QStringLiteral("language"));
+  if (!languageValue.isUndefined()) {
+    language = languageValue.toString();
+    if (language != QStringLiteral("en") && language != QStringLiteral("ja")) return false;
+  }
   bool returnAsShare = false;
   bool returnInAll = false;
   const QJsonValue returnValue = settings.value(QStringLiteral("return"));
@@ -618,6 +627,10 @@ bool AppState::applySettings(const QJsonObject& settings) {
   videoDeviceName_ = videoDevice;
   returnAsShare_ = returnAsShare;
   returnInAll_ = returnInAll;
+  if (language != language_) {
+    language_ = language;
+    emit languageChanged();
+  }
   role_ = role;
   roleScreen_ = roleScreen;
   twoShotFill_ = fill;
@@ -642,14 +655,14 @@ void AppState::loadDefaults() {
   for (int i = 1; i <= 4; ++i) {
     SlotRow r;
     r.number = QString::number(i);
-    r.label = QStringLiteral("演者%1").arg(i);
+    r.label = T("演者%1").arg(i);
     r.situation.kind = backhaul::SlotKind::Person;
     r.channels = quint32{1} << (i - 1);
     rows.push_back(r);
   }
   SlotRow slide;
   slide.number = QStringLiteral("S");
-  slide.label = QStringLiteral("スライド");
+  slide.label = T("スライド");
   slide.situation.kind = backhaul::SlotKind::Share;
   slide.cropTo169 = true;
   slide.channels = quint32{1} << 4;
@@ -715,14 +728,14 @@ void AppState::refreshDisplays() {
                      : single  ? (s.key == roleScreen_ && roleRow() >= 0 && roleRow() < slotRows.size() ? roleRow() : -1)
                                : slotByScreen_.value(s.key, -1);
     if (r.isOperator) {
-      r.slotText = QStringLiteral("操作画面（このPCの画面）");
+      r.slotText = T("操作画面（このPCの画面）");
     } else if (slot >= 0 && slot < slotRows.size()) {
       r.slot = slot;
       const bool share = slotRows[slot].situation.kind == backhaul::SlotKind::Share;
-      r.slotText = QStringLiteral("%1%2　%3").arg(share ? QString() : QStringLiteral("枠"), slotRows[slot].number, slotRows[slot].label);
+      r.slotText = QStringLiteral("%1%2　%3").arg(share ? QString() : T("枠"), slotRows[slot].number, slotRows[slot].label);
       shownOn[slot].push_back(s.title);
     } else {
-      r.slotText = QStringLiteral("出さない（黒）");
+      r.slotText = T("出さない（黒）");
     }
     rows.push_back(r);
   }
@@ -734,10 +747,10 @@ void AppState::refreshDisplays() {
 }
 
 QStringList AppState::outputChoices() const {
-  QStringList choices{QStringLiteral("出さない（黒）")};
+  QStringList choices{T("出さない（黒）")};
   for (const SlotRow& r : slots_.rows()) {
     const bool share = r.situation.kind == backhaul::SlotKind::Share;
-    choices.push_back(QStringLiteral("%1%2　%3").arg(share ? QString() : QStringLiteral("枠"), r.number, r.label));
+    choices.push_back(QStringLiteral("%1%2　%3").arg(share ? QString() : T("枠"), r.number, r.label));
   }
   return choices;
 }
@@ -759,7 +772,7 @@ void AppState::setDisplayChoice(int displayRow, int choice) {
 }
 
 QStringList AppState::gridChoices() const {
-  QStringList choices{QStringLiteral("出さない")};
+  QStringList choices{T("出さない")};
   for (const int row : outputRows()) choices.push_back(screens_[row].title);
   return choices;
 }
@@ -816,6 +829,14 @@ void AppState::setVideoDeviceName(const QString& name) {
 void AppState::setReturnAsShare(bool share) {
   if (share == returnAsShare_) return;
   returnAsShare_ = share;
+  emit changed();
+  emit settingsEdited();
+}
+
+void AppState::setLanguage(const QString& language) {
+  if (language == language_ || (language != QStringLiteral("en") && language != QStringLiteral("ja"))) return;
+  language_ = language;
+  emit languageChanged();
   emit changed();
   emit settingsEdited();
 }

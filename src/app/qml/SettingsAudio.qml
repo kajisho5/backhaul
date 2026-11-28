@@ -10,7 +10,7 @@ ColumnLayout {
     readonly property int numberWidth: 76
     readonly property int gap: 8
 
-    Text { text: "音声出力"; color: Theme.ink; font.family: app.sansFamily; font.pixelSize: 22; font.bold: true; Layout.bottomMargin: 20 }
+    Text { text: qsTr("音声出力"); color: Theme.ink; font.family: app.sansFamily; font.pixelSize: 22; font.bold: true; Layout.bottomMargin: 20 }
 
     RowLayout {
         Layout.fillWidth: true
@@ -21,7 +21,7 @@ ColumnLayout {
         ColumnLayout {
             spacing: 6
             Layout.alignment: Qt.AlignBottom
-            Text { text: "方式"; color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 12 }
+            Text { text: qsTr("方式"); color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 12 }
             Segmented {
                 visible: audio.asioAvailable
                 implicitHeight: 40
@@ -48,9 +48,9 @@ ColumnLayout {
             Layout.minimumWidth: 160
             Layout.maximumWidth: 320
             Layout.alignment: Qt.AlignBottom
-            label: "機器"
+            label: qsTr("機器")
             value: app.audioDeviceName
-            placeholder: "未選択"
+            placeholder: qsTr("未選択")
             readOnly: true
         }
         ColumnLayout {
@@ -61,11 +61,11 @@ ColumnLayout {
             Layout.alignment: Qt.AlignBottom
             spacing: 6
             z: deviceChoice.open ? 100 : 0
-            Text { text: "機器"; color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 12 }
+            Text { text: qsTr("機器"); color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 12 }
             Dropdown {
                 id: deviceChoice
                 Layout.fillWidth: true
-                name: "音声の機器"
+                name: qsTr("音声の機器")
                 options: audio.deviceNames
                 current: audio.deviceIndex
                 dimmed: audio.deviceIndex === 0
@@ -75,7 +75,7 @@ ColumnLayout {
         PlainButton {
             visible: audio.available
             Layout.alignment: Qt.AlignBottom
-            text: "探し直す"
+            text: qsTr("探し直す")
             textSize: 13
             implicitHeight: 40
             onClicked: audio.refreshDevices()
@@ -85,11 +85,11 @@ ColumnLayout {
             Layout.bottomMargin: 11
             spacing: 12
             Text {
-                text: (app.audioSampleRate / 1000) + "kHz・出力 " + app.audioChannels + "ch"
+                text: (app.audioSampleRate / 1000) + qsTr("kHz・出力 ") + app.audioChannels + "ch"
                 color: Theme.ink; font.family: app.monoFamily; font.pixelSize: 13
             }
             Text {
-                text: app.audioOk ? "正常" : "停止中"
+                text: app.audioOk ? qsTr("正常") : qsTr("停止中")
                 color: app.audioOk ? Theme.ok : Theme.mute
                 font.family: app.sansFamily; font.pixelSize: 13; font.bold: true
             }
@@ -103,19 +103,19 @@ ColumnLayout {
         Layout.bottomMargin: 20
         wrapMode: Text.WordWrap
         text: audio.problem.length > 0 ? audio.problem
-                : !audio.asioAvailable ? "このプログラムにはASIOが入っていません。Windowsの音声（WASAPI）で出します。"
-                : app.audioAsio ? "ASIOは機器を48kHzで動かします。出力chの数は機器のドライバーに従います。"
-                : "Windowsの音声（WASAPI）で出します。機器側の周波数へはWindowsが変換します。"
+                : !audio.asioAvailable ? qsTr("このプログラムにはASIOが入っていません。Windowsの音声（WASAPI）で出します。")
+                : app.audioAsio ? qsTr("ASIOは機器を48kHzで動かします。出力chの数は機器のドライバーに従います。")
+                : qsTr("Windowsの音声（WASAPI）で出します。機器側の周波数へはWindowsが変換します。")
         color: audio.problem.length > 0 ? Theme.lost : Theme.mute
         font.family: app.sansFamily; font.pixelSize: 13
     }
 
-    Text { text: "割り当て表"; color: Theme.ink; font.family: app.sansFamily; font.pixelSize: 15; font.bold: true; Layout.bottomMargin: 6 }
+    Text { text: qsTr("割り当て表"); color: Theme.ink; font.family: app.sansFamily; font.pixelSize: 15; font.bold: true; Layout.bottomMargin: 6 }
     Text {
         Layout.fillWidth: true
         Layout.bottomMargin: 16
         wrapMode: Text.WordWrap
-        text: "マスを押すと、その枠の音がそのchから出ます。同じchに複数の枠を入れると、まとめて出ます。"
+        text: qsTr("マスを押すと、その枠の音がそのchから出ます。同じchに複数の枠を入れると、まとめて出ます。")
         color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 13
     }
 
@@ -124,7 +124,7 @@ ColumnLayout {
         Layout.fillWidth: true
         Layout.bottomMargin: 8
         spacing: root.gap
-        Text { Layout.preferredWidth: root.nameWidth; text: "枠"; color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 11 }
+        Text { Layout.preferredWidth: root.nameWidth; text: qsTr("枠"); color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 11 }
         Repeater {
             model: app.audioChannels
             delegate: Text {
@@ -136,8 +136,8 @@ ColumnLayout {
                 color: Theme.mute; font.family: app.monoFamily; font.pixelSize: 12
             }
         }
-        Text { Layout.preferredWidth: root.numberWidth; horizontalAlignment: Text.AlignHCenter; text: "音量"; color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 11 }
-        Text { Layout.preferredWidth: root.numberWidth; horizontalAlignment: Text.AlignHCenter; text: "遅延"; color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 11 }
+        Text { Layout.preferredWidth: root.numberWidth; horizontalAlignment: Text.AlignHCenter; text: qsTr("音量"); color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 11 }
+        Text { Layout.preferredWidth: root.numberWidth; horizontalAlignment: Text.AlignHCenter; text: qsTr("遅延"); color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 11 }
     }
 
     Repeater {
@@ -180,7 +180,7 @@ ColumnLayout {
                     border.color: activeFocus ? Theme.ink : (on ? Theme.ok : Theme.line)
                     activeFocusOnTab: true
                     Accessible.role: Accessible.CheckBox
-                    Accessible.name: "枠" + line.number + "をch " + (index + 1) + "へ"
+                    Accessible.name: qsTr("枠") + line.number + qsTr("をch ") + (index + 1) + qsTr("へ")
                     Accessible.checkable: true
                     Accessible.checked: on
                     Keys.onReturnPressed: app.toggleRoute(line.index, index + 1)
@@ -188,7 +188,7 @@ ColumnLayout {
                     Text {
                         anchors.centerIn: parent
                         visible: cell.on
-                        text: "出力"
+                        text: qsTr("出力")
                         color: Theme.bg; font.family: app.sansFamily; font.pixelSize: 13; font.bold: true
                     }
                     MouseArea { anchors.fill: parent; onClicked: app.toggleRoute(line.index, cell.index + 1) }

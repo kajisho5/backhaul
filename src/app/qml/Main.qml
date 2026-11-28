@@ -57,7 +57,7 @@ Window {
             y: screen ? screen.virtualY : 0
             flags: Qt.Window | Qt.FramelessWindowHint
             color: "black"
-            title: "backhaul 出力"
+            title: qsTr("backhaul 出力")
             visibility: slot >= 0 && !isOperator ? Window.FullScreen : Window.Hidden
             OutputView { anchors.fill: parent; visible: app.role !== "twoshot"; slotRow: slot }
             TwoShotView { anchors.fill: parent; visible: app.role === "twoshot" }
@@ -111,14 +111,14 @@ Window {
                 Text {
                     Layout.fillWidth: true
                     elide: Text.ElideRight
-                    text: "テスト音を出しています　出力 " + audio.testChannelsText
+                    text: qsTr("テスト音を出しています　出力 ") + audio.testChannelsText
                     color: Theme.bg; font.family: app.sansFamily; font.pixelSize: 13; font.bold: true
                 }
                 PlainButton {
-                    text: "止める"
+                    text: qsTr("止める")
                     tint: Theme.bg
                     implicitHeight: 26
-                    Accessible.name: "テスト音を止める"
+                    Accessible.name: qsTr("テスト音を止める")
                     onClicked: audio.stopTest()
                 }
             }

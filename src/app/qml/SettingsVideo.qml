@@ -9,7 +9,7 @@ ColumnLayout {
     spacing: 0
     readonly property int tableWidth: Math.min(width, 860)
 
-    Text { text: "映像出力"; color: Theme.ink; font.family: app.sansFamily; font.pixelSize: 22; font.bold: true; Layout.bottomMargin: 20 }
+    Text { text: qsTr("映像出力"); color: Theme.ink; font.family: app.sansFamily; font.pixelSize: 22; font.bold: true; Layout.bottomMargin: 20 }
 
     RowLayout {
         Layout.fillWidth: true
@@ -19,17 +19,17 @@ ColumnLayout {
         ColumnLayout {
             Layout.fillWidth: true
             spacing: 6
-            Text { text: "モニターと枠"; color: Theme.ink; font.family: app.sansFamily; font.pixelSize: 15; font.bold: true }
+            Text { text: qsTr("モニターと枠"); color: Theme.ink; font.family: app.sansFamily; font.pixelSize: 15; font.bold: true }
             Text {
                 Layout.fillWidth: true
                 wrapMode: Text.WordWrap
-                text: "つながっているモニターごとに、全画面で出す枠を選びます。選んでいないモニターは黒を出します。"
+                text: qsTr("つながっているモニターごとに、全画面で出す枠を選びます。選んでいないモニターは黒を出します。")
                 color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 13
             }
         }
         PlainButton {
             Layout.alignment: Qt.AlignBottom
-            text: "各モニターに番号を出す"
+            text: qsTr("各モニターに番号を出す")
             textSize: 13
             implicitHeight: 40
             color: Theme.control
@@ -40,7 +40,7 @@ ColumnLayout {
 
     Text {
         visible: displayRows.count === 0
-        text: "モニターが見つかりません"
+        text: qsTr("モニターが見つかりません")
         color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 14
     }
 
@@ -123,7 +123,7 @@ ColumnLayout {
             Text {
                 Layout.preferredWidth: 72
                 horizontalAlignment: Text.AlignRight
-                text: line.isOperator ? "—" : (line.slot >= 0 ? (app.demo ? "割り当て済み" : "出力中") : "黒")
+                text: line.isOperator ? "—" : (line.slot >= 0 ? (app.demo ? qsTr("割り当て済み") : qsTr("出力中")) : qsTr("黒"))
                 color: line.slot >= 0 && !line.isOperator && !app.demo ? Theme.ok : Theme.mute; font.family: app.sansFamily; font.pixelSize: 12; font.bold: true
             }
         }
@@ -136,17 +136,17 @@ ColumnLayout {
         Layout.maximumWidth: 420
         spacing: 10
         z: gridChoice.open ? 100 : 0
-        Text { text: "2×2まとめの出力先"; color: Theme.ink; font.family: app.sansFamily; font.pixelSize: 15; font.bold: true }
+        Text { text: qsTr("2×2まとめの出力先"); color: Theme.ink; font.family: app.sansFamily; font.pixelSize: 15; font.bold: true }
         Text {
             Layout.fillWidth: true
             wrapMode: Text.WordWrap
-            text: "操作画面で「2×2まとめ」にしたとき、4人を1枚にまとめて出すモニターです。"
+            text: qsTr("操作画面で「2×2まとめ」にしたとき、4人を1枚にまとめて出すモニターです。")
             color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 13
         }
         Dropdown {
             id: gridChoice
             Layout.preferredWidth: 320
-            name: "2×2まとめの出力先"
+            name: qsTr("2×2まとめの出力先")
             options: app.gridChoices
             current: app.gridChoice
             dimmed: app.gridChoice === 0
