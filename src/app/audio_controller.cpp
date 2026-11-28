@@ -242,7 +242,7 @@ void AudioController::stopMic() {
 
 bool AudioController::startMic(int index) {
   if (!app_.sendsAudio()) {
-    micProblem_ = QStringLiteral("このPCの役割ではZoomへ音を送りません（役割を「音声」にすると送れます）");
+    micProblem_ = QStringLiteral("このPCの今の設定ではZoomへ音を送りません（役割「音声」「返し」か、「1台でぜんぶ」で設定の「返し」を「送る」にすると送れます）");
     emit changed();
     return false;
   }

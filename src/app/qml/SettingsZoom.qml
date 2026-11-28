@@ -445,8 +445,8 @@ ColumnLayout {
                     { at: 1, title: "Zoomの鍵が通った", note: "ライセンス（または自分の鍵）で作った入場券をZoomが確認すると進みます" },
                     { at: 2, title: "会議に入った", note: meeting.step >= 2 ? app.meetingName : "" },
                     { at: 3, title: meeting.step === 2 ? "映像と音を受け取る許可を待っています" : "映像と音を受け取る許可が出た",
-                      note: "ホストに、この参加者「" + app.joinName + "」を共同ホストにしてもらってください" },
-                    { at: 3, title: "映像と音を受け取っている", note: "許可が出ると自動で始まります" }
+                      note: meeting.step >= 3 ? "" : "ホストに、この参加者「" + app.joinName + "」を共同ホストにしてもらってください" },
+                    { at: 3, title: "映像と音を受け取っている", note: meeting.step >= 3 ? "" : "許可が出ると自動で始まります" }
                 ]
                 delegate: ColumnLayout {
                     id: stepRow

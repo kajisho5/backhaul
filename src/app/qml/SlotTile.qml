@@ -25,9 +25,9 @@ Item {
     activeFocusOnTab: true
     Accessible.role: Accessible.Button
     Accessible.name: "枠" + number + " " + label + " " + stateText
-    Accessible.onPressAction: app.selected = index
-    Keys.onReturnPressed: app.selected = index
-    Keys.onSpacePressed: app.selected = index
+    Accessible.onPressAction: { app.selected = index; root.picked() }
+    Keys.onReturnPressed: { app.selected = index; root.picked() }
+    Keys.onSpacePressed: { app.selected = index; root.picked() }
 
     // Selection ring, drawn outside the tile so the state colour stays visible.
     Rectangle {

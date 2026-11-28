@@ -214,7 +214,7 @@ Window {
                     state: win.returnState
                     onSettingsRequested: { settingsTab = "return"; settingsOpen = true }
                 }
-                ParticipantList { Layout.fillWidth: true; Layout.fillHeight: true }
+                ParticipantList { Layout.fillWidth: true; Layout.fillHeight: true; slotOnShow: !win.returnPicked }
             }
         }
     }
