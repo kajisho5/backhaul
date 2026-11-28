@@ -6,7 +6,9 @@
 #include "dictionary_translator.h"
 
 const DictionaryEntry kEnglish[] = {
+    {"前回は異常終了しました。入っていた会議に入り直しています", "The program ended unexpectedly last time. Rejoining the meeting it was in"},
     // The spare sound device
+    {"サンプル予備機器", "Sample spare device"},
     {"なし", "None"},
     {"予備の機器", "Spare device"},
     {"予備の音声機器", "Spare audio device"},

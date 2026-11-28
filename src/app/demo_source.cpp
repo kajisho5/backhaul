@@ -26,6 +26,7 @@ void loadDemo(AppState& app) {
   app.connected_ = true;
   app.elapsed_ = QStringLiteral("00:42:15");
   app.audioDeviceName_ = T("サンプル音声機器");
+  app.setSpareDeviceName(T("サンプル予備機器"));
   app.audioAsio_ = false;
   app.audioChannels_ = 8;
   app.audioSampleRate_ = 48000;

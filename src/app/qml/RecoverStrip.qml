@@ -18,6 +18,8 @@ Rectangle {
                         text: qsTr("回線が切れました。%1回目を %2秒後に試します").arg(2).arg(8), waiting: true })
             list.push({ kind: "audio", title: qsTr("音声の機器を探しています"),
                         text: qsTr("「%1」が見つかりません。つなぎ直すと自動で戻ります（%2秒）").arg("Sample audio device").arg(12), waiting: false })
+            list.push({ kind: "spare", title: qsTr("予備の機器で出力しています"),
+                        text: qsTr("「%1」が戻りました。「元の機器に戻す」で切り替えます（一瞬音が途切れます）").arg("Sample audio device"), waiting: true })
             return list
         }
         if (meeting.rejoining) {

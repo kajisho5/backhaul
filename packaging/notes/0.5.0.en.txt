@@ -1,0 +1,4 @@
+New: the show goes on when a device or the program itself stops.
+- Spare audio device: pick one under "Audio output" in the settings. When the main device stays away for 3 seconds, the spare takes over by itself. It keeps running until you press "Back to the main device".
+- Starting again by itself: if the program crashes, it starts again and goes back into the meeting it was in. After three crashes within five minutes it stays closed.
+- The pre-show check now looks at the spare audio device as well.

@@ -22,7 +22,7 @@ bool mayRestart(const std::vector<std::int64_t>& earlier, std::int64_t nowMs) {
   for (const std::int64_t at : earlier) {
     if (at <= nowMs && nowMs - at < kRestartWindowMs) ++recent;
   }
-  return recent < kRestartLimit;
+  return recent + 1 < kCrashLimit;
 }
 
 }  // namespace backhaul

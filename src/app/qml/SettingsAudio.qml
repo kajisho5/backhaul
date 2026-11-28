@@ -19,6 +19,7 @@ ColumnLayout {
         z: 50
 
         ColumnLayout {
+            id: methodColumn
             spacing: 6
             Layout.alignment: Qt.AlignBottom
             Text { text: qsTr("方式"); color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 12 }
@@ -100,14 +101,27 @@ ColumnLayout {
 
     // The spare output device: takes over by itself when the main one stays away.
     RowLayout {
-        visible: audio.available
         Layout.fillWidth: true
         Layout.maximumWidth: 860
         Layout.topMargin: -20
-        Layout.bottomMargin: 28
-        spacing: 16
+        Layout.bottomMargin: 8
+        spacing: 24
         z: spareChoice.open ? 100 : 0
+        // Under the main device's field, not under the method.
+        Item { implicitWidth: methodColumn.width; implicitHeight: 1 }
+        // Without a sound output on this system the saved name is only shown.
+        LabeledInput {
+            visible: !audio.available
+            Layout.fillWidth: true
+            Layout.minimumWidth: 160
+            Layout.maximumWidth: 320
+            label: qsTr("予備の機器")
+            value: app.spareDeviceName
+            placeholder: qsTr("なし")
+            readOnly: true
+        }
         ColumnLayout {
+            visible: audio.available
             Layout.fillWidth: true
             Layout.minimumWidth: 160
             Layout.maximumWidth: 320
@@ -125,13 +139,16 @@ ColumnLayout {
                 onPicked: (index) => audio.chooseSpare(index)
             }
         }
-        Text {
-            Layout.fillWidth: true
-            Layout.alignment: Qt.AlignBottom
-            wrapMode: Text.WordWrap
-            text: qsTr("主の機器が3秒戻らないとき、予備へ自動で切り替えます。主の機器が戻っても、「元の機器に戻す」を押すまで予備のままです。")
-            color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 13
-        }
+        Item { Layout.fillWidth: true; Layout.preferredWidth: 0 }
+    }
+    Text {
+        Layout.fillWidth: true
+        Layout.maximumWidth: 860
+        Layout.leftMargin: methodColumn.width + 24
+        Layout.bottomMargin: 36
+        wrapMode: Text.WordWrap
+        text: qsTr("主の機器が3秒戻らないとき、予備へ自動で切り替えます。主の機器が戻っても、「元の機器に戻す」を押すまで予備のままです。")
+        color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 13
     }
 
     Text {

@@ -260,6 +260,105 @@ static void testRejoin() {
   a.setRejoins(true);
 }
 
+// started again after a crash: back into the meeting this PC was in
+static void testResume() {
+  struct Kept final : SecretStore {
+    QByteArray* shared;
+    explicit Kept(QByteArray* s) : shared(s) {}
+    QByteArray load() override { return *shared; }
+    bool save(const QByteArray& secret) override {
+      *shared = secret;
+      return true;
+    }
+    bool clear() override {
+      shared->clear();
+      return true;
+    }
+  };
+  QByteArray kept;  // what survives the crash (the system's protected store)
+  ZoomCredentials saved{QStringLiteral("SampleClientId_01"), QStringLiteral("sample-secret")};
+  QJsonObject settings;
+  {
+    AppState a;
+    a.loadDefaults();
+    a.setRole(QStringLiteral("all"));
+    a.setMeetingId(QStringLiteral("123 4567 8901"));
+    settings = a.settingsJson();
+    FrameStore frames;
+    auto* client = new ScriptedClient;
+    MeetingController m(a, frames, std::unique_ptr<backhaul::MeetingClient>(client), std::make_unique<MemoryCredentials>(&saved));
+    m.setResumeStore(std::make_unique<Kept>(&kept));
+    m.setProperty("passcode", QStringLiteral("sample-pass"));
+    m.join();
+    CHECK(kept.isEmpty());  // nothing is kept before this PC is really in
+    client->events->onMeetingState(MeetingState::Receiving, {});
+    CHECK(!kept.isEmpty() && kept.contains("sample-pass"));
+    // Leaving in the normal way takes it away again...
+    m.leave();
+    CHECK(kept.isEmpty());
+    // ...and so does a meeting that ends.
+    m.join();
+    client->events->onMeetingState(MeetingState::Receiving, {});
+    CHECK(!kept.isEmpty());
+    client->events->onEndCause(backhaul::EndCause::Host);
+    client->events->onMeetingState(MeetingState::Ended, {});
+    CHECK(kept.isEmpty());
+    // While coming back after a dropped line it stays: a crash then still finds its way back.
+    m.join();
+    client->events->onMeetingState(MeetingState::Receiving, {});
+    client->events->onEndCause(backhaul::EndCause::Connection);
+    client->events->onMeetingState(MeetingState::Failed, {});
+    CHECK(m.rejoining() && !kept.isEmpty());
+    m.rejoinNow();
+    client->events->onMeetingState(MeetingState::Receiving, {});
+    // Here the program "crashes": it goes away without leaving.
+  }
+  CHECK(!kept.isEmpty());
+
+  {  // Started again by the watcher.
+    AppState a;
+    CHECK(a.applySettings(settings));
+    FrameStore frames;
+    auto* client = new ScriptedClient;
+    MeetingController m(a, frames, std::unique_ptr<backhaul::MeetingClient>(client), std::make_unique<MemoryCredentials>(&saved));
+    m.setResumeStore(std::make_unique<Kept>(&kept));
+    CHECK(m.resume());
+    CHECK(client->joins == 1 && client->lastRequest.meetingNumber == 12345678901ULL && client->lastRequest.passcode == "sample-pass");
+    // The line is not back yet: the try is followed by the next ones, as after a drop.
+    client->events->onEndCause(backhaul::EndCause::Connection);
+    client->events->onMeetingState(MeetingState::Failed, {});
+    CHECK(m.rejoining());
+    m.rejoinNow();
+    client->events->onMeetingState(MeetingState::Receiving, {});
+    CHECK(!m.rejoining() && client->joins == 2 && !kept.isEmpty());
+    m.leave();
+    CHECK(kept.isEmpty());
+    CHECK(!m.resume());  // nothing to come back to
+  }
+  {  // A normal start does not go into a meeting a crash long ago left behind.
+    kept = QByteArrayLiteral("{\"passcode\":\"old\",\"zak\":\"\"}");
+    AppState a;
+    CHECK(a.applySettings(settings));
+    FrameStore frames;
+    auto* client = new ScriptedClient;
+    MeetingController m(a, frames, std::unique_ptr<backhaul::MeetingClient>(client), std::make_unique<MemoryCredentials>(&saved));
+    m.setResumeStore(std::make_unique<Kept>(&kept));
+    m.forgetResume();
+    CHECK(kept.isEmpty() && client->joins == 0 && !m.resume());
+  }
+  {  // No meeting ID any more: nothing is joined, and what was kept is dropped.
+    kept = QByteArrayLiteral("{\"passcode\":\"old\",\"zak\":\"\"}");
+    AppState a;
+    a.loadDefaults();
+    a.setRole(QStringLiteral("all"));
+    FrameStore frames;
+    auto* client = new ScriptedClient;
+    MeetingController m(a, frames, std::unique_ptr<backhaul::MeetingClient>(client), std::make_unique<MemoryCredentials>(&saved));
+    m.setResumeStore(std::make_unique<Kept>(&kept));
+    CHECK(!m.resume() && client->joins == 0 && kept.isEmpty());
+  }
+}
+
 // how good the line is: this PC's own, and each person's
 static void testLine() {
   AppState a;
@@ -1656,6 +1755,7 @@ int main(int argc, char* argv[]) {
 
 
   testRejoin();
+  testResume();
   testLine();
   testDevicesComeBack();
   testSpareDevice();

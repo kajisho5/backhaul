@@ -1,6 +1,7 @@
 #include <QCommandLineParser>
 #include "dictionary_translator.h"
 #include <QDesktopServices>
+#include <QDir>
 #include <QFileInfo>
 #include <QSysInfo>
 #include <QGuiApplication>
@@ -31,8 +32,13 @@
 #include "system_facts.h"
 #include "update/updater.h"
 #include "update_controller.h"
+#include "watchdog.h"
 
 int main(int argc, char* argv[]) {
+  // The watcher (see watchdog.h) is a run of this program that only waits for another one.
+  int watcherCode = 0;
+  if (watchdog::ranAsWatcher(argc, argv, &watcherCode)) return watcherCode;
+
   QGuiApplication qtApp(argc, argv);
   QGuiApplication::setApplicationName(QStringLiteral("backhaul"));
   QGuiApplication::setApplicationVersion(QStringLiteral(BACKHAUL_VERSION));
@@ -64,6 +70,8 @@ int main(int argc, char* argv[]) {
                                      QStringLiteral("For pictures: show <version> as a newer version that was found."),
                                      QStringLiteral("version"));
   args.addOption(updateOpt);
+  const QCommandLineOption resumeOpt(QStringLiteral("resume"), QStringLiteral("Started again after a crash: go back into the meeting this PC was in."));
+  args.addOption(resumeOpt);
   const QCommandLineOption lockOpt(QStringLiteral("locked"), QStringLiteral("For pictures: start with the show lock on."));
   args.addOption(lockOpt);
   const QCommandLineOption recoverOpt(QStringLiteral("recover"), QStringLiteral("For pictures: show the \"coming back\" strip with sample lines."));
@@ -126,6 +134,7 @@ int main(int argc, char* argv[]) {
                             QSysInfo::machineHostName(), [](const QUrl& url) { return QDesktopServices::openUrl(url); });
   meeting.setLicence(&licence);
   licence.refresh();
+  if (!demo) meeting.setResumeStore(makeSecretStore(QStringLiteral("backhaul/resume")));
 
   // While the operator has paused sending, the sound stays here too. Declared before
   // `audio` so that it is still there when audio's sending thread makes its last call.
@@ -279,6 +288,31 @@ int main(int argc, char* argv[]) {
     }
     state.setReturnInAll(send == QStringLiteral("on"));
     window->setProperty("returnPicked", true);
+  }
+
+  // Starting again after a crash. Not for the demo or for pictures; the mark is set once
+  // the window is up, so that a program that cannot even start is not started for ever.
+  if (!demo && !args.isSet(shotOpt)) {
+    const QString folder = QDir::toNativeSeparators(QFileInfo(SettingsSaver::defaultPath()).absolutePath());
+    QTimer::singleShot(0, &qtApp, [folder] { watchdog::begin(folder.toStdString()); });
+    QObject::connect(&qtApp, &QCoreApplication::aboutToQuit, &qtApp, [] { watchdog::end(); });
+    if (args.isSet(resumeOpt)) {
+      // The devices get a moment to start before the meeting is joined again.
+      QTimer::singleShot(2000, &meeting, [&meeting, &state] {
+        if (meeting.resume()) {
+          state.notice_ = T("前回は異常終了しました。入っていた会議に入り直しています");
+          state.notifyChanged();
+          QTimer::singleShot(20000, &state, [&state] {
+            if (state.notice_ == T("前回は異常終了しました。入っていた会議に入り直しています")) {
+              state.notice_.clear();
+              state.notifyChanged();
+            }
+          });
+        }
+      });
+    } else {
+      meeting.forgetResume();
+    }
   }
 
   if (args.isSet(shotOpt)) {

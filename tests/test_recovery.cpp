@@ -32,12 +32,13 @@ void testRecovery() {
   CHECK(pickOutput(false, true, 3000) == OutputPick::Spare);
   CHECK(pickOutput(false, false, 99999) == OutputPick::None);
 
-  // Started again after a crash, but not more than three times in five minutes.
+  // Started again after a crash, but the third crash within five minutes is left alone.
   const std::int64_t minute = 60 * 1000;
   CHECK(mayRestart({}, 10 * minute));
-  CHECK(mayRestart({9 * minute, 8 * minute}, 10 * minute));
+  CHECK(mayRestart({9 * minute}, 10 * minute));
+  CHECK(!mayRestart({9 * minute, 8 * minute}, 10 * minute));
+  CHECK(mayRestart({9 * minute, 5 * minute}, 10 * minute));                  // five minutes ago no longer counts
+  CHECK(mayRestart({9 * minute, 4 * minute, 1 * minute}, 10 * minute));
   CHECK(!mayRestart({9 * minute, 8 * minute, 7 * minute}, 10 * minute));
-  CHECK(mayRestart({9 * minute, 8 * minute, 5 * minute}, 10 * minute));      // five minutes ago no longer counts
-  CHECK(mayRestart({9 * minute, 8 * minute, 4 * minute, 1 * minute}, 10 * minute));
   CHECK(mayRestart({11 * minute, 12 * minute, 13 * minute}, 10 * minute));   // a clock set back: times "from the future" do not count
 }

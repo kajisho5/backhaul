@@ -22,6 +22,7 @@ add_library(backhaul_app_state STATIC
   slot_model.cpp slot_model.h
   check_controller.cpp check_controller.h
   system_facts.cpp system_facts.h
+  watchdog.cpp watchdog.h
   update_controller.cpp update_controller.h
 )
 target_include_directories(backhaul_app_state PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
@@ -152,4 +153,18 @@ if(BUILD_TESTING)
   backhaul_warnings(licence_controller_tests app)
   add_test(NAME licence_controller_tests COMMAND licence_controller_tests)
   set_tests_properties(licence_controller_tests PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+  # The watcher for real: a stand-in program that starts it and then ends in several ways.
+  if(WIN32)
+    find_package(Python3 COMPONENTS Interpreter)
+    if(Python3_FOUND)
+      add_executable(watchdog_probe ${CMAKE_SOURCE_DIR}/tests/app/watchdog_probe.cpp watchdog.cpp watchdog.h)
+      target_include_directories(watchdog_probe PRIVATE ${CMAKE_SOURCE_DIR}/src)
+      target_link_libraries(watchdog_probe PRIVATE backhaul_core)
+      backhaul_warnings(watchdog_probe app)
+      add_test(NAME watchdog_tests
+        COMMAND Python3::Interpreter ${CMAKE_SOURCE_DIR}/tests/app/watchdog_test.py $<TARGET_FILE:watchdog_probe>)
+      set_tests_properties(watchdog_tests PROPERTIES TIMEOUT 240)
+    endif()
+  endif()
 endif()

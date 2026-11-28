@@ -38,11 +38,12 @@ inline constexpr std::int64_t kSpareAfterMs = 3000;
 enum class OutputPick { None, Main, Spare };
 OutputPick pickOutput(bool mainThere, bool spareThere, std::int64_t mainGoneMs);
 
-// A program that crashed is started again, but not for ever: with this many starts
-// within the window, the next crash is left alone.
-inline constexpr int kRestartLimit = 3;
+// A program that crashed is started again, but not for ever: the crash that makes it
+// this many within the window is left alone (two are answered, the third is not).
+inline constexpr int kCrashLimit = 3;
 inline constexpr std::int64_t kRestartWindowMs = 5 * 60 * 1000;
-// `earlier` are the times of the restarts so far (any order). True when one more is allowed.
+// `earlier` are the times of the crashes answered with a restart so far (any order).
+// True when the crash that has just happened may be answered with one more.
 bool mayRestart(const std::vector<std::int64_t>& earlier, std::int64_t nowMs);
 
 }  // namespace backhaul
