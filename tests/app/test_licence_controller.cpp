@@ -13,6 +13,7 @@
 
 #include "app_state.h"
 #include "check.h"
+#include "check_controller.h"
 #include "frame_store.h"
 #include "gate_client.h"
 #include "licence_controller.h"
@@ -465,6 +466,97 @@ struct KeptCredentials final : CredentialStore {
   }
 };
 
+// the check before the show: what the screen says, from what is known
+void testCheck() {
+  Rig rig;
+  AppState a;
+  a.loadDefaults();
+  a.setRole(QStringLiteral("camera"));  // shows one person: no sound of its own
+  FrameStore frames;
+  MeetingController m(a, frames, std::make_unique<NotingClient>(), std::make_unique<KeptCredentials>());
+  m.setLicence(rig.licence.get());
+  SystemFacts system;
+  CheckController check(a, m, rig.licence.get(), nullptr, nullptr, [&system] { return system; }, [] { return QStringLiteral("14:02"); });
+  auto level = [&check](const QString& name) {
+    for (const QVariant& v : check.items()) {
+      if (v.toMap().value(QStringLiteral("name")).toString() == name) return v.toMap().value(QStringLiteral("level")).toString();
+    }
+    return QString();
+  };
+  auto text = [&check](const QString& name) {
+    for (const QVariant& v : check.items()) {
+      if (v.toMap().value(QStringLiteral("name")).toString() == name) return v.toMap().value(QStringLiteral("text")).toString();
+    }
+    return QString();
+  };
+  CHECK(check.items().isEmpty() && check.checkedAt().isEmpty());
+
+  // A PC fresh from the installer: no licence, no meeting ID. The server is asked even so.
+  const QString status = QStringLiteral("/v1/status");
+  rig.gate->answer(status, 401, {{QStringLiteral("error"), QStringLiteral("unknown_device")}});
+  check.run();
+  CHECK(check.running() && check.checkedAt() == QStringLiteral("14:02"));
+  CHECK(level(QStringLiteral("インターネット")).isEmpty());  // not claimed before the answer
+  CHECK(level(QStringLiteral("ライセンス")) == QStringLiteral("bad") && level(QStringLiteral("会議ID")) == QStringLiteral("bad"));
+  CHECK(level(QStringLiteral("音声の機器")).isEmpty());  // not this PC's job
+  CHECK(level(QStringLiteral("映像の出力先")) == QStringLiteral("warn"));
+  rig.gate->flush();
+  CHECK(!check.running() && level(QStringLiteral("インターネット")) == QStringLiteral("ok"));
+  CHECK(!rig.licence->active() && check.badCount() == 2);
+
+  // Set up: a licence, a meeting ID, mains power, notifications held back.
+  rig.activate();
+  a.setMeetingId(QStringLiteral("123 4567 8901"));
+  system.power = 1;
+  system.notifications = 0;
+  rig.gate->answer(status, 200, {{QStringLiteral("problem"), QJsonValue()}, {QStringLiteral("licence"), licenceJson(2)}});
+  check.run();
+  rig.gate->flush();
+  CHECK(level(QStringLiteral("ライセンス")) == QStringLiteral("ok") && text(QStringLiteral("ライセンス")).contains(QStringLiteral("2 / 5")));
+  CHECK(level(QStringLiteral("会議ID")) == QStringLiteral("ok") && text(QStringLiteral("会議ID")) == QStringLiteral("123 4567 8901"));
+  CHECK(level(QStringLiteral("Zoomのサインイン")) == QStringLiteral("warn"));
+  CHECK(level(QStringLiteral("電源とスリープ")) == QStringLiteral("ok") && level(QStringLiteral("Windowsの通知")) == QStringLiteral("ok"));
+  CHECK(check.badCount() == 0 && check.warnCount() == 2 && check.okCount() == 5);
+
+  // On battery, notifications showing, and the licence ends in three days.
+  system.power = 0;
+  system.notifications = 1;
+  rig.gate->answer(status, 200, {{QStringLiteral("problem"), QJsonValue()},
+                                 {QStringLiteral("licence"), licenceJson(2, static_cast<double>(rig.now + 3 * 86400 + 100))}});
+  check.run();
+  rig.gate->flush();
+  CHECK(level(QStringLiteral("電源とスリープ")) == QStringLiteral("warn") && level(QStringLiteral("Windowsの通知")) == QStringLiteral("warn"));
+  CHECK(level(QStringLiteral("ライセンス")) == QStringLiteral("warn") && text(QStringLiteral("ライセンス")).contains(QStringLiteral("あと3日")));
+
+  // The owner stopped the licence.
+  rig.gate->answer(status, 200, {{QStringLiteral("problem"), QStringLiteral("revoked")}, {QStringLiteral("licence"), licenceJson(2)}});
+  check.run();
+  rig.gate->flush();
+  CHECK(rig.licence->stopped() && level(QStringLiteral("ライセンス")) == QStringLiteral("bad"));
+  rig.gate->answer(status, 200, {{QStringLiteral("problem"), QJsonValue()}, {QStringLiteral("licence"), licenceJson(2)}});
+  check.run();
+  rig.gate->flush();
+  CHECK(!rig.licence->stopped() && level(QStringLiteral("ライセンス")) == QStringLiteral("ok"));
+
+  // No network: said as such, and what was known about the licence stays.
+  rig.gate->unreachable(status);
+  check.run();
+  rig.gate->flush();
+  CHECK(level(QStringLiteral("インターネット")) == QStringLiteral("bad") && level(QStringLiteral("ライセンス")) == QStringLiteral("ok"));
+  CHECK(rig.licence->active());
+
+  // A second look while the first is under way: only the newer answer counts.
+  rig.gate->unreachable(status);
+  rig.gate->answer(status, 200, {{QStringLiteral("problem"), QJsonValue()}, {QStringLiteral("licence"), licenceJson(2)}});
+  check.run();
+  check.run();
+  rig.gate->flush();
+  CHECK(!check.running() && level(QStringLiteral("インターネット")) == QStringLiteral("ok"));
+
+  // Looking changes nothing that is saved.
+  CHECK(a.meetingId() == QStringLiteral("123 4567 8901") && !a.locked());
+}
+
 void testJoining() {
   Rig rig;
   AppState a;
@@ -585,6 +677,7 @@ int main(int argc, char* argv[]) {
   qputenv("QT_QPA_PLATFORM", "offscreen");
   QGuiApplication qt(argc, argv);
   testLicence();
+  testCheck();
   testJoinTokens();
   testZoomSignIn();
   testJoining();

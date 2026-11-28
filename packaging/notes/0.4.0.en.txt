@@ -1,0 +1,5 @@
+New: things that keep a show from stopping.
+- Show lock: "Lock" in the top bar keeps settings, role, devices and slot assignments from being changed by accident. Hold the button for one second to unlock.
+- Pre-show check: a new page at the top of the settings looks at the connection, the licence, the Zoom sign-in, the meeting ID, devices, output monitors, power, notifications and updates in one go.
+- Line state: during a meeting the top bar shows "Line Good / Note / Poor", and a person with a bad line is marked "Unstable".
+- Windows is kept from sleeping and from switching the screens off during a meeting.
