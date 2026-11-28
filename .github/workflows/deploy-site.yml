@@ -1,0 +1,20 @@
+# Publishes the sales site (site/) to Cloudflare through tower's shared workflow.
+# Only files are published: no secret is used by the site, and none is built into it.
+name: deploy site
+on:
+  push:
+    branches: [main]
+    paths: ['site/**', '.github/workflows/deploy-site.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  deploy:
+    uses: kajisho5/tower/.github/workflows/deploy-workers.yml@f6911432850c58a144002d690cdd778a7be091c8  # tower main, 2026-11-28
+    with:
+      working-directory: site
+      build-command: npm run build
+      command: deploy
+    secrets:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="backhaul"><title>backhaul</title>
+<defs>
+<linearGradient id="loop" x1="60" y1="40" x2="200" y2="220" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#b9ffd6"/><stop offset="0.4" stop-color="#4be695"/><stop offset="1" stop-color="#12bba4"/></linearGradient>
+</defs>
+<rect width="256" height="256" rx="58" fill="#0c1513"/>
+<path d="M82 50V206" stroke="#f2f2f0" stroke-width="34" stroke-linecap="round" fill="none"/>
+<g fill="none" stroke="url(#loop)" stroke-width="34" stroke-linecap="round" stroke-linejoin="round"><path d="M82 150A52 52 0 1 1 134 202H118"/><path d="M140 176L114 202L140 228"/></g>
+</svg>

@@ -1,0 +1,62 @@
+---
+// The frame of every page: head, the floating bar, the footer.
+import "@fontsource-variable/inter";
+import "@fontsource-variable/noto-sans-jp";
+import "../styles.css";
+import { BILLING, GATE, SALES_OPEN } from "../texts";
+import type { Texts } from "../texts";
+
+interface Props {
+  t: Texts;
+  title?: string;
+  /** The same page in the other language. */
+  otherHref?: string;
+  /** Pages that only make sense to their visitor (the key, the trial form) stay out of search engines. */
+  hidden?: boolean;
+}
+const { t, title, otherHref = t.other.href, hidden = false } = Astro.props;
+const pageTitle = title ? `${title} | backhaul` : t.title;
+const here = new URL(Astro.url.pathname, Astro.site).href;
+---
+<!doctype html>
+<html lang={t.lang}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>{pageTitle}</title>
+    <meta name="description" content={t.description} />
+    {(hidden || !SALES_OPEN) && <meta name="robots" content="noindex" />}
+    <link rel="canonical" href={here} />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <meta name="theme-color" content="#050a08" />
+    <meta property="og:title" content={pageTitle} />
+    <meta property="og:description" content={t.description} />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content={here} />
+  </head>
+  <body>
+    <a class="skip" href="#main">{t.lang === "ja" ? "本文へ" : "Skip to content"}</a>
+    {!SALES_OPEN && <p class="preview">{t.preview}</p>}
+    <header>
+      <nav class="pill" aria-label={t.lang === "ja" ? "ページ内の案内" : "Site"}>
+        <a class="logo" href={t.home}><img src="/logo.svg" alt="backhaul" width="109" height="26" /></a>
+        <a href={`${t.home}#how`}>{t.nav.how}</a>
+        <a href={`${t.home}#pricing`}>{t.nav.pricing}</a>
+        <a href={`${t.home}start/`}>{t.nav.guide}</a>
+        <a class="keep" href={otherHref} lang={t.other.label === "English" ? "en" : "ja"}>{t.other.label}</a>
+        <a class="cta" href={`${t.home}trial/`}>{t.nav.trial}</a>
+      </nav>
+    </header>
+    <main id="main" class="wrap"><slot /></main>
+    <footer class="wrap">
+      <div class="links">
+        <a href={`${GATE}/privacy`}>{t.footer.privacy}</a>
+        <a href={`${GATE}/terms`}>{t.footer.terms}</a>
+        <a href={`${GATE}/support`}>{t.footer.support}</a>
+        <a href={BILLING}>{t.footer.billing}</a>
+      </div>
+      <p>{t.footer.zoom}</p>
+      <p>© 2026 SEVENTHWELL</p>
+    </footer>
+  </body>
+</html>

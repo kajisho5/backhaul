@@ -1,0 +1,12 @@
+---
+import Base from "../layouts/Base.astro";
+import { texts } from "../texts";
+const t = texts.en;
+---
+<Base t={t} title={t.notFound.title} hidden>
+  <div class="sheet">
+    <h1>{t.notFound.title}</h1>
+    <p class="lead">{t.notFound.text} / {texts.ja.notFound.text}</p>
+    <div class="more"><a class="btn solid" href="/">{t.notFound.home}</a><a class="btn line" href="/ja/">{texts.ja.notFound.home}</a></div>
+  </div>
+</Base>

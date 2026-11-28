@@ -7,6 +7,7 @@ import { newLicenceKey, normaliseKey, problemOf, randomToken, sameText, sha256He
 import type { Licence } from "./licence";
 import { adminPage } from "./admin_page";
 import { publicPage, publicPaths } from "./public_pages";
+import { openShop, shopRoutes } from "./shop";
 import { Store } from "./store";
 import { Vault } from "./vault";
 import type { Device } from "./store";
@@ -19,7 +20,15 @@ export interface Env {
   ZOOM_CLIENT_ID?: string;
   ZOOM_CLIENT_SECRET?: string;
   ADMIN_TOKEN?: string;
-  SIGNIN_KEY?: string; // random text, 32 characters or more: seals the licences' Zoom sign-ins
+  SIGNIN_KEY?: string; // random text, 32 characters or more: seals the licences' Zoom sign-ins and undelivered keys
+  // Selling (see shop.ts). The first three are plain settings, the rest are secrets.
+  SITE_URL?: string; // the sales site, the only origin that may call /v1/shop from a browser
+  MAIL_FROM?: string; // "backhaul <address>", an address of a domain verified at Resend
+  BILLING_URL?: string; // Stripe's sign-in page for subscribers (plan, card, cancel)
+  STRIPE_TAX_RATE_JPY?: string; // txr_…: added to payments in yen (prices are without tax)
+  STRIPE_SECRET_KEY?: string;
+  STRIPE_WEBHOOK_SECRET?: string;
+  RESEND_API_KEY?: string;
 }
 
 /** The outside world, so that tests can set the time and stand in for Zoom. */
@@ -78,8 +87,16 @@ export function createApp(outside: Outside) {
   });
 
   app.get("/", async (c) =>
-    c.json({ service: "backhaul-gate", zoomConfigured: zoomKeys(c.env) !== null, signInConfigured: (await Vault.open(c.env.SIGNIN_KEY)) !== null }),
+    c.json({
+      service: "backhaul-gate",
+      zoomConfigured: zoomKeys(c.env) !== null,
+      signInConfigured: (await Vault.open(c.env.SIGNIN_KEY)) !== null,
+      shopConfigured: (await openShop(c.env, outside)) !== null,
+    }),
   );
+
+  // Before "/v1" below: these need no PC token.
+  app.route("/v1/shop", shopRoutes(outside));
 
   // ---- registering a PC ----
 

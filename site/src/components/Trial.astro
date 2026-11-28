@@ -1,0 +1,67 @@
+---
+// The trial form: an address in, the key goes out by mail.
+import Base from "../layouts/Base.astro";
+import { GATE } from "../texts";
+import type { Texts } from "../texts";
+
+interface Props { t: Texts }
+const { t } = Astro.props;
+const x = t.trial;
+---
+<Base t={t} title={x.title} otherHref={`${t.other.href}trial/`} hidden>
+  <div class="sheet">
+    <h1>{x.heading}</h1>
+    <p class="lead">{x.lead}</p>
+    <form class="card" id="trial" novalidate data-gate={GATE} data-lang={t.lang} data-busy={x.sending} data-errors={JSON.stringify(x.errors)} data-done={x.done("{email}")}>
+      <label for="email">{x.label}</label>
+      <input id="email" name="email" type="email" autocomplete="email" inputmode="email" required maxlength="254" spellcheck="false" autocapitalize="off" />
+      <button class="btn solid" type="submit">{x.send}</button>
+      <p class="problem" role="alert"></p>
+      <p class="note">{x.privacy}</p>
+    </form>
+    <div class="card" id="sent" hidden>
+      <p class="good" role="status"></p>
+      <a class="btn line" href={`${t.home}start/`}>{x.next}</a>
+    </div>
+  </div>
+</Base>
+
+<script>
+  import { ask } from "../scripts/gate";
+
+  const form = document.querySelector<HTMLFormElement>("#trial");
+  const sent = document.querySelector<HTMLElement>("#sent");
+  if (form && sent) {
+    const input = form.querySelector<HTMLInputElement>("input")!;
+    const button = form.querySelector<HTMLButtonElement>("button")!;
+    const problem = form.querySelector<HTMLElement>(".problem")!;
+    const errors = JSON.parse(form.dataset.errors ?? "{}") as Record<string, string>;
+    const label = button.textContent ?? "";
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (button.disabled) return;
+      const email = input.value.trim();
+      problem.textContent = "";
+      if (email.length === 0 || !input.checkValidity()) {
+        problem.textContent = errors.bad_email ?? "";
+        input.focus();
+        return;
+      }
+      button.disabled = true;
+      button.textContent = form.dataset.busy ?? label;
+      const answer = await ask(form.dataset.gate ?? "", "trial", { email, lang: form.dataset.lang });
+      button.disabled = false;
+      button.textContent = label;
+      if (answer.status === 200) {
+        form.hidden = true;
+        sent.hidden = false;
+        const line = sent.querySelector<HTMLElement>(".good")!;
+        line.textContent = (form.dataset.done ?? "").replace("{email}", email);
+        line.tabIndex = -1;
+        line.focus();
+        return;
+      }
+      problem.textContent = errors[answer.error] ?? errors.network ?? "";
+    });
+  }
+</script>

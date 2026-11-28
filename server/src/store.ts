@@ -60,6 +60,29 @@ export interface Signin {
   zakAt: number;
 }
 
+/** A Stripe subscription and its licence. */
+export interface Sale {
+  stripeId: string;
+  licenceId: number;
+  status: string;
+  keyCipher: string | null;
+  mailedAt: number | null;
+  shownAt: number | null;
+}
+
+interface SaleRow {
+  stripe_id: string;
+  licence_id: number;
+  status: string;
+  key_cipher: string | null;
+  mailed_at: number | null;
+  shown_at: number | null;
+}
+
+function toSale(r: SaleRow): Sale {
+  return { stripeId: r.stripe_id, licenceId: r.licence_id, status: r.status, keyCipher: r.key_cipher, mailedAt: r.mailed_at, shownAt: r.shown_at };
+}
+
 export class Store {
   constructor(private readonly db: D1Database) {}
 
@@ -239,5 +262,88 @@ export class Store {
 
   async unlockSignin(licenceId: number) {
     await this.db.prepare("UPDATE zoom_signins SET busy_until = 0 WHERE licence_id = ?").bind(licenceId).run();
+  }
+
+  // ---- bought licences (Stripe subscriptions) and trials ----
+
+  async subscriptionOf(stripeId: string): Promise<Sale | null> {
+    const row = await this.db.prepare("SELECT * FROM subscriptions WHERE stripe_id = ?").bind(stripeId).first<SaleRow>();
+    return row === null ? null : toSale(row);
+  }
+
+  /**
+   * Ties a new licence to a subscription. False when the subscription already has one
+   * (another request was faster): the caller then drops the licence it just made.
+   */
+  async addSubscription(stripeId: string, licenceId: number, status: string, keyCipher: string, now: number): Promise<boolean> {
+    const done = await this.db
+      .prepare(
+        `INSERT INTO subscriptions (stripe_id, licence_id, status, key_cipher, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)
+         ON CONFLICT (stripe_id) DO NOTHING`,
+      )
+      .bind(stripeId, licenceId, status, keyCipher, now, now)
+      .run();
+    return done.meta.changes > 0;
+  }
+
+  /** A licence nobody has seen the key of (made a moment ago, and not needed after all). */
+  async dropLicence(id: number) {
+    await this.db.prepare("DELETE FROM licences WHERE id = ?").bind(id).run();
+  }
+
+  /** What the subscription says now. PCs beyond the new number lose their place, the longest unused first. */
+  async followSubscription(stripeId: string, licenceId: number, status: string, seats: number, expiresAt: number, now: number) {
+    await this.db.prepare("UPDATE subscriptions SET status = ?, updated_at = ? WHERE stripe_id = ?").bind(status, now, stripeId).run();
+    await this.db.prepare("UPDATE licences SET seats = ?, expires_at = ? WHERE id = ?").bind(seats, expiresAt, licenceId).run();
+    const keep = "SELECT id FROM devices WHERE licence_id = ? ORDER BY last_seen_at DESC, id DESC LIMIT ?";
+    await this.db
+      .prepare(`DELETE FROM logins WHERE device_row IN (SELECT id FROM devices WHERE licence_id = ? AND id NOT IN (${keep}))`)
+      .bind(licenceId, licenceId, seats)
+      .run();
+    await this.db.prepare(`DELETE FROM devices WHERE licence_id = ? AND id NOT IN (${keep})`).bind(licenceId, licenceId, seats).run();
+  }
+
+  /** True for exactly one caller: that one sends the key by e-mail. */
+  async claimKeyMail(stripeId: string, now: number): Promise<boolean> {
+    const done = await this.db
+      .prepare("UPDATE subscriptions SET mailed_at = ? WHERE stripe_id = ? AND mailed_at IS NULL AND key_cipher IS NOT NULL")
+      .bind(now, stripeId)
+      .run();
+    return done.meta.changes > 0;
+  }
+
+  /** The e-mail did not go out: the next request tries again. */
+  async releaseKeyMail(stripeId: string) {
+    await this.db.prepare("UPDATE subscriptions SET mailed_at = NULL WHERE stripe_id = ?").bind(stripeId).run();
+  }
+
+  /** True for exactly one caller: that one shows the key on the page. */
+  async claimKeyShown(stripeId: string, now: number): Promise<boolean> {
+    const done = await this.db
+      .prepare("UPDATE subscriptions SET shown_at = ? WHERE stripe_id = ? AND shown_at IS NULL AND key_cipher IS NOT NULL")
+      .bind(now, stripeId)
+      .run();
+    return done.meta.changes > 0;
+  }
+
+  /** Removes sealed keys that reached their buyer: shown and mailed, or mailed a week ago. */
+  async forgetDeliveredKeys(now: number) {
+    await this.db
+      .prepare("UPDATE subscriptions SET key_cipher = NULL WHERE key_cipher IS NOT NULL AND mailed_at IS NOT NULL AND (shown_at IS NOT NULL OR mailed_at < ?)")
+      .bind(now - 7 * 86400)
+      .run();
+  }
+
+  async trialExists(emailHash: string): Promise<boolean> {
+    return (await this.db.prepare("SELECT 1 AS one FROM trials WHERE email_hash = ?").bind(emailHash).first<{ one: number }>()) !== null;
+  }
+
+  /** False when this address already had a trial. */
+  async addTrial(emailHash: string, licenceId: number, now: number): Promise<boolean> {
+    const done = await this.db
+      .prepare("INSERT INTO trials (email_hash, licence_id, created_at) VALUES (?, ?, ?) ON CONFLICT (email_hash) DO NOTHING")
+      .bind(emailHash, licenceId, now)
+      .run();
+    return done.meta.changes > 0;
   }
 }
