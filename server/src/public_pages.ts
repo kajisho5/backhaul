@@ -35,7 +35,7 @@ const pages: Page[] = [
 
 <h2>How long we keep it</h2>
 <ul>
-<li>Zoom sign-in tokens: until you press サインアウト (Sign out) in backhaul (this also revokes them at Zoom), until you remove backhaul from your Zoom account (the server discards them the next time they would be used), or until we stop your licence. Tokens left with an expired licence are deleted together with its records.</li>
+<li>Zoom sign-in tokens: until you press Sign out in backhaul (this also revokes them at Zoom), until you remove backhaul from your Zoom account (the server discards them the next time they would be used), or until we stop your licence. Tokens left with an expired licence are deleted together with its records.</li>
 <li>Licence and PC records: while the licence is valid and up to 12 months after, for support and accounting. Records we must keep by law (for example invoices) are kept as long as the law requires.</li>
 </ul>
 
@@ -108,9 +108,9 @@ const pages: Page[] = [
 
 <h2>Common questions</h2>
 <ul>
-<li><b>"映像と音を受け取る許可を待っています" (waiting for permission to receive video and audio).</b> Zoom requires the host's consent. Ask the host to make the backhaul participant a co-host, or to allow the request shown in the meeting.</li>
-<li><b>Cannot join a meeting hosted by another account.</b> Sign in under 設定 (Settings) &gt; Zoom接続 &gt; Zoomアカウント, then join again.</li>
-<li><b>Moving a licence to another PC.</b> Press このPCを外す (Remove this PC) under 設定 &gt; Zoom接続 on the old PC, then enter the key on the new one.</li>
+<li><b>"Waiting for permission to receive video and audio".</b> Zoom requires the host's consent. Ask the host to make the backhaul participant a co-host, or to allow the request shown in the meeting.</li>
+<li><b>Cannot join a meeting hosted by another account.</b> Press Sign in with Zoom under Settings &gt; Zoom connection &gt; Zoom account, then join again.</li>
+<li><b>Moving a licence to another PC.</b> Press Remove this PC under Settings &gt; Zoom connection on the old PC, then enter the key on the new one.</li>
 </ul>
 <p>The <a href="/docs">guide</a> explains adding, using and removing backhaul. Privacy and data deletion requests: see the <a href="/privacy">privacy policy</a>.</p>`,
   },
@@ -128,29 +128,29 @@ const pages: Page[] = [
 <li>A Zoom account. To join meetings hosted by another Zoom account, you sign in with Zoom once (below).</li>
 </ul>
 
-<p>The interface is currently in Japanese. Below, names are written as they appear on screen, with English in brackets.</p>
+<p>The interface is in English; Japanese can be chosen at the top of Settings. Below, names are written as they appear on screen in English.</p>
 
 <h2>Adding backhaul</h2>
 <ol>
 <li>Install backhaul on the PC and start it.</li>
-<li>Open 設定 (Settings) &gt; Zoom接続 (Zoom connection), and enter your licence key under ライセンス (Licence).</li>
-<li>Under Zoomアカウント (Zoom account), press サインイン (Sign in). Your browser opens Zoom's consent page; it asks for one permission, "View a user's token", which lets backhaul obtain a short-lived Zoom Access Key so that Zoom knows which user this PC acts for. Press Allow, then return to backhaul. One sign-in covers all PCs on the same licence.</li>
+<li>Open Settings &gt; Zoom connection, and enter your licence key under Licence.</li>
+<li>Under Zoom account, press Sign in with Zoom. Your browser opens Zoom's consent page; it asks for one permission, "View a user's token", which lets backhaul obtain a short-lived Zoom Access Key so that Zoom knows which user this PC acts for. Press Allow, then return to backhaul. One sign-in covers all PCs on the same licence.</li>
 </ol>
 
 <h2>Using backhaul</h2>
 <ol>
-<li>Choose the role of this PC, このPCの役割: カメラ (Camera), 2ショット (Two-shot), スライド (Slides), 音声 (Audio), 返し (Return) or 1台でぜんぶ (All in one).</li>
-<li>Under 設定 &gt; Zoom接続, enter the meeting ID and passcode and press 会議に入る (Join). backhaul appears in the meeting as a participant with the name you set.</li>
+<li>Choose the Role of this PC: Camera, Two-shot, Slides, Audio, Return or All in one.</li>
+<li>Under Settings &gt; Zoom connection, enter the meeting ID and passcode and press Join. backhaul appears in the meeting as a participant with the name you set.</li>
 <li>Zoom asks the host to allow backhaul to receive video and audio. The host allows the request or makes the backhaul participant a co-host.</li>
-<li>Assign presenters to slots, choose the monitor and audio channel for each slot, and, if you send a return, choose the capture device and audio input under 設定 &gt; 返し (Return).</li>
-<li>Press 会議から出る (Leave) to leave the meeting.</li>
+<li>Assign presenters to slots, choose the monitor and audio channel for each slot, and, if you send a return, choose the capture device and audio input under Settings &gt; Return.</li>
+<li>Press Leave to leave the meeting.</li>
 </ol>
 
 <h2>Removing backhaul</h2>
 <ol>
-<li>In backhaul, open 設定 &gt; Zoom接続 and press サインアウト (Sign out). This revokes backhaul's access at Zoom and deletes the stored sign-in from our server, for all PCs on the licence.</li>
+<li>In backhaul, open Settings &gt; Zoom connection and press Sign out. This revokes backhaul's access at Zoom and deletes the stored sign-in from our server, for all PCs on the licence.</li>
 <li>Or remove it from Zoom: sign in to the <a href="https://marketplace.zoom.us/user/installed" rel="noopener">Zoom App Marketplace</a>, open Manage &gt; Added Apps, find backhaul and press Remove.</li>
-<li>Press このPCを外す (Remove this PC) to free the licence seat, then uninstall backhaul from Windows (Settings &gt; Apps).</li>
+<li>Press Remove this PC to free the licence seat, then uninstall backhaul from Windows (Settings &gt; Apps).</li>
 </ol>
 <p>To have all remaining records deleted, write to ${mail}. See the <a href="/privacy">privacy policy</a> for what is kept and for how long.</p>
 
