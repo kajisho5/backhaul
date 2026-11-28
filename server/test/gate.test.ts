@@ -465,3 +465,32 @@ describe("the owner's page", () => {
     expect(html).not.toMatch(/innerHTML|document\.write|\balert\(|\bconfirm\(/);
   });
 });
+
+describe("the public pages", () => {
+  it("serves privacy, terms, support and the guide, each linking to the others", async () => {
+    for (const path of ["/privacy", "/terms", "/support", "/docs"]) {
+      const r = await app.request(path, {}, env);
+      expect(r.status).toBe(200);
+      expect(r.headers.get("content-type")).toContain("text/html");
+      expect(r.headers.get("x-frame-options")).toBe("DENY");
+      const html = await r.text();
+      expect(html).toContain("info@seventh-well.com");
+      for (const other of ["/privacy", "/terms", "/support", "/docs"]) {
+        if (other !== path) expect(html).toContain(`href="${other}"`);
+      }
+      expect(html).not.toContain(ADMIN);
+      expect(html).not.toContain("sample-secret");
+      expect(html).not.toContain("<script");
+    }
+    expect((await app.request("/privacy/", {}, env)).status).toBe(404);
+  });
+
+  it("says what is kept and how to remove the app", async () => {
+    const privacy = await (await app.request("/privacy", {}, env)).text();
+    expect(privacy).toContain("AES-256-GCM");
+    expect(privacy).toContain("Your rights");
+    const guide = await (await app.request("/docs", {}, env)).text();
+    expect(guide).toContain("Removing backhaul");
+    expect(guide).toContain("Added Apps");
+  });
+});

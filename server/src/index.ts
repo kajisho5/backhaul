@@ -6,6 +6,7 @@ import type { Context } from "hono";
 import { newLicenceKey, normaliseKey, problemOf, randomToken, sameText, sha256Hex } from "./licence";
 import type { Licence } from "./licence";
 import { adminPage } from "./admin_page";
+import { publicPage, publicPaths } from "./public_pages";
 import { Store } from "./store";
 import { Vault } from "./vault";
 import type { Device } from "./store";
@@ -311,6 +312,11 @@ export function createApp(outside: Outside) {
   });
 
   // The page itself holds nothing secret; every request it makes needs the admin token.
+  // Privacy, terms, support and the guide: what the Zoom listing links to.
+  for (const path of publicPaths) {
+    app.get(path, (c) => c.html(publicPage(path) ?? "", 200, { "cache-control": "public, max-age=300", "x-frame-options": "DENY", "x-content-type-options": "nosniff" }));
+  }
+
   app.get("/admin", (c) => c.html(adminPage(), 200, { "cache-control": "no-store", "x-frame-options": "DENY", "referrer-policy": "no-referrer" }));
 
   admin.post("/licences", async (c) => {
