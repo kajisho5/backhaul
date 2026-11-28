@@ -88,6 +88,9 @@ class AudioController : public QObject {
   // The sending thread's work, also callable from a test: hands over every full 10 ms block
   // that is waiting. Returns the number of blocks handed over.
   int pumpOnce();
+  // For tests: no sending thread is started; the test hands blocks over with pumpOnce().
+  // (Two threads handing over at once would both read the same waiting sound.)
+  void pumpByHand() { pumpByHand_ = true; }
   backhaul::MicFeed* micFeed() { return &feed_; }
   // The effects the recorded sound goes through before it is sent (two channels).
   // It lives here so that it outlasts whoever fills it, for as long as the sending thread runs.
@@ -171,4 +174,5 @@ class AudioController : public QObject {
   std::atomic<bool> stereo_{false};
   std::atomic<bool> pumpStop_{false};
   std::thread pumpThread_;
+  bool pumpByHand_ = false;
 };

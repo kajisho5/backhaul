@@ -15,7 +15,8 @@ export function newLicenceKey(): string {
  * hyphens, with the letters people confuse mapped back. Null when it cannot be a key.
  */
 export function normaliseKey(typed: string): string | null {
-  let text = typed.toUpperCase().replace(/[\s\-‐-―ー]/g, "");
+  // NFKC first: full-width letters, digits and hyphens (ＢＨ－１２…) become the plain ones.
+  let text = typed.normalize("NFKC").toUpperCase().replace(/[\s\-‐-―ー]/g, "");
   if (text.startsWith("BH")) text = text.slice(2);
   text = text.replace(/O/g, "0").replace(/[IL]/g, "1");
   if (text.length !== 20) return null;

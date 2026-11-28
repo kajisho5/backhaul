@@ -66,9 +66,10 @@ async function tokenRequest(keys: ZoomKeys, fetcher: Fetcher, form: Record<strin
   });
   const body = (await response.json().catch(() => null)) as Record<string, unknown> | null;
   if (!response.ok || body === null) {
-    // 400/401 here means the code or the refresh token is no longer good.
+    // 400/401 here means the code or the refresh token is no longer good. Anything else
+    // (429 "too many requests", 5xx) says nothing about the sign-in, which is then kept.
     const reason = typeof body?.reason === "string" ? body.reason : typeof body?.error === "string" ? body.error : "";
-    throw new ZoomError(`Zoom refused the sign-in (${response.status}${reason ? `: ${reason}` : ""})`, response.status < 500);
+    throw new ZoomError(`Zoom refused the sign-in (${response.status}${reason ? `: ${reason}` : ""})`, response.status === 400 || response.status === 401);
   }
   if (typeof body.access_token !== "string" || typeof body.refresh_token !== "string") {
     throw new ZoomError("Zoom answered without tokens", false);

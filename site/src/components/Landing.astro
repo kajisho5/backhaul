@@ -139,6 +139,7 @@ const product = {
     }
     for (const button of section.querySelectorAll<HTMLButtonElement>("[data-buy]")) {
       const label = button.textContent ?? "";
+      button.dataset.label = label;
       button.addEventListener("click", async () => {
         if (problem) problem.textContent = "";
         button.disabled = true;
@@ -160,7 +161,10 @@ const product = {
     }
     // Coming back from Stripe with the browser's back button: the button must work again.
     addEventListener("pageshow", () => {
-      for (const button of section.querySelectorAll<HTMLButtonElement>("[data-buy]")) button.disabled = false;
+      for (const button of section.querySelectorAll<HTMLButtonElement>("[data-buy]")) {
+        button.disabled = false;
+        if (button.dataset.label !== undefined) button.textContent = button.dataset.label; // not "one moment…" any more
+      }
     });
   }
 </script>

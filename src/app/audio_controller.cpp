@@ -269,7 +269,7 @@ bool AudioController::startMic(int index) {
   }
   micIndex_ = index;
   micProblem_.clear();
-  if (!pumpThread_.joinable()) pumpThread_ = std::thread([this] { pump(); });
+  if (!pumpByHand_ && !pumpThread_.joinable()) pumpThread_ = std::thread([this] { pump(); });
   emit changed();
   return true;
 }

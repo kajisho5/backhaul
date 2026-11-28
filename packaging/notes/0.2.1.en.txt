@@ -1,0 +1,6 @@
+Fixes.
+- Signing in to Zoom on another PC now reaches PCs that are already running (a restart was needed before).
+- "Leave" pressed in the waiting room or while connecting now leaves at Zoom too.
+- After a dropped connection came back, the screen no longer stays on "reconnecting".
+- "Leave" pressed while the entry is being fetched cancels the join.
+- A plug-in that puts out broken values sends silence to Zoom, not loud noise.

@@ -254,6 +254,7 @@ static void testAudioRole() {
     AudioController audio(a, std::unique_ptr<backhaul::AudioOutput>(speaker), std::unique_ptr<backhaul::AudioOutput>(asio),
                           std::unique_ptr<backhaul::AudioInput>(mic));
     // No sending thread in this test: blocks are handed over by calling pumpOnce().
+    audio.pumpByHand();
     std::vector<std::int16_t> got;
     int gotChannels = 0;
     audio.setSender([&](const std::int16_t* samples, std::size_t n, int channels) {
@@ -717,6 +718,7 @@ static void testSoundCheck() {
   auto* out = new CheckOutput;
   auto* mic = new CheckMic;
   AudioController audio(a, std::unique_ptr<backhaul::AudioOutput>(out), nullptr, std::unique_ptr<backhaul::AudioInput>(mic));
+  audio.pumpByHand();  // blocks are handed over by calling pumpOnce() below
   std::vector<std::int16_t> sent;
   audio.setSender([&](const std::int16_t* samples, std::size_t n, int channels) {
     sent.insert(sent.end(), samples, samples + n * static_cast<std::size_t>(channels));

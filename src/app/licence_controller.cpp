@@ -343,21 +343,30 @@ void LicenceController::prepareJoin(std::function<void(const Entry&)> done) {
   });
 }
 
+// The sign-in belongs to the licence, not to this PC: another PC may have signed in or out
+// since this one last looked. So the server is always asked, and what this PC believed
+// only decides whether a missing ZAK is worth a notice.
 void LicenceController::addZak(Entry entry, std::function<void(const Entry&)> done) {
-  if (!zoomSignedIn()) {
-    done(entry);
-    return;
-  }
-  post(QStringLiteral("/v1/zoom/zak"), {}, [this, entry, done = std::move(done)](const GateReply& reply) mutable {
+  const bool believed = zoomSignedIn();
+  post(QStringLiteral("/v1/zoom/zak"), {}, [this, entry, believed, done = std::move(done)](const GateReply& reply) mutable {
     const QString zak = reply.body.value(QStringLiteral("zak")).toString();
     const QString error = reply.body.value(QStringLiteral("error")).toString();
     if (reply.status == 200 && !zak.isEmpty()) {
       entry.zak = zak;
+      if (!zoomSignedIn_) {  // signed in on another PC in the meantime
+        zoomSignedIn_ = true;
+        saveLicence();
+        sayZoom(QString(), false);
+      }
     } else if (error == QStringLiteral("signed_out") || error == QStringLiteral("not_signed_in")) {
-      zoomSignedIn_ = false;
-      saveLicence();
-      entry.notice = T("Zoomのサインインが切れました。ほかのアカウントの会議に入るには、もう一度サインインしてください");
-      sayZoom(entry.notice, true);
+      if (believed || error == QStringLiteral("signed_out")) {
+        zoomSignedIn_ = false;
+        saveLicence();
+        entry.notice = T("Zoomのサインインが切れました。ほかのアカウントの会議に入るには、もう一度サインインしてください");
+        sayZoom(entry.notice, true);
+      }
+    } else if (!believed && error != QStringLiteral("zoom_failed")) {
+      // Nobody is known to have signed in, and the server did not say otherwise: nothing to tell.
     } else {
       entry.notice = T("Zoomの許可（ZAK）を取れませんでした。ほかのアカウントの会議には入れないことがあります（%1）")
                          .arg(reply.transport.isEmpty() ? reply.body.value(QStringLiteral("detail")).toString() : reply.transport);

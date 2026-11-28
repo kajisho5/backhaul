@@ -206,6 +206,13 @@ export class Store {
     return row !== null && row.count <= limit;
   }
 
+  /** True when `bucket` already holds `limit` counted requests in this window. Counts nothing itself. */
+  async over(bucket: string, limit: number, windowSeconds: number, now: number): Promise<boolean> {
+    const key = `${bucket}:${Math.floor(now / windowSeconds)}`;
+    const row = await this.db.prepare("SELECT count FROM attempts WHERE bucket = ?").bind(key).first<{ count: number }>();
+    return row !== null && row.count >= limit;
+  }
+
   // ---- the licence's Zoom sign-in ----
 
   async signinOf(licenceId: number): Promise<Signin | null> {

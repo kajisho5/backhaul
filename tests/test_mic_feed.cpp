@@ -44,14 +44,14 @@ void testMicFeed() {
     CHECK(feed.available() == 0);
     CHECK(feed.read(nullptr, 4, true) == 0);
   }
-  {  // too-loud and broken samples are held to full scale; meters show the loudest since last asked
+  {  // too-loud samples are held to full scale, broken ones are silence; meters show the loudest since last asked
     MicFeed feed(256);
     const float in[6] = {2.0f, -3.0f, std::numeric_limits<float>::quiet_NaN(), 0.5f, 0.1f, -0.2f};
     feed.write(in, 3, 2);
     std::int16_t out[6] = {};
     CHECK(feed.read(out, 3, true) == 3);
     CHECK(out[0] == 32767 && out[1] == -32767);
-    CHECK(out[2] == -32767 && out[3] == 16384);  // a broken sample never becomes a random value
+    CHECK(out[2] == 0 && out[3] == 16384);  // a broken sample is silence, never a click at full level
     CHECK_NEAR(feed.takePeak(0), 1.0, 1e-6);
     CHECK_NEAR(feed.takePeak(1), 1.0, 1e-6);
     CHECK(feed.takePeak(0) == 0.0f);
