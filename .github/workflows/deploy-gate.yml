@@ -10,7 +10,7 @@ permissions:
   contents: read
 jobs:
   deploy:
-    uses: kajisho5/tower/.github/workflows/deploy-workers.yml@main
+    uses: kajisho5/tower/.github/workflows/deploy-workers.yml@f6911432850c58a144002d690cdd778a7be091c8  # tower main, 2026-11-28
     with:
       working-directory: server
       # Type-check and test first; then put the database id (a repository variable set by tower) into the config.
