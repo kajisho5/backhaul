@@ -96,6 +96,14 @@ class MeetingController : public QObject, public backhaul::MeetingEvents {
   Q_INVOKABLE void rejoinNow();
   // For tests: the time in milliseconds, in place of the system's clock.
   void setClock(std::function<qint64()> clock) { clock_ = std::move(clock); }
+  // Where the passcode and a typed ZAK are kept while this PC is in a meeting, so that a
+  // program started again after a crash can go back in. Emptied when the meeting is left.
+  // The protected store of the system; never the settings file. May stay unset.
+  void setResumeStore(std::unique_ptr<SecretStore> store) { resumeStore_ = std::move(store); }
+  // After a crash: joins the meeting this PC was in, if it was in one. True when a join was started.
+  bool resume();
+  // A normal start: whatever a crash long ago left behind is not used any more.
+  void forgetResume();
   Q_INVOKABLE bool saveCredentials(const QString& clientId, const QString& clientSecret);
   Q_INVOKABLE void clearCredentials();
 
@@ -136,6 +144,8 @@ class MeetingController : public QObject, public backhaul::MeetingEvents {
   FrameStore& frames_;
   std::unique_ptr<backhaul::MeetingClient> client_;
   std::unique_ptr<CredentialStore> credentials_;
+  std::unique_ptr<SecretStore> resumeStore_;
+  bool resumeKept_ = false;  // the store holds this meeting's passcode right now
   LicenceController* licence_ = nullptr;
   bool preparing_ = false;  // waiting for the licence server before the join starts
   int prepareRound_ = 0;    // which wait is the current one; "leave" ends it by moving on

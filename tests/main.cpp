@@ -19,6 +19,7 @@ void testSdkToken();
 void testSlotOutput();
 void testTestTone();
 void testUpdatePolicy();
+void testWatcher();
 void testYuv();
 
 int main() {
@@ -39,6 +40,7 @@ int main() {
   testSlotOutput();
   testTestTone();
   testUpdatePolicy();
+  testWatcher();
   testYuv();
   if (testing::failures() == 0) {
     std::printf("all tests passed\n");

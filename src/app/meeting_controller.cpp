@@ -4,6 +4,8 @@
 #include <QDateTime>
 #include <algorithm>
 #include <QImage>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QMutexLocker>
 
 #include "app_state.h"
@@ -174,6 +176,29 @@ void MeetingController::join() {
   startJoin();
 }
 
+void MeetingController::forgetResume() {
+  if (resumeStore_ != nullptr) resumeStore_->clear();
+  resumeKept_ = false;
+}
+
+bool MeetingController::resume() {
+  if (resumeStore_ == nullptr) return false;
+  const QByteArray kept = resumeStore_->load();
+  if (kept.isEmpty()) return false;
+  const QJsonObject o = QJsonDocument::fromJson(kept).object();
+  passcode_ = o.value(QStringLiteral("passcode")).toString().left(64);
+  zak_ = o.value(QStringLiteral("zak")).toString().left(4096);
+  emit changed();
+  if (!canJoin()) {
+    forgetResume();
+    return false;
+  }
+  join();
+  // Like a meeting this PC was thrown out of: should this try fail for the line, the next ones follow.
+  wasIn_ = true;
+  return true;
+}
+
 void MeetingController::stopRejoining() {
   rejoinTimer_.stop();
   rejoinAttempt_ = 0;
@@ -322,6 +347,12 @@ void MeetingController::onMeetingState(MeetingState state, const std::string& de
   if (in) {
     wasIn_ = true;
     stopRejoining();  // back in
+    if (resumeStore_ != nullptr && !resumeKept_) {
+      QJsonObject kept;
+      kept[QStringLiteral("passcode")] = passcode_;
+      kept[QStringLiteral("zak")] = zak_;
+      resumeKept_ = resumeStore_->save(QJsonDocument(kept).toJson(QJsonDocument::Compact));
+    }
   }
   if (state == MeetingState::Idle) {
     endCause_ = backhaul::EndCause::None;
@@ -343,6 +374,7 @@ void MeetingController::onMeetingState(MeetingState state, const std::string& de
   }
   if (!in) line_ = backhaul::LineGrade::Unknown;
   if (!live) {
+    forgetResume();  // out of the meeting for good: nothing to come back to
     lineWatch_.clear();
     sendingAudio_ = sendingVideo_ = false;
     sendNote_.clear();

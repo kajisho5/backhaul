@@ -93,6 +93,9 @@
 ## 本番ロック・回線の品質・本番前チェック・スリープ止め（バージョン0.4.0）
 決まりと画面は `docs/steady.ja.md`。判定は `src/core/line_quality.*` と `src/core/preshow_check.*`、Windowsに触れる部分は `src/app/system_facts.*` にある。
 
+## 予備の音声機器・落ちたら自動で再起動（バージョン0.5.0）
+決まりは同じく `docs/steady.ja.md`。予備へ切り替える判断と再起動の回数制限は `src/core/recovery.*`、見張り役の判断は `src/core/watcher.*`、見張り役そのもの（Windowsに触れる部分）は `src/app/watchdog.*`。入り直すためのパスコードは、会議に入っている間だけWindowsの資格情報の保管場所（`backhaul/resume`）に置く。
+
 ## 画面デザイン
 
 ![操作画面](design/operator.png)

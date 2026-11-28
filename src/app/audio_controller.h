@@ -6,6 +6,7 @@
 #include <QString>
 #include <QStringList>
 #include <QElapsedTimer>
+#include <functional>
 #include <QTimer>
 #include <QVariantList>
 #include <atomic>
@@ -44,6 +45,12 @@ class AudioController : public QObject {
   // it is back: whether that is going on, and for how many seconds by now.
   Q_PROPERTY(bool outputSeeking READ outputSeeking NOTIFY changed)
   Q_PROPERTY(int outputSeekSeconds READ outputSeekSeconds NOTIFY seekChanged)
+  // The spare output device: what can be chosen (entry 0 is "none"), which one is, whether
+  // the sound runs on it right now, and whether the main device is back meanwhile.
+  Q_PROPERTY(QStringList spareNames READ spareNames NOTIFY changed)
+  Q_PROPERTY(int spareIndex READ spareIndex NOTIFY changed)
+  Q_PROPERTY(bool onSpare READ onSpare NOTIFY changed)
+  Q_PROPERTY(bool mainBack READ mainBack NOTIFY changed)
   Q_PROPERTY(bool micSeeking READ micSeeking NOTIFY changed)
   Q_PROPERTY(int micSeekSeconds READ micSeekSeconds NOTIFY seekChanged)
   // Sound check: a test signal on chosen output channels. Never part of what goes to the meeting.
@@ -126,6 +133,18 @@ class AudioController : public QObject {
   // and what the new settings name starts.
   void reloadSaved();
 
+  QStringList spareNames() const;
+  int spareIndex() const;
+  bool onSpare() const { return onSpare_; }
+  bool mainBack() const { return onSpare_ && mainBack_; }
+  Q_INVOKABLE void chooseSpare(int index);
+  // Whether the chosen spare is connected right now (asks the devices).
+  bool spareThere() const;
+  // From the spare device back to the main one. The sound stops for a moment; if the main
+  // device is not there after all, the spare takes over again after a few seconds.
+  Q_INVOKABLE void returnToMain();
+  // For tests: the time in milliseconds, in place of the system's clock.
+  void setClock(std::function<qint64()> clock) { clock_ = std::move(clock); }
   bool outputSeeking() const;
   int outputSeekSeconds() const { return outputSeeking() && outputSought_.isValid() ? static_cast<int>(outputSought_.elapsed() / 1000) : 0; }
   bool micSeeking() const;
@@ -172,6 +191,11 @@ class AudioController : public QObject {
   QString problem_;
   QElapsedTimer outputSought_, micSought_, lastLook_;  // since when a device is looked for; the last look
   int shownSeekSeconds_ = -1;
+  qint64 outputGoneAtMs_ = -1;  // since when no output runs although one is chosen; -1: not the case
+  std::function<qint64()> clock_;
+  qint64 nowMs() const;
+  bool onSpare_ = false;   // the running output is the spare device
+  bool mainBack_ = false;  // ...and the main one was seen again
   QTimer timer_;
   QVariantList outputLevels_;
   std::uint32_t testMask_ = 0;

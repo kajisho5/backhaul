@@ -65,6 +65,11 @@ ShowFacts CheckController::gather() const {
   f.meetingIdGood = MeetingController::parseMeetingNumber(app_.meetingId()) != 0;
   f.outputChosen = !app_.property("audioDeviceName").toString().isEmpty();
   f.outputRunning = audio_ != nullptr && audio_->deviceIndex() > 0;
+  f.spareChosen = !app_.spareDeviceName().isEmpty();
+  f.onSpare = audio_ != nullptr && audio_->onSpare();
+  // The list on the settings page holds what was found last; a chosen spare that is
+  // unplugged is in it too, so "found" is asked of the devices themselves.
+  f.spareThere = audio_ != nullptr && audio_->spareThere();
   f.inputChosen = !app_.micDeviceName().isEmpty();
   f.inputRunning = audio_ != nullptr && audio_->micIndex() > 0;
   app_.outputMonitors(&f.monitorsChosen, &f.monitorsMissing);
@@ -118,6 +123,7 @@ QString CheckController::nameOf(CheckId id) const {
     case CheckId::ZoomSignIn: return T("Zoomのサインイン");
     case CheckId::MeetingId: return T("会議ID");
     case CheckId::AudioOutput: return T("音声の機器");
+    case CheckId::SpareOutput: return T("予備の音声機器");
     case CheckId::AudioInput: return T("入力の機器");
     case CheckId::VideoOutputs: return T("映像の出力先");
     case CheckId::Power: return T("電源とスリープ");
@@ -151,6 +157,10 @@ QString CheckController::textOf(const CheckItem& item, const ShowFacts& f) const
       return T("「%1」が動いていません（探しています）").arg(item.id == CheckId::AudioInput ? app_.micDeviceName() : app_.property("audioDeviceName").toString());
     case CheckReason::DeviceNotChosen:
       return item.id == CheckId::AudioInput ? T("選ばれていません（Zoomへ音を送りません）") : T("選ばれていません（会議の音が出ません）");
+    case CheckReason::SpareReady: return app_.spareDeviceName();
+    case CheckReason::SpareInUse: return T("いま予備の機器で出力しています（主の機器：%1）").arg(app_.property("audioDeviceName").toString());
+    case CheckReason::SpareNotThere: return T("「%1」がつながっていません").arg(app_.spareDeviceName());
+    case CheckReason::NoSpare: return T("選ばれていません（主の機器が抜けると音が止まります）");
     case CheckReason::OutputsGood: return T("モニター %1台に出します").arg(f.monitorsChosen);
     case CheckReason::OutputMissing: return T("出力先のモニターが %1台つながっていません").arg(f.monitorsMissing);
     case CheckReason::NoOutputChosen: return T("出力先のモニターが決まっていません");

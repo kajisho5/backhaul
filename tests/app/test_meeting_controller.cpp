@@ -260,6 +260,105 @@ static void testRejoin() {
   a.setRejoins(true);
 }
 
+// started again after a crash: back into the meeting this PC was in
+static void testResume() {
+  struct Kept final : SecretStore {
+    QByteArray* shared;
+    explicit Kept(QByteArray* s) : shared(s) {}
+    QByteArray load() override { return *shared; }
+    bool save(const QByteArray& secret) override {
+      *shared = secret;
+      return true;
+    }
+    bool clear() override {
+      shared->clear();
+      return true;
+    }
+  };
+  QByteArray kept;  // what survives the crash (the system's protected store)
+  ZoomCredentials saved{QStringLiteral("SampleClientId_01"), QStringLiteral("sample-secret")};
+  QJsonObject settings;
+  {
+    AppState a;
+    a.loadDefaults();
+    a.setRole(QStringLiteral("all"));
+    a.setMeetingId(QStringLiteral("123 4567 8901"));
+    settings = a.settingsJson();
+    FrameStore frames;
+    auto* client = new ScriptedClient;
+    MeetingController m(a, frames, std::unique_ptr<backhaul::MeetingClient>(client), std::make_unique<MemoryCredentials>(&saved));
+    m.setResumeStore(std::make_unique<Kept>(&kept));
+    m.setProperty("passcode", QStringLiteral("sample-pass"));
+    m.join();
+    CHECK(kept.isEmpty());  // nothing is kept before this PC is really in
+    client->events->onMeetingState(MeetingState::Receiving, {});
+    CHECK(!kept.isEmpty() && kept.contains("sample-pass"));
+    // Leaving in the normal way takes it away again...
+    m.leave();
+    CHECK(kept.isEmpty());
+    // ...and so does a meeting that ends.
+    m.join();
+    client->events->onMeetingState(MeetingState::Receiving, {});
+    CHECK(!kept.isEmpty());
+    client->events->onEndCause(backhaul::EndCause::Host);
+    client->events->onMeetingState(MeetingState::Ended, {});
+    CHECK(kept.isEmpty());
+    // While coming back after a dropped line it stays: a crash then still finds its way back.
+    m.join();
+    client->events->onMeetingState(MeetingState::Receiving, {});
+    client->events->onEndCause(backhaul::EndCause::Connection);
+    client->events->onMeetingState(MeetingState::Failed, {});
+    CHECK(m.rejoining() && !kept.isEmpty());
+    m.rejoinNow();
+    client->events->onMeetingState(MeetingState::Receiving, {});
+    // Here the program "crashes": it goes away without leaving.
+  }
+  CHECK(!kept.isEmpty());
+
+  {  // Started again by the watcher.
+    AppState a;
+    CHECK(a.applySettings(settings));
+    FrameStore frames;
+    auto* client = new ScriptedClient;
+    MeetingController m(a, frames, std::unique_ptr<backhaul::MeetingClient>(client), std::make_unique<MemoryCredentials>(&saved));
+    m.setResumeStore(std::make_unique<Kept>(&kept));
+    CHECK(m.resume());
+    CHECK(client->joins == 1 && client->lastRequest.meetingNumber == 12345678901ULL && client->lastRequest.passcode == "sample-pass");
+    // The line is not back yet: the try is followed by the next ones, as after a drop.
+    client->events->onEndCause(backhaul::EndCause::Connection);
+    client->events->onMeetingState(MeetingState::Failed, {});
+    CHECK(m.rejoining());
+    m.rejoinNow();
+    client->events->onMeetingState(MeetingState::Receiving, {});
+    CHECK(!m.rejoining() && client->joins == 2 && !kept.isEmpty());
+    m.leave();
+    CHECK(kept.isEmpty());
+    CHECK(!m.resume());  // nothing to come back to
+  }
+  {  // A normal start does not go into a meeting a crash long ago left behind.
+    kept = QByteArrayLiteral("{\"passcode\":\"old\",\"zak\":\"\"}");
+    AppState a;
+    CHECK(a.applySettings(settings));
+    FrameStore frames;
+    auto* client = new ScriptedClient;
+    MeetingController m(a, frames, std::unique_ptr<backhaul::MeetingClient>(client), std::make_unique<MemoryCredentials>(&saved));
+    m.setResumeStore(std::make_unique<Kept>(&kept));
+    m.forgetResume();
+    CHECK(kept.isEmpty() && client->joins == 0 && !m.resume());
+  }
+  {  // No meeting ID any more: nothing is joined, and what was kept is dropped.
+    kept = QByteArrayLiteral("{\"passcode\":\"old\",\"zak\":\"\"}");
+    AppState a;
+    a.loadDefaults();
+    a.setRole(QStringLiteral("all"));
+    FrameStore frames;
+    auto* client = new ScriptedClient;
+    MeetingController m(a, frames, std::unique_ptr<backhaul::MeetingClient>(client), std::make_unique<MemoryCredentials>(&saved));
+    m.setResumeStore(std::make_unique<Kept>(&kept));
+    CHECK(!m.resume() && client->joins == 0 && kept.isEmpty());
+  }
+}
+
 // how good the line is: this PC's own, and each person's
 static void testLine() {
   AppState a;
@@ -482,6 +581,128 @@ static void testDevicesComeBack() {
   audio.watchDevices(true);
   returning.watchDevice(true);
   CHECK(!audio.outputSeeking() && !audio.micSeeking() && !returning.seeking() && !speaker->alive && !capture->alive);
+}
+
+// a spare sound device takes over when the main one stays away
+static void testSpareDevice() {
+  struct Rack final : backhaul::AudioOutput {
+    bool mainThere = true, spareThere = true;
+    std::string on;
+    std::vector<std::string> started;
+    std::vector<backhaul::AudioDevice> devices() override {
+      std::vector<backhaul::AudioDevice> list;
+      if (mainThere) list.push_back({"main", "サンプル卓出力"});
+      if (spareThere) list.push_back({"spare", "サンプル予備出力"});
+      list.push_back({"other", "サンプル別出力"});
+      return list;
+    }
+    bool start(const std::string& id, backhaul::AudioMixer*, std::string*) override {
+      started.push_back(id);
+      on = id;
+      return true;
+    }
+    void stop() override { on.clear(); }
+    bool running() const override { return !on.empty(); }
+    int channels() const override { return on.empty() ? 0 : 8; }
+  };
+  AppState a;
+  a.loadDefaults();
+  a.setRole(QStringLiteral("all"));
+  auto* rack = new Rack;
+  AudioController audio(a, std::unique_ptr<backhaul::AudioOutput>(rack));
+  qint64 now = 1'000'000;
+  audio.setClock([&now] { return now; });
+
+  // No main device: no spare to choose from either.
+  CHECK(audio.spareNames() == (QStringList{QStringLiteral("なし"), QStringLiteral("サンプル卓出力"), QStringLiteral("サンプル予備出力"), QStringLiteral("サンプル別出力")}));
+  audio.chooseDevice(1);
+  // The main device is not offered as its own spare.
+  CHECK(audio.spareNames() == (QStringList{QStringLiteral("なし"), QStringLiteral("サンプル予備出力"), QStringLiteral("サンプル別出力")}));
+  CHECK(audio.spareIndex() == 0 && !audio.onSpare());
+
+  // Without a spare, a lost main device is only looked for.
+  rack->on.clear();
+  rack->mainThere = false;
+  audio.watchDevices(true);
+  now += 10000;
+  audio.watchDevices(true);
+  CHECK(audio.outputSeeking() && !audio.onSpare() && rack->started.size() == 1);
+  rack->mainThere = true;
+  audio.watchDevices(true);
+  CHECK(audio.deviceIndex() > 0 && rack->on == "main");
+
+  // With a spare: a quick re-plug is no reason to switch...
+  audio.chooseSpare(1);
+  CHECK(a.spareDeviceName() == QStringLiteral("サンプル予備出力") && audio.spareIndex() == 1 && audio.spareThere());
+  rack->on.clear();
+  rack->mainThere = false;
+  audio.watchDevices(true);
+  now += 2900;
+  audio.watchDevices(true);
+  CHECK(audio.outputSeeking() && !audio.onSpare() && rack->on.empty());
+  rack->mainThere = true;
+  audio.watchDevices(true);
+  CHECK(rack->on == "main" && !audio.onSpare());
+  // ...three seconds without the main device are.
+  rack->on.clear();
+  rack->mainThere = false;
+  audio.watchDevices(true);
+  now += 3000;
+  audio.watchDevices(true);
+  CHECK(rack->on == "spare" && audio.onSpare() && !audio.outputSeeking() && a.property("audioOk").toBool());
+  CHECK(a.property("audioDeviceName").toString() == QStringLiteral("サンプル卓出力"));  // the main device stays the main device
+  CHECK(audio.problem().contains(QStringLiteral("予備")) && !audio.mainBack());
+
+  // The main device is back: said, but not switched to (that would interrupt the sound again).
+  rack->mainThere = true;
+  audio.watchDevices(true);
+  CHECK(audio.mainBack() && audio.onSpare() && rack->on == "spare");
+  audio.returnToMain();
+  CHECK(rack->on == "main" && !audio.onSpare() && !audio.mainBack() && audio.problem().isEmpty());
+
+  // Going back although the main device is not there: looked for, and the spare again after three seconds.
+  rack->on.clear();
+  rack->mainThere = false;
+  audio.watchDevices(true);
+  now += 3000;
+  audio.watchDevices(true);
+  CHECK(audio.onSpare());
+  audio.returnToMain();
+  CHECK(!audio.onSpare() && audio.outputSeeking() && rack->on.empty());
+  now += 3000;
+  audio.watchDevices(true);
+  CHECK(audio.onSpare() && rack->on == "spare");
+
+  // The spare goes too: both are looked for, and the main one wins when both are there.
+  rack->on.clear();
+  rack->spareThere = false;
+  audio.watchDevices(true);
+  CHECK(!audio.onSpare() && audio.outputSeeking());
+  CHECK(audio.spareNames().contains(QStringLiteral("サンプル予備出力")) && !audio.spareThere());  // the choice stays visible
+  now += 5000;
+  rack->mainThere = rack->spareThere = true;
+  audio.watchDevices(true);
+  CHECK(rack->on == "main" && !audio.onSpare());
+
+  // Choosing the spare as the main device leaves no spare; so does "no output".
+  audio.chooseDevice(2);
+  CHECK(a.property("audioDeviceName").toString() == QStringLiteral("サンプル予備出力") && a.spareDeviceName().isEmpty());
+  audio.chooseSpare(1);
+  CHECK(a.spareDeviceName() == QStringLiteral("サンプル卓出力"));
+  audio.chooseDevice(0);
+  CHECK(a.spareDeviceName().isEmpty() && !audio.outputSeeking());
+
+  // Kept in the settings, and a file that names the main device as its own spare is put right.
+  audio.chooseDevice(1);
+  audio.chooseSpare(1);
+  AppState b;
+  CHECK(b.applySettings(a.settingsJson()) && b.spareDeviceName() == QStringLiteral("サンプル予備出力"));
+  QJsonObject odd = a.settingsJson();
+  QJsonObject sound = odd.value(QStringLiteral("audio")).toObject();
+  sound[QStringLiteral("spare")] = sound.value(QStringLiteral("device"));
+  odd[QStringLiteral("audio")] = sound;
+  AppState c;
+  CHECK(c.applySettings(odd) && c.spareDeviceName().isEmpty());
 }
 
 // a PC that shows one person: one slot, the largest picture, and no sound at all
@@ -1534,8 +1755,10 @@ int main(int argc, char* argv[]) {
 
 
   testRejoin();
+  testResume();
   testLine();
   testDevicesComeBack();
+  testSpareDevice();
   testCameraRole();
   testTwoShotRole();
   testAudioRole();

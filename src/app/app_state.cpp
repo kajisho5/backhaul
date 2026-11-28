@@ -396,6 +396,7 @@ QJsonObject AppState::settingsJson() const {
   audio[QStringLiteral("method")] = audioAsio_ ? QStringLiteral("asio") : QStringLiteral("wasapi");
   audio[QStringLiteral("device")] = audioDeviceName_;
   audio[QStringLiteral("input")] = micDeviceName_;
+  if (!spareDeviceName_.isEmpty()) audio[QStringLiteral("spare")] = spareDeviceName_;
   audio[QStringLiteral("sendQuality")] =
       sendQuality_ == 2 ? QStringLiteral("music") : sendQuality_ == 1 ? QStringLiteral("original") : QStringLiteral("speech");
   audio[QStringLiteral("sendStereo")] = sendStereo_;
@@ -448,6 +449,13 @@ bool AppState::applySettings(const QJsonObject& settings) {
   if (method != QStringLiteral("asio") && method != QStringLiteral("wasapi")) return false;
   if (!audio.value(QStringLiteral("device")).isString()) return false;
 
+  // The spare output device: absent in files written before there was one, and when none is chosen.
+  QString spareDevice;
+  const QJsonValue spareValue = audio.value(QStringLiteral("spare"));
+  if (!spareValue.isUndefined()) {
+    if (!spareValue.isString()) return false;
+    spareDevice = spareValue.toString().left(kMaxZoomNameLength);
+  }
   // Sending side: absent in files written before the sound role existed.
   QString micDevice;
   int sendQuality = 0;
@@ -658,6 +666,7 @@ bool AppState::applySettings(const QJsonObject& settings) {
   emit roleChanged();
   audioAsio_ = method == QStringLiteral("asio");
   audioDeviceName_ = audio.value(QStringLiteral("device")).toString().left(kMaxZoomNameLength);
+  spareDeviceName_ = spareDevice == audioDeviceName_ ? QString() : spareDevice;  // a device is not its own spare
   micDeviceName_ = micDevice;
   sendQuality_ = sendQuality;
   sendStereo_ = sendStereo;
@@ -905,6 +914,14 @@ void AppState::setReturnInAll(bool on) {
   emit settingsEdited();
 }
 
+void AppState::setSpareDeviceName(const QString& name) {
+  const QString kept = name.left(kMaxZoomNameLength);
+  if (kept == spareDeviceName_) return;
+  spareDeviceName_ = kept;
+  emit changed();
+  emit settingsEdited();
+}
+
 void AppState::setMicDeviceName(const QString& name) {
   const QString value = name.left(kMaxZoomNameLength);
   if (value == micDeviceName_) return;
@@ -931,6 +948,7 @@ void AppState::setAudioDeviceName(const QString& name) {
   const QString value = name.left(kMaxZoomNameLength);
   if (value == audioDeviceName_) return;
   audioDeviceName_ = value;
+  if (value.isEmpty() || value == spareDeviceName_) spareDeviceName_.clear();  // no spare without a main device, and none of itself
   emit changed();
   emit settingsEdited();
 }
