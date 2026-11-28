@@ -9,6 +9,7 @@ void testEffectChain();
 void testMicFeed();
 void testNv12();
 void testQualityPolicy();
+void testRecovery();
 void testResampler();
 void testRole();
 void testRouteMatrix();
@@ -26,6 +27,7 @@ int main() {
   testMicFeed();
   testNv12();
   testQualityPolicy();
+  testRecovery();
   testResampler();
   testRole();
   testRouteMatrix();

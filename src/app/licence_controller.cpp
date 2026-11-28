@@ -332,6 +332,7 @@ void LicenceController::prepareJoin(std::function<void(const Entry&)> done) {
     } else if (!reply.transport.isEmpty() && !sdkToken_.isEmpty() && sdkTokenExpiresAt_ > now()) {
       // The server is out of reach, but the token from earlier today is still good.
     } else {
+      entry.unreachable = !reply.transport.isEmpty();
       entry.error = explain(reply);
       say(entry.error, true);
       done(entry);

@@ -6,6 +6,7 @@
 #include <cmath>
 
 #include "app_state.h"
+#include "core/recovery.h"
 
 AudioController::AudioController(AppState& app, std::unique_ptr<backhaul::AudioOutput> output,
                                  std::unique_ptr<backhaul::AudioOutput> asio,
@@ -454,19 +455,76 @@ void AudioController::tick() {
     micLevels_ = mic;
     emit levelsChanged();
   }
-  // A recording device can disappear on its own too.
+  watchDevices();
+}
+
+// The operator's choice stands while its name is kept: "no output" and "not used" clear it.
+bool AudioController::outputSeeking() const {
+  return active() != nullptr && deviceIndex_ == 0 && wantsOutput() && !app_.audioDeviceName_.isEmpty();
+}
+
+bool AudioController::micSeeking() const {
+  if (micIndex_ != 0 || !app_.sendsAudio() || !micAvailable() || app_.micDeviceName().isEmpty()) return false;
+  // ASIO inputs belong to the output device: there is nothing to look for until it runs.
+  return !app_.audioAsio() || (asio_ != nullptr && asio_->running());
+}
+
+void AudioController::watchDevices(bool lookNow) {
+  // A recording device can disappear on its own.
   if (micIndex_ > 0 && !app_.audioAsio() && input_ != nullptr && !input_->running()) {
     micIndex_ = 0;
-    micProblem_ = T("入力の機器が止まりました。機器を選び直してください");
+    micProblem_ = T("入力の機器が止まりました。同じ機器を探しています");
     emit changed();
   }
-  // The device can disappear on its own (unplugged, driver restarted).
+  // So can the output device (unplugged, driver restarted, settings changed in its panel).
   if (active() != nullptr && deviceIndex_ > 0 && !active()->running()) {
     stopTest();
+    if (app_.audioAsio()) stopMic();  // its inputs went with it; they come back with it
     deviceIndex_ = 0;
-    problem_ = T("音声の機器が止まりました。機器を選び直してください");
+    problem_ = T("音声の機器が止まりました。同じ機器を探しています");
     app_.audioOk_ = false;
     app_.notifyChanged();
     emit changed();
+  }
+
+  const bool output = outputSeeking(), mic = micSeeking();
+  if (output && !outputSought_.isValid()) outputSought_.start();
+  if (!output) outputSought_.invalidate();
+  if (mic && !micSought_.isValid()) micSought_.start();
+  if (!mic) micSought_.invalidate();
+  const int seconds = output || mic ? outputSeekSeconds() + micSeekSeconds() : -1;
+  if (seconds != shownSeekSeconds_) {
+    shownSeekSeconds_ = seconds;
+    emit seekChanged();
+  }
+  if (!output && !mic) return;
+  if (!lookNow && lastLook_.isValid() && lastLook_.elapsed() < qint64{1000} * backhaul::kDeviceSeekSeconds) return;
+  lastLook_.start();
+
+  // Looked for quietly: the lists on the screen change only when the device is there.
+  if (output) {
+    const std::vector<backhaul::AudioDevice> found = active()->devices();
+    for (std::size_t i = 0; i < found.size(); ++i) {
+      if (QString::fromStdString(found[i].name) != app_.audioDeviceName_) continue;
+      devices_ = found;
+      const QString before = problem_;
+      if (!startDevice(static_cast<int>(i) + 1)) problem_ = before;  // there, but not ready yet: the next look tries again
+      emit changed();
+      break;
+    }
+  }
+  if (micSeeking()) {
+    bool there = false;
+    if (app_.audioAsio()) {
+      there = micNames().indexOf(app_.micDeviceName()) >= 1;
+    } else {
+      for (const backhaul::AudioDevice& d : input_->devices()) there = there || QString::fromStdString(d.name) == app_.micDeviceName();
+    }
+    if (there) {
+      const QString before = micProblem_;
+      startSavedMic();
+      if (micIndex_ == 0) micProblem_ = before;
+      emit changed();
+    }
   }
 }

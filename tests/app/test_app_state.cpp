@@ -167,6 +167,23 @@ int main(int argc, char* argv[]) {
     a.setCropSlides(false);
     a.addPersonSlot();
 
+    // Coming back after a dropped line: on unless switched off, and kept with the Zoom settings.
+    CHECK(a.rejoins() && !a.settingsJson().value(QStringLiteral("zoom")).toObject().contains(QStringLiteral("rejoin")));
+    a.setRejoins(false);
+    CHECK(a.settingsJson().value(QStringLiteral("zoom")).toObject().value(QStringLiteral("rejoin")).isBool());
+    {
+      AppState off;
+      CHECK(off.applySettings(a.settingsJson()) && !off.rejoins());
+      QJsonObject wrong = a.settingsJson();
+      QJsonObject zoom = wrong.value(QStringLiteral("zoom")).toObject();
+      zoom[QStringLiteral("rejoin")] = QStringLiteral("yes");
+      wrong[QStringLiteral("zoom")] = zoom;
+      AppState refuses;
+      refuses.loadDefaults();
+      CHECK(!refuses.applySettings(wrong) && refuses.rejoins());
+    }
+    a.setRejoins(true);
+
     AppState b;
     CHECK(b.applySettings(a.settingsJson()));
     CHECK(b.settingsJson() == a.settingsJson());

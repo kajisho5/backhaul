@@ -1,0 +1,4 @@
+backhaul now comes back on its own.
+- An audio or capture device that was unplugged starts again by itself once it is plugged back in (no need to choose it again).
+- When this PC drops out of the meeting because of the connection, it joins the same meeting again by itself. It keeps trying for 10 minutes, and "Try now" and "Cancel" are there. Not when the host ended the meeting or removed this PC.
+- Rejoining can be switched off under Settings > Zoom > On connection loss.

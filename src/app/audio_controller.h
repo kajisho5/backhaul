@@ -5,6 +5,7 @@
 #include <QObject>
 #include <QString>
 #include <QStringList>
+#include <QElapsedTimer>
 #include <QTimer>
 #include <QVariantList>
 #include <atomic>
@@ -39,6 +40,12 @@ class AudioController : public QObject {
   Q_PROPERTY(int micIndex READ micIndex NOTIFY changed)
   Q_PROPERTY(QString micProblem READ micProblem NOTIFY changed)
   Q_PROPERTY(QVariantList micLevels READ micLevels NOTIFY levelsChanged)  // left, right
+  // A chosen device that is not running (unplugged, or not there yet) is looked for until
+  // it is back: whether that is going on, and for how many seconds by now.
+  Q_PROPERTY(bool outputSeeking READ outputSeeking NOTIFY changed)
+  Q_PROPERTY(int outputSeekSeconds READ outputSeekSeconds NOTIFY seekChanged)
+  Q_PROPERTY(bool micSeeking READ micSeeking NOTIFY changed)
+  Q_PROPERTY(int micSeekSeconds READ micSeekSeconds NOTIFY seekChanged)
   // Sound check: a test signal on chosen output channels. Never part of what goes to the meeting.
   Q_PROPERTY(QVariantList testOn READ testOn NOTIFY testChanged)  // one true/false per output channel
   Q_PROPERTY(bool testing READ testing NOTIFY testChanged)        // at least one channel sounds
@@ -119,8 +126,18 @@ class AudioController : public QObject {
   // and what the new settings name starts.
   void reloadSaved();
 
+  bool outputSeeking() const;
+  int outputSeekSeconds() const { return outputSeeking() && outputSought_.isValid() ? static_cast<int>(outputSought_.elapsed() / 1000) : 0; }
+  bool micSeeking() const;
+  int micSeekSeconds() const { return micSeeking() && micSought_.isValid() ? static_cast<int>(micSought_.elapsed() / 1000) : 0; }
+  // Notices a device that stopped on its own, and looks for the chosen devices that are
+  // not running; they start again as soon as they are back. Called several times a second;
+  // looking happens every few seconds, or right away with `lookNow` (for tests).
+  void watchDevices(bool lookNow = false);
+
  signals:
   void changed();
+  void seekChanged();
   void levelsChanged();
   void testChanged();
 
@@ -153,6 +170,8 @@ class AudioController : public QObject {
   std::vector<backhaul::AudioDevice> devices_;
   int deviceIndex_ = 0;
   QString problem_;
+  QElapsedTimer outputSought_, micSought_, lastLook_;  // since when a device is looked for; the last look
+  int shownSeekSeconds_ = -1;
   QTimer timer_;
   QVariantList outputLevels_;
   std::uint32_t testMask_ = 0;

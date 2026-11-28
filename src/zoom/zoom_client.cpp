@@ -400,11 +400,13 @@ class ZoomClient final : public MeetingClient,
         break;
       case sdk::MEETING_STATUS_FAILED:
         endOfMeeting();
+        if (events_ != nullptr) events_->onEndCause(causeOfFailure(result));
         state(MeetingState::Failed, code("会議に入れませんでした", result));
         break;
       case sdk::MEETING_STATUS_ENDED:
         stopRaw();
         endOfMeeting();
+        if (events_ != nullptr) events_->onEndCause(causeOfEnd(result));
         state(MeetingState::Ended, {});
         break;
       case sdk::MEETING_STATUS_IN_WAITING_ROOM:
@@ -448,6 +450,49 @@ class ZoomClient final : public MeetingClient,
   void onSmartRecordingEnableActionCallback(sdk::ISmartRecordingEnableActionHandler*) override {}
 
  private:
+  // What the meeting library's numbers mean for coming back. Only failures that are the
+  // line's fault count as such; everything not listed is left alone.
+  static EndCause causeOfFailure(int result) {
+    switch (result) {
+      case sdk::MEETING_FAIL_CONNECTION_ERR:
+      case sdk::MEETING_FAIL_RECONNECT_ERR:
+      case sdk::MEETING_FAIL_MMR_ERR:
+      case sdk::MEETING_FAIL_SESSION_ERR:
+      case sdk::MEETING_FAIL_NO_MMR:
+      case sdk::MEETING_FAIL_CANNOT_EMIT_WEBREQUEST:
+        return EndCause::Connection;
+      case sdk::MEETING_FAIL_PASSWORD_ERR:
+      case sdk::MEETING_FAIL_MEETING_OVER:
+      case sdk::MEETING_FAIL_MEETING_NOT_START:
+      case sdk::MEETING_FAIL_MEETING_NOT_EXIST:
+      case sdk::MEETING_FAIL_MEETING_USER_FULL:
+      case sdk::MEETING_FAIL_CONFLOCKED:
+      case sdk::MEETING_FAIL_MEETING_RESTRICTED:
+      case sdk::MEETING_FAIL_MEETING_RESTRICTED_JBH:
+      case sdk::MEETING_FAIL_ENFORCE_LOGIN:
+      case sdk::MEETING_FAIL_HOST_DISALLOW_OUTSIDE_USER_JOIN:
+      case sdk::MEETING_FAIL_BLOCKED_BY_ACCOUNT_ADMIN:
+      case sdk::MEETING_FAIL_NEED_SIGN_IN_FOR_PRIVATE_MEETING:
+        return EndCause::Refused;
+      default:
+        return EndCause::Other;
+    }
+  }
+  static EndCause causeOfEnd(int result) {
+    switch (result) {
+      case sdk::EndMeetingReason_KickByHost:
+      case sdk::EndMeetingReason_EndByHost:
+      case sdk::EndMeetingReason_JBHTimeOut:
+      case sdk::EndMeetingReason_NoAttendee:
+      case sdk::EndMeetingReason_HostStartAnotherMeeting:
+      case sdk::EndMeetingReason_FreeMeetingTimeOut:
+      case sdk::EndMeetingReason_DueToAuthorizedUserLeave:
+        return EndCause::Host;
+      default:
+        return EndCause::Other;  // "none" and "undefined": not known to be the line
+    }
+  }
+
   // True from the moment a join was started until the meeting is over for this PC.
   static bool onTheWayInOrIn(sdk::MeetingStatus status) {
     switch (status) {

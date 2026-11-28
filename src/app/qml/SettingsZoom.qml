@@ -433,6 +433,27 @@ ColumnLayout {
                     onChosen: (first) => app.qualityAuto = first
                 }
             }
+
+            ColumnLayout {
+                Layout.fillWidth: true
+                Layout.topMargin: 28
+                spacing: 10
+                Text { text: qsTr("回線が切れたとき"); color: Theme.ink; font.family: app.sansFamily; font.pixelSize: 15; font.bold: true }
+                Text {
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
+                    text: qsTr("回線が原因で会議から落ちたとき、同じ会議に自動で入り直します（10分まで）。主催者が会議を終えたときや、外されたときは入り直しません。")
+                    color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 13
+                }
+                Segmented {
+                    implicitHeight: 38
+                    Accessible.name: qsTr("回線が切れたとき")
+                    firstText: qsTr("入り直す")
+                    secondText: qsTr("入り直さない")
+                    first: app.rejoins
+                    onChosen: (first) => app.rejoins = first
+                }
+            }
         }
 
         // Where the connection stands

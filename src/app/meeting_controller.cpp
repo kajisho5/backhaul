@@ -10,6 +10,7 @@
 #include "licence_controller.h"
 #include "core/audio_mixer.h"
 #include "core/quality_policy.h"
+#include "core/recovery.h"
 #include "core/yuv.h"
 #include "frame_store.h"
 
@@ -46,6 +47,8 @@ MeetingController::MeetingController(AppState& app, FrameStore& frames, std::uni
   connect(&pollTimer_, &QTimer::timeout, this, [this] {
     if (client_ != nullptr) client_->poll();
   });
+  rejoinTimer_.setSingleShot(true);
+  connect(&rejoinTimer_, &QTimer::timeout, this, [this] { rejoinNow(); });
   secondTimer_.setInterval(1000);
   connect(&secondTimer_, &QTimer::timeout, this, [this] { everySecond(); });
   connect(&app_, &AppState::assignmentsChanged, this, [this] { applyParticipants(); });
@@ -80,13 +83,22 @@ int MeetingController::step() const {
   }
 }
 
+qint64 MeetingController::nowMs() const { return clock_ ? clock_() : QDateTime::currentMSecsSinceEpoch(); }
+
+int MeetingController::rejoinWaitSeconds() const {
+  if (!rejoining() || rejoinNextMs_ == 0) return 0;
+  return static_cast<int>(std::max<qint64>(0, (rejoinNextMs_ - nowMs() + 999) / 1000));
+}
+
 bool MeetingController::busy() const {
-  return preparing_ || state_ == MeetingState::Authenticating || state_ == MeetingState::Joining ||
+  // Coming back counts: the operator's wish to be in the meeting still stands.
+  return rejoining() || preparing_ || state_ == MeetingState::Authenticating || state_ == MeetingState::Joining ||
          state_ == MeetingState::WaitingForPermission || state_ == MeetingState::Receiving;
 }
 
 QString MeetingController::statusText() const {
   if (preparing_) return T("入場券を取っています…");
+  if (rejoining() && (state_ == MeetingState::Failed || state_ == MeetingState::Ended)) return T("入り直し中");
   switch (state_) {
     case MeetingState::Idle: return T("未接続");
     case MeetingState::Authenticating: return T("鍵を確認中");
@@ -120,6 +132,51 @@ bool MeetingController::canJoin() const {
 
 void MeetingController::join() {
   if (!canJoin()) return;
+  stopRejoining();
+  wasIn_ = false;
+  startJoin();
+}
+
+void MeetingController::stopRejoining() {
+  rejoinTimer_.stop();
+  rejoinAttempt_ = 0;
+  rejoinSinceMs_ = rejoinNextMs_ = 0;
+}
+
+// Decides, at the end of a meeting or of a try, whether this PC comes back by itself.
+// True when the next try is set up.
+bool MeetingController::planRejoin() {
+  const backhaul::EndCause cause = endCause_;
+  endCause_ = backhaul::EndCause::None;
+  const bool had = wasIn_ || rejoining();
+  wasIn_ = false;
+  if (client_ == nullptr || !had || !app_.rejoins() || !backhaul::shouldRejoin(cause)) {
+    stopRejoining();
+    return false;
+  }
+  const qint64 now = nowMs();
+  if (!rejoining()) rejoinSinceMs_ = now;
+  const qint64 wait = qint64{1000} * backhaul::rejoinWaitSeconds(rejoinAttempt_ + 1);
+  if (now + wait - rejoinSinceMs_ > qint64{1000} * backhaul::kRejoinGiveUpSeconds) {
+    stopRejoining();
+    detail_ = T("10分たっても会議に入り直せませんでした。回線を確かめて、もう一度「参加」を押してください");
+    return false;
+  }
+  ++rejoinAttempt_;
+  rejoinNextMs_ = now + wait;
+  rejoinTimer_.start(static_cast<int>(wait));
+  return true;
+}
+
+void MeetingController::rejoinNow() {
+  if (!rejoining() || rejoinNextMs_ == 0) return;  // not waiting for a try
+  rejoinTimer_.stop();
+  rejoinNextMs_ = 0;
+  startJoin();
+}
+
+// The join itself, for the operator's "join" and for coming back alike.
+void MeetingController::startJoin() {
   backhaul::JoinRequest request;
   request.clientId = clientId_.toStdString();
   request.clientSecret = clientSecret_.toStdString();
@@ -156,8 +213,10 @@ void MeetingController::join() {
     if (asked != prepareRound_) return;  // the operator pressed "leave" while this was on its way
     preparing_ = false;
     if (!entry.ok) {
-      state_ = MeetingState::Failed;
-      detail_ = entry.error;
+      // The licence server out of reach is the line again; a refusal is not.
+      endCause_ = entry.unreachable ? backhaul::EndCause::Connection : backhaul::EndCause::Other;
+      onMeetingState(MeetingState::Failed, {});
+      if (detail_.isEmpty()) detail_ = entry.error;  // unless giving up had something to say
       emit changed();
       return;
     }
@@ -186,13 +245,14 @@ bool MeetingController::sendVideo(const std::uint8_t* i420, int width, int heigh
 }
 
 void MeetingController::leave() {
-  if (preparing_) {
-    // Nothing was started at the meeting service yet: the answer on its way is simply not used.
+  const bool waiting = rejoining() && rejoinNextMs_ != 0;  // between two tries: nothing is running
+  stopRejoining();
+  wasIn_ = false;
+  if (preparing_ || waiting) {
+    // Nothing is started at the meeting service: an answer on its way is simply not used.
     ++prepareRound_;
     preparing_ = false;
-    state_ = MeetingState::Idle;
-    detail_.clear();
-    emit changed();
+    onMeetingState(MeetingState::Idle, {});
     return;
   }
   if (client_ != nullptr && busy()) client_->leave();
@@ -220,6 +280,25 @@ void MeetingController::onMeetingState(MeetingState state, const std::string& de
   state_ = state;
   detail_ = T(detail);  // said in Japanese by the Zoom part
   if (state == MeetingState::Joining) authenticated_ = true;
+  const bool in = state == MeetingState::WaitingForPermission || state == MeetingState::Receiving;
+  const bool over = state == MeetingState::Failed || state == MeetingState::Ended;
+  if (in) {
+    wasIn_ = true;
+    stopRejoining();  // back in
+  }
+  if (state == MeetingState::Idle) {
+    endCause_ = backhaul::EndCause::None;
+    wasIn_ = false;
+  }
+  if (over && planRejoin()) {
+    // Coming back: the slots stay as they are (their people show as lost and return to
+    // them by name); only what belongs to the connection that just ended is put away.
+    sendingAudio_ = sendingVideo_ = false;
+    sendNote_.clear();
+    sendVideoNote_.clear();
+    app_.elapsed_.clear();
+    joinedAtMs_ = 0;
+  }
   const bool live = busy();
   if (live && !pollTimer_.isActive()) {
     pollTimer_.start();
@@ -490,6 +569,7 @@ void MeetingController::everySecond() {
       emit changed();
     }
   }
+  if (rejoining()) emit changed();  // the seconds until the next try
   if (joinedAtMs_ != 0) {
     const qint64 s = (QDateTime::currentMSecsSinceEpoch() - joinedAtMs_) / 1000;
     app_.elapsed_ = QStringLiteral("%1:%2:%3")
