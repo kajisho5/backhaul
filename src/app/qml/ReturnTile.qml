@@ -1,42 +1,114 @@
 import QtQuick
 import QtQuick.Layouts
 import Backhaul
+import Backhaul.Video
 
-// What the venue is sending back to Zoom.
-Rectangle {
-    implicitHeight: column.implicitHeight + 4
-    color: Theme.panel
-    border.width: 2
-    border.color: Theme.line
-    radius: 2
+// What the venue is sending back to Zoom, on the wall of the all-in-one role.
+Item {
+    id: root
+    property bool picked: false
+    // "off" | "paused" | "sending" | "noinput" | "idle" (see Main.qml)
+    property string state: "off"
+    signal chosen()
+    readonly property bool on: state !== "off"
+    readonly property color tint: state === "sending" ? Theme.ok : state === "paused" || state === "idle" ? Theme.muted
+                                  : state === "noinput" ? Theme.lost : Theme.line
+    readonly property string stateText: state === "sending" ? "送信中" : state === "paused" ? "停止中"
+                                        : state === "noinput" ? "入力なし" : state === "idle" ? "未送信" : "送らない"
+    implicitHeight: body.implicitHeight
+    activeFocusOnTab: true
+    Accessible.role: Accessible.Button
+    Accessible.name: "Zoomへの返し " + stateText
+    Accessible.onPressAction: root.chosen()
+    Keys.onReturnPressed: root.chosen()
+    Keys.onSpacePressed: root.chosen()
 
-    ColumnLayout {
-        id: column
+    Rectangle {
+        visible: root.picked || root.activeFocus
         anchors.fill: parent
-        anchors.margins: 2
-        spacing: 0
-        Rectangle {
-            Layout.fillWidth: true
-            Layout.preferredHeight: width * 9 / 16
-            color: Theme.picture
-            Text { anchors.centerIn: parent; text: "本番映像"; color: "#6f757d"; font.family: app.sansFamily; font.pixelSize: 12; font.letterSpacing: 1.5 }
-        }
-        RowLayout {
-            Layout.fillWidth: true
-            Layout.preferredHeight: 40
-            Layout.leftMargin: 12
-            Layout.rightMargin: 12
-            spacing: 10
-            Text { text: "返"; color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 13 }
-            Text { Layout.fillWidth: true; text: "Zoomへの返し"; elide: Text.ElideRight; color: Theme.ink; font.family: app.sansFamily; font.pixelSize: 15; font.bold: true }
-            Text {
-                readonly property bool allOk: app.returnVideoOk && app.returnAudioOk
-                text: allOk ? "入力あり"
-                            : (!app.returnVideoOk && !app.returnAudioOk ? "入力なし"
-                               : (app.returnVideoOk ? "音声の入力なし" : "映像の入力なし"))
-                color: allOk ? Theme.ok : Theme.lost
-                font.family: app.sansFamily; font.pixelSize: 12; font.bold: true
+        anchors.margins: -6
+        color: "transparent"
+        border.width: root.picked ? 3 : 1
+        border.color: Theme.ink
+        radius: 3
+    }
+
+    Rectangle {
+        id: body
+        anchors.left: parent.left
+        anchors.right: parent.right
+        implicitHeight: column.implicitHeight + 4
+        color: Theme.panel
+        border.width: 2
+        border.color: root.tint
+        radius: 2
+
+        ColumnLayout {
+            id: column
+            anchors.fill: parent
+            anchors.margins: 2
+            spacing: 0
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: width * 9 / 16
+                color: Theme.picture
+                Text {
+                    anchors.centerIn: parent
+                    text: !root.on ? "返しは送らない設定です"
+                          : returning.deviceIndex === 0 && !app.demo ? "映像の入力を選んでいません" : "会場の映像"
+                    color: "#6f757d"; font.family: app.sansFamily; font.pixelSize: 12; font.letterSpacing: 1.5
+                }
+                FrameItem { anchors.fill: parent; slot: 1000; visible: root.on }
+                Rectangle {
+                    visible: root.on && returning.inputText.length > 0
+                    x: 8; y: 8
+                    color: "#b3000000"
+                    width: sizeLabel.implicitWidth + 12; height: sizeLabel.implicitHeight + 4
+                    Text { id: sizeLabel; anchors.centerIn: parent; text: returning.inputText; color: Theme.ink; font.family: app.monoFamily; font.pixelSize: 11 }
+                }
+                Rectangle {
+                    visible: root.on
+                    x: 8; y: parent.height - height - 8
+                    color: "#b3000000"
+                    width: wayLabel.implicitWidth + 12; height: wayLabel.implicitHeight + 4
+                    Text { id: wayLabel; anchors.centerIn: parent; text: app.returnAsShare ? "画面共有として" : "カメラとして"; color: Theme.ink; font.family: app.sansFamily; font.pixelSize: 11 }
+                }
+                Rectangle {
+                    visible: root.on
+                    Accessible.role: Accessible.Indicator
+                    Accessible.name: "送る音のメーター"
+                    anchors { right: parent.right; top: parent.top; bottom: parent.bottom; margins: 8 }
+                    width: 6
+                    color: "#1d2024"
+                    Rectangle {
+                        anchors.bottom: parent.bottom
+                        width: parent.width
+                        height: parent.height * Math.max(0, Math.min(1, Math.max(audio.micLevels[0], audio.micLevels[1])))
+                        color: Theme.ok
+                    }
+                }
+            }
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 40
+                color: root.picked ? Theme.ink : "transparent"
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: 12
+                    anchors.rightMargin: 12
+                    spacing: 10
+                    Text { text: "返"; color: root.picked ? "#3a3d42" : Theme.mute; font.family: app.sansFamily; font.pixelSize: 13 }
+                    Text { Layout.fillWidth: true; text: "Zoomへの返し"; elide: Text.ElideRight; color: root.picked ? Theme.bg : Theme.ink; font.family: app.sansFamily; font.pixelSize: 15; font.bold: true }
+                    Rectangle {
+                        color: root.on ? root.tint : "transparent"
+                        border.width: root.on ? 0 : 1
+                        border.color: root.picked ? "#3a3d42" : Theme.mute
+                        implicitWidth: chip.implicitWidth + 16; implicitHeight: 22
+                        Text { id: chip; anchors.centerIn: parent; text: root.stateText; color: root.on ? Theme.bg : (root.picked ? "#3a3d42" : Theme.mute); font.family: app.sansFamily; font.pixelSize: 12; font.bold: true }
+                    }
+                }
             }
         }
     }
+    MouseArea { anchors.fill: parent; onClicked: { root.chosen(); root.forceActiveFocus() } }
 }

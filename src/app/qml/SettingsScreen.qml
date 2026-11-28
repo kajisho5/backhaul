@@ -15,7 +15,7 @@ Rectangle {
         { key: "slots", title: "枠", ready: true },
         { key: "video", title: "映像出力", ready: true },
         { key: "audio", title: "音声出力", ready: true },
-        { key: "return", title: "返し", ready: false },
+        { key: "return", title: "返し", ready: true },
         { key: "project", title: "プロジェクト", ready: true }
     ]
 
@@ -112,7 +112,7 @@ Rectangle {
                 clip: true
                 readonly property real pageWidth: Math.max(width, 760)
                 contentWidth: pageWidth
-                contentHeight: (root.tab === "audio" ? audioPage.implicitHeight : root.tab === "video" ? videoPage.implicitHeight : root.tab === "zoom" ? zoomPage.implicitHeight : root.tab === "project" ? projectPage.implicitHeight : slotsPage.implicitHeight) + 56
+                contentHeight: (root.tab === "audio" ? audioPage.implicitHeight : root.tab === "video" ? videoPage.implicitHeight : root.tab === "zoom" ? zoomPage.implicitHeight : root.tab === "project" ? projectPage.implicitHeight : root.tab === "return" ? returnPage.implicitHeight : slotsPage.implicitHeight) + 56
                 boundsBehavior: Flickable.StopAtBounds
 
                 SettingsAudio {
@@ -133,6 +133,12 @@ Rectangle {
                     x: 32; y: 28
                     width: scroller.pageWidth - 64
                     onIdentifyRequested: root.identifyRequested()
+                }
+                SettingsReturn {
+                    id: returnPage
+                    visible: root.tab === "return"
+                    x: 32; y: 28
+                    width: scroller.pageWidth - 64
                 }
                 SettingsProject {
                     id: projectPage

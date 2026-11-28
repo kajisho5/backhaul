@@ -38,6 +38,10 @@ bool receivesVideo(Role role);
 bool sendsAudio(Role role);
 // Whether this PC sends a capture device's picture into the meeting.
 bool sendsVideo(Role role);
+// The same two questions for a PC whose owner has (or has not) switched on "send the
+// return from the all-in-one PC too". Only the all-in-one role listens to that switch.
+bool sendsAudio(Role role, bool returnInAll);
+bool sendsVideo(Role role, bool returnInAll);
 // False for a PC that only sends: it takes neither pictures nor voices from the meeting.
 bool receivesAnything(Role role);
 

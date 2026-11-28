@@ -23,13 +23,17 @@ bool singleOutput(Role role) { return role == Role::Camera || role == Role::TwoS
 
 bool playsAudio(Role role) { return role == Role::All || role == Role::Audio; }
 
-bool handlesAudio(Role role) { return playsAudio(role) || sendsAudio(role); }
+bool handlesAudio(Role role) { return playsAudio(role) || sendsAudio(role); }  // the all-in-one PC handles sound either way
 
 bool receivesVideo(Role role) { return role != Role::Audio && role != Role::Return && role != Role::Unset; }
 
 bool sendsAudio(Role role) { return role == Role::Audio || role == Role::Return; }
 
 bool sendsVideo(Role role) { return role == Role::Return; }
+
+bool sendsAudio(Role role, bool returnInAll) { return sendsAudio(role) || (role == Role::All && returnInAll); }
+
+bool sendsVideo(Role role, bool returnInAll) { return sendsVideo(role) || (role == Role::All && returnInAll); }
 
 bool receivesAnything(Role role) { return receivesVideo(role) || playsAudio(role); }
 

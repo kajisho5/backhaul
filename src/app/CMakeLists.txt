@@ -49,6 +49,8 @@ qt_add_qml_module(backhaul
     qml/TopBar.qml
     qml/SlotTile.qml
     qml/ReturnTile.qml
+    qml/ReturnDetail.qml
+    qml/SettingsReturn.qml
     qml/RouteStrip.qml
     qml/DetailPanel.qml
     qml/ParticipantList.qml

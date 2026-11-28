@@ -37,6 +37,8 @@ class AppState : public QObject {
   // whether it goes out as a shared screen instead of as this PC's camera.
   Q_PROPERTY(QString videoDeviceName READ videoDeviceName NOTIFY changed)
   Q_PROPERTY(bool returnAsShare READ returnAsShare WRITE setReturnAsShare NOTIFY changed)
+  Q_PROPERTY(bool returnInAll READ returnInAll WRITE setReturnInAll NOTIFY roleChanged)
+  Q_PROPERTY(bool sendsVideo READ sendsVideo NOTIFY roleChanged)
   Q_PROPERTY(bool receivesVideo READ receivesVideo NOTIFY roleChanged)
   Q_PROPERTY(int audioChannels MEMBER audioChannels_ NOTIFY changed)
   Q_PROPERTY(int audioSampleRate MEMBER audioSampleRate_ NOTIFY changed)
@@ -104,14 +106,18 @@ class AppState : public QObject {
   // Stereo needs "original" or "music": with speech processing the meeting sends one side only.
   bool sendStereo() const { return sendStereo_ && sendQuality_ != 0; }
   void setSendStereo(bool stereo);
-  bool sendsAudio() const { return backhaul::sendsAudio(role_); }
+  bool sendsAudio() const { return backhaul::sendsAudio(role_, returnInAll_); }
   bool playsAudio() const { return backhaul::playsAudio(role_); }
-  bool sendsVideo() const { return backhaul::sendsVideo(role_); }
+  bool sendsVideo() const { return backhaul::sendsVideo(role_, returnInAll_); }
   bool receivesAnything() const { return backhaul::receivesAnything(role_); }
   QString videoDeviceName() const { return videoDeviceName_; }
   void setVideoDeviceName(const QString& name);
   bool returnAsShare() const { return returnAsShare_; }
   void setReturnAsShare(bool share);
+  // "Send the return from the all-in-one PC too". Off unless the owner switched it on, so
+  // that devices remembered from another role never start sending by themselves.
+  bool returnInAll() const { return returnInAll_; }
+  void setReturnInAll(bool on);
   bool receivesVideo() const { return backhaul::receivesVideo(role_); }
   // Slides that are not 16:9: true cuts them to 16:9, false shows all with black bars.
   bool cropSlides() const;
@@ -231,6 +237,7 @@ class AppState : public QObject {
   bool sendStereo_ = false;
   QString videoDeviceName_;
   bool returnAsShare_ = false;
+  bool returnInAll_ = false;
   QString roleScreen_;
   bool twoShotSwapped_ = false, twoShotFill_ = true, twoShotSolo_ = false;
   int twoShotSplit_ = 0;

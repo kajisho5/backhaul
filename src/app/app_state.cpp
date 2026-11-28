@@ -420,6 +420,7 @@ QJsonObject AppState::settingsJson() const {
   QJsonObject returning;
   returning[QStringLiteral("device")] = videoDeviceName_;
   returning[QStringLiteral("as")] = returnAsShare_ ? QStringLiteral("share") : QStringLiteral("camera");
+  if (returnInAll_) returning[QStringLiteral("inAll")] = true;
   root[QStringLiteral("return")] = returning;
   root[QStringLiteral("standbyText")] = standbyText_;
   if (!pluginSettings_.isEmpty()) root[QStringLiteral("plugins")] = pluginSettings_;
@@ -574,6 +575,7 @@ bool AppState::applySettings(const QJsonObject& settings) {
   // Return picture: absent in files written before that role existed.
   QString videoDevice;
   bool returnAsShare = false;
+  bool returnInAll = false;
   const QJsonValue returnValue = settings.value(QStringLiteral("return"));
   if (!returnValue.isUndefined()) {
     const QJsonObject returning = returnValue.toObject();
@@ -584,6 +586,10 @@ bool AppState::applySettings(const QJsonObject& settings) {
     }
     videoDevice = returning.value(QStringLiteral("device")).toString().left(kMaxZoomNameLength);
     returnAsShare = as == QStringLiteral("share");
+    // Absent in files written before the all-in-one PC could send the return.
+    const QJsonValue inAll = returning.value(QStringLiteral("inAll"));
+    if (!inAll.isUndefined() && !inAll.isBool()) return false;
+    returnInAll = inAll.toBool();
   }
 
   // People first, then slides, numbered in order.
@@ -611,6 +617,7 @@ bool AppState::applySettings(const QJsonObject& settings) {
   standbyText_ = standbyText;
   videoDeviceName_ = videoDevice;
   returnAsShare_ = returnAsShare;
+  returnInAll_ = returnInAll;
   role_ = role;
   roleScreen_ = roleScreen;
   twoShotFill_ = fill;
@@ -655,6 +662,7 @@ void AppState::loadDefaults() {
   pluginSettings_ = QJsonObject();
   videoDeviceName_.clear();
   returnAsShare_ = false;
+  returnInAll_ = false;
   role_ = backhaul::Role::Unset;
   roleScreen_.clear();
   twoShotFill_ = true;
@@ -808,6 +816,14 @@ void AppState::setVideoDeviceName(const QString& name) {
 void AppState::setReturnAsShare(bool share) {
   if (share == returnAsShare_) return;
   returnAsShare_ = share;
+  emit changed();
+  emit settingsEdited();
+}
+
+void AppState::setReturnInAll(bool on) {
+  if (on == returnInAll_) return;
+  returnInAll_ = on;
+  emit roleChanged();  // what this PC sends has changed, as it does with a change of role
   emit changed();
   emit settingsEdited();
 }
