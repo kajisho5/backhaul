@@ -27,6 +27,7 @@ interface FakeSub {
 let subs: Record<string, FakeSub>;
 let sessions: Record<string, { status: string; payment_status: string; subscription: string | null; email: string }>;
 let prices: Record<string, string>;
+let taxRates: { id: string; percentage: number; metadata: Record<string, string> }[];
 let stripeCalls: { method: string; url: string; body: string; headers: Headers }[];
 let mails: { to: string[]; subject: string; text: string; from: string; reply_to: string; once: string }[];
 let mailWorks: boolean;
@@ -70,6 +71,15 @@ const app = createApp({
     if (at.pathname === "/v1/prices") {
       const id = prices[at.searchParams.get("lookup_keys[0]") ?? ""];
       return json({ object: "list", data: id ? [{ id }] : [] });
+    }
+    if (at.pathname === "/v1/tax_rates") {
+      if (init?.method === "POST") {
+        const sent = new URLSearchParams(body);
+        const made = { id: `txr_Sample${taxRates.length + 1}`, percentage: Number(sent.get("percentage")), metadata: { backhaul: sent.get("metadata[backhaul]") ?? "" } };
+        taxRates.push(made);
+        return json(made);
+      }
+      return json({ object: "list", data: taxRates });
     }
     if (at.pathname === "/v1/checkout/sessions" && init?.method === "POST") {
       return json({ id: "cs_test_SampleNew0001", url: "https://checkout.stripe.example.invalid/pay/cs_test_SampleNew0001" });
@@ -143,7 +153,6 @@ beforeEach(() => {
     SITE_URL: SITE,
     MAIL_FROM: "backhaul <licence@otter.example>",
     BILLING_URL: "https://billing.example.invalid/p/login/sample",
-    STRIPE_TAX_RATE_JPY: "txr_SampleJp10",
     STRIPE_SECRET_KEY: "sk_test_sample_otter",
     STRIPE_WEBHOOK_SECRET: WEBHOOK_SECRET,
     RESEND_API_KEY: "re_sample_otter",
@@ -151,6 +160,7 @@ beforeEach(() => {
   subs = {};
   sessions = {};
   prices = { backhaul_5_month: "price_5m", backhaul_10_year: "price_10y" };
+  taxRates = [{ id: "txr_SampleOther", percentage: 8, metadata: {} }];
   stripeCalls = [];
   mails = [];
   mailWorks = true;
@@ -392,11 +402,23 @@ describe("the thank-you page", () => {
 });
 
 describe("starting a purchase", () => {
-  it("opens Stripe's page for the chosen plan, in yen with the tax rate", async () => {
+  it("opens Stripe's page for the chosen plan; yen gets the consumption tax rate, made at Stripe on first use", async () => {
     const r = await call("/v1/shop/checkout", { seats: 5, period: "month", currency: "jpy", lang: "ja" });
     expect(r.status).toBe(200);
     expect(((await r.json()) as { url: string }).url).toBe("https://checkout.stripe.example.invalid/pay/cs_test_SampleNew0001");
-    const sent = new URLSearchParams(at(stripeCalls, 1).body);
+    const made = stripeCalls.find((c) => c.method === "POST" && c.url.endsWith("/v1/tax_rates"));
+    expect(Object.fromEntries(new URLSearchParams(made?.body))).toEqual({
+      display_name: "消費税",
+      description: "Japanese consumption tax, added to payments in yen",
+      percentage: "10",
+      inclusive: "false",
+      country: "JP",
+      jurisdiction: "JP",
+      tax_type: "jct",
+      "metadata[backhaul]": "jct10",
+    });
+    expect(made?.headers.get("idempotency-key")).toBe("backhaul-jct10");
+    const sent = new URLSearchParams(at(stripeCalls, stripeCalls.length - 1).body);
     expect(Object.fromEntries(sent)).toEqual({
       mode: "subscription",
       "line_items[0][price]": "price_5m",
@@ -407,17 +429,26 @@ describe("starting a purchase", () => {
       cancel_url: `${SITE}/ja/#pricing`,
       billing_address_collection: "required",
       "subscription_data[metadata][lang]": "ja",
-      "subscription_data[default_tax_rates][0]": "txr_SampleJp10",
+      "subscription_data[default_tax_rates][0]": "txr_Sample2",
     });
   });
 
-  it("adds no Japanese tax rate to a payment in dollars", async () => {
+  it("uses the same tax rate from then on, and never one it did not mark", async () => {
+    await call("/v1/shop/checkout", { seats: 5, period: "month", currency: "jpy" });
+    await call("/v1/shop/checkout", { seats: 5, period: "month", currency: "jpy" });
+    expect(taxRates).toHaveLength(2); // the stranger's 8 % rate and ours
+    expect(stripeCalls.filter((c) => c.method === "POST" && c.url.endsWith("/v1/tax_rates"))).toHaveLength(1);
+    expect(new URLSearchParams(at(stripeCalls, stripeCalls.length - 1).body).get("subscription_data[default_tax_rates][0]")).toBe("txr_Sample2");
+  });
+
+  it("adds no Japanese tax to a payment in dollars", async () => {
     await call("/v1/shop/checkout", { seats: 10, period: "year", currency: "usd", lang: "en" });
     const sent = new URLSearchParams(at(stripeCalls, 1).body);
     expect(sent.get("line_items[0][price]")).toBe("price_10y");
     expect(sent.get("currency")).toBe("usd");
     expect(sent.get("success_url")).toBe(`${SITE}/thanks/?session_id={CHECKOUT_SESSION_ID}`);
     expect(sent.has("subscription_data[default_tax_rates][0]")).toBe(false);
+    expect(stripeCalls.some((c) => c.url.includes("/v1/tax_rates"))).toBe(false);
   });
 
   it("refuses plans that are not sold", async () => {

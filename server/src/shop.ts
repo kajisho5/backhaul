@@ -36,7 +36,6 @@ interface Shop {
   mailFrom: string;
   siteUrl: string;
   billingUrl: string;
-  taxRateJpy: string | null;
 }
 
 /** Null until everything selling needs is set: the three secrets, the sealing key, the site and the sender. */
@@ -53,7 +52,6 @@ export async function openShop(env: Env, outside: Outside): Promise<Shop | null>
     mailFrom: env.MAIL_FROM,
     siteUrl: env.SITE_URL.replace(/\/+$/, ""),
     billingUrl: env.BILLING_URL ?? "",
-    taxRateJpy: env.STRIPE_TAX_RATE_JPY ? env.STRIPE_TAX_RATE_JPY : null,
   };
 }
 
@@ -190,7 +188,8 @@ export function shopRoutes(outside: Outside) {
         priceId,
         currency,
         lang,
-        taxRate: currency === "jpy" ? open.taxRateJpy : null,
+        // Prices are without tax. Yen: Japanese consumption tax on top. Dollars: sold abroad, no Japanese tax.
+        taxRate: currency === "jpy" ? await open.stripe.japanTaxRate() : null,
         // Stripe puts the session's id where the braces are; the page then asks /v1/shop/order with it.
         successUrl: `${home}/thanks/?session_id={CHECKOUT_SESSION_ID}`,
         cancelUrl: `${home}/#pricing`,
