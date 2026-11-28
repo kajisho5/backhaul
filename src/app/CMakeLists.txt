@@ -21,6 +21,7 @@ add_library(backhaul_app_state STATIC
   settings_saver.cpp settings_saver.h
   slot_model.cpp slot_model.h
   check_controller.cpp check_controller.h
+  log_controller.cpp log_controller.h
   system_facts.cpp system_facts.h
   watchdog.cpp watchdog.h
   update_controller.cpp update_controller.h

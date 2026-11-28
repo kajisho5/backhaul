@@ -7,6 +7,8 @@
 #include <windows.h>
 #endif
 
+#include <QDir>
+#include <QFile>
 #include <QImage>
 #include <QJsonArray>
 #include <QJsonObject>
@@ -15,6 +17,7 @@
 #include "audio_controller.h"
 #include "check.h"
 #include "frame_store.h"
+#include "log_controller.h"
 #include "meeting_controller.h"
 #include "return_controller.h"
 
@@ -261,6 +264,70 @@ static void testRejoin() {
 }
 
 // started again after a crash: back into the meeting this PC was in
+// The show log writes down what the meeting does, by watching: no part tells it anything.
+static void testShowLog() {
+  using backhaul::LogKind;
+  ZoomCredentials saved{QStringLiteral("SampleClientId_01"), QStringLiteral("sample-secret")};
+  AppState a;
+  a.loadDefaults();
+  a.setRole(QStringLiteral("all"));
+  a.setMeetingId(QStringLiteral("123 4567 8901"));
+  FrameStore frames;
+  auto* client = new ScriptedClient;
+  MeetingController m(a, frames, std::unique_ptr<backhaul::MeetingClient>(client), std::make_unique<MemoryCredentials>(&saved));
+  qint64 now = 1'800'000'000'000;
+  LogController log(a, m, nullptr, [&now] { return now; });
+  auto kinds = [&log] {
+    std::vector<LogKind> out;
+    for (const backhaul::LogEntry& e : log.log().entries()) out.push_back(e.kind);
+    return out;
+  };
+  auto last = [&log] { return log.log().entries().back(); };
+  Participant self = person(1, "backhaul");
+  self.isSelf = true;
+
+  CHECK(log.count() == 0);
+  m.join();
+  client->events->onParticipants({self, person(10, "Kakuu Ichiro")});  // the list comes before the meeting counts as joined
+  CHECK(log.count() == 0);
+  client->events->onMeetingTopic("Sample Conference");
+  client->events->onMeetingState(MeetingState::Receiving, {});
+  // In the meeting; who was there is told apart from who comes later; this PC is not listed.
+  CHECK(kinds() == (std::vector<LogKind>{LogKind::MeetingJoined, LogKind::PersonHere}));
+  CHECK(log.log().entries().front().who == "Sample Conference" && last().who == "Kakuu Ichiro");
+  now += 60'000;
+  client->events->onParticipants({self, person(10, "Kakuu Ichiro"), person(11, "=Mihon, Hanako")});
+  CHECK(last().kind == LogKind::PersonCame && last().who == "=Mihon, Hanako" && last().atMs == now);
+  client->events->onParticipants({self, person(10, "Kakuu Ichiro"), person(11, "=Mihon, Hanako")});  // told again: nothing new
+  CHECK(log.count() == 3);
+  client->events->onParticipants({self, person(11, "=Mihon, Hanako")});
+  CHECK(last().kind == LogKind::PersonLeft && last().who == "Kakuu Ichiro" && log.count() == 4);
+
+  // The line drops: one line for that, none for the people (they did not leave).
+  client->events->onEndCause(backhaul::EndCause::Connection);
+  client->events->onMeetingState(MeetingState::Failed, {});
+  CHECK(m.rejoining() && last().kind == LogKind::MeetingDropped && log.count() == 5);
+  m.rejoinNow();
+  client->events->onMeetingState(MeetingState::Receiving, {});
+  client->events->onParticipants({self, person(27, "=Mihon, Hanako")});
+  CHECK(kinds().back() == LogKind::PersonHere && kinds()[5] == LogKind::MeetingJoined && log.count() == 7);
+  m.leave();
+  client->events->onMeetingState(MeetingState::Idle, {});
+  CHECK(last().kind == LogKind::MeetingLeft && log.count() == 8);
+
+  // The file: a heading, one line each, and a name that looks like a formula made harmless.
+  const QByteArray file = log.csv();
+  CHECK(file.startsWith("\xEF\xBB\xBF") && file.count("\r\n") == 9);
+  CHECK(file.contains("\"'=Mihon, Hanako\"") && !file.contains(",=Mihon"));
+  const QString path = QDir::temp().filePath(QStringLiteral("backhaul-log-test-%1.csv").arg(QCoreApplication::applicationPid()));
+  CHECK(log.saveTo(path) && !log.failed() && log.message().contains(QStringLiteral("8")));
+  QFile written(path);
+  CHECK(written.open(QIODevice::ReadOnly) && written.readAll() == file);
+  written.close();
+  QFile::remove(path);
+  CHECK(!log.saveTo(QDir::temp().filePath(QStringLiteral("no-such-folder-otter/x.csv"))) && log.failed());
+}
+
 static void testResume() {
   struct Kept final : SecretStore {
     QByteArray* shared;
@@ -1755,6 +1822,7 @@ int main(int argc, char* argv[]) {
 
 
   testRejoin();
+  testShowLog();
   testResume();
   testLine();
   testDevicesComeBack();

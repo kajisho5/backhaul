@@ -88,4 +88,46 @@ ColumnLayout {
             }
         }
     }
+
+    // The show log: what happened since the program was started, as a file.
+    Text {
+        Layout.topMargin: 28; Layout.bottomMargin: 8
+        text: qsTr("本番ログ")
+        color: Theme.ink; font.family: app.sansFamily; font.pixelSize: 16; font.bold: true
+    }
+    Text {
+        Layout.fillWidth: true
+        Layout.maximumWidth: root.textWidth
+        Layout.bottomMargin: 14
+        wrapMode: Text.WordWrap
+        text: qsTr("会議に入った・出た時刻、参加者の出入り、音声の機器が止まった時刻を記録しています。表計算ソフトで開けるCSVファイルに書き出せます。記録はこのPCの中だけにあり、backhaul を閉じると消えます。")
+        color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 13
+    }
+    RowLayout {
+        Layout.bottomMargin: 10
+        spacing: 12
+        PlainButton {
+            text: qsTr("CSVで書き出す")
+            textSize: 13
+            implicitHeight: 40
+            color: Theme.control
+            enabled: showLog.canSave && showLog.count > 0
+            onClicked: showLog.save()
+        }
+        Text {
+            text: qsTr("%1件").arg(showLog.count)
+            color: Theme.ink; font.family: app.monoFamily; font.pixelSize: 13
+        }
+    }
+    Text {
+        visible: text.length > 0
+        Layout.fillWidth: true
+        Layout.maximumWidth: root.textWidth
+        wrapMode: Text.WordWrap
+        text: showLog.message.length > 0 ? showLog.message
+              : !showLog.canSave ? (app.demo ? qsTr("デモ表示では書き出せません。") : qsTr("このPCではファイルを選ぶ窓を出せません。"))
+              : ""
+        color: showLog.message.length > 0 ? (showLog.failed ? Theme.lost : Theme.ok) : Theme.mute
+        font.family: app.sansFamily; font.pixelSize: 13
+    }
 }

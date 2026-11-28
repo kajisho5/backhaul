@@ -4,7 +4,11 @@
 
 #include <QString>
 
+// What kind of file the window is for: it shows files of that kind and adds the ending
+// when the operator types a name without one.
+enum class FileKind { Project, Csv };
+
 bool canPickFiles();
 // Empty when the operator closed the window without choosing.
-QString pickSaveFile(const QString& title, const QString& suggestedName);
+QString pickSaveFile(const QString& title, const QString& suggestedName, FileKind kind = FileKind::Project);
 QString pickOpenFile(const QString& title);

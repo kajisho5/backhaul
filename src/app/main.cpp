@@ -23,6 +23,7 @@
 #include "frame_item.h"
 #include "frame_store.h"
 #include "licence_controller.h"
+#include "log_controller.h"
 #include "meeting_controller.h"
 #include "plugin_controller.h"
 #include "plugins/plugin_host.h"
@@ -188,6 +189,8 @@ int main(int argc, char* argv[]) {
   // The check before the show. The demo shows a sample result.
   CheckController check(state, meeting, demo ? nullptr : &licence, demo ? nullptr : &audio, demo ? nullptr : &update);
   if (demo) check.showForPicture();
+  // The show log watches the meeting, the people in it and the audio device.
+  LogController showLog(state, meeting, &audio);
   if (args.isSet(updateOpt)) {
     update.showForPicture(args.value(updateOpt));
   } else if (!args.isSet(shotOpt)) {
@@ -214,6 +217,7 @@ int main(int argc, char* argv[]) {
   engine.rootContext()->setContextProperty(QStringLiteral("project"), &project);
   engine.rootContext()->setContextProperty(QStringLiteral("updates"), &update);  // not "update": every QML item has a function of that name
   engine.rootContext()->setContextProperty(QStringLiteral("check"), &check);
+  engine.rootContext()->setContextProperty(QStringLiteral("showLog"), &showLog);
   engine.rootContext()->setContextProperty(QStringLiteral("app"), &state);
   QObject::connect(&engine, &QQmlApplicationEngine::objectCreationFailed, &qtApp,
                    [] { QCoreApplication::exit(2); }, Qt::QueuedConnection);
@@ -298,7 +302,8 @@ int main(int argc, char* argv[]) {
     QObject::connect(&qtApp, &QCoreApplication::aboutToQuit, &qtApp, [] { watchdog::end(); });
     if (args.isSet(resumeOpt)) {
       // The devices get a moment to start before the meeting is joined again.
-      QTimer::singleShot(2000, &meeting, [&meeting, &state] {
+      QTimer::singleShot(2000, &meeting, [&meeting, &state, &showLog] {
+        showLog.note(backhaul::LogKind::Restarted);
         if (meeting.resume()) {
           state.notice_ = T("前回は異常終了しました。入っていた会議に入り直しています");
           state.notifyChanged();
