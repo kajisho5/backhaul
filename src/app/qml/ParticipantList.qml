@@ -3,6 +3,10 @@ import QtQuick.Layouts
 import Backhaul
 
 ColumnLayout {
+    id: list
+    // False while something other than a slot is selected (the return tile): there is then
+    // no slot on show for "この枠へ" to mean.
+    property bool slotOnShow: true
     spacing: 0
 
     RowLayout {
@@ -40,7 +44,7 @@ ColumnLayout {
                 color: Theme.mute; font.family: app.sansFamily; font.pixelSize: 11
             }
             PlainButton {
-                visible: canAssign
+                visible: canAssign && list.slotOnShow
                 anchors.verticalCenter: parent.verticalCenter
                 anchors.right: parent.right
                 text: "この枠へ"
