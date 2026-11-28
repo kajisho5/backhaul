@@ -352,6 +352,18 @@ describe("signing in to Zoom", () => {
     expect(Object.fromEntries(new URLSearchParams(zoomCalls[3]!.body)).refresh_token).toBe("sample-refresh-2");
   });
 
+  it("forgets the sign-in when the licence is stopped", async () => {
+    const { id, key } = await issue();
+    const token = await tokenFor(key, PC_A);
+    await signedIn(token);
+    expect(((await (await call("/v1/status", {}, token)).json()) as { licence: { zoomSignedIn: boolean } }).licence.zoomSignedIn).toBe(true);
+    await call(`/admin/licences/${id}/revoke`, undefined, ADMIN);
+    await call(`/admin/licences/${id}/restore`, undefined, ADMIN);
+    const after = await call("/v1/zoom/zak", {}, token);
+    expect(after.status).toBe(404);
+    expect(await after.json()).toMatchObject({ error: "not_signed_in" });
+  });
+
   it("lets one PC at a time talk to Zoom; the others wait for its result", async () => {
     const { key } = await issue(2);
     const a = await tokenFor(key, PC_A);

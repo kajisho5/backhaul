@@ -33,7 +33,7 @@ const pages: Page[] = [
 
 <h2>How long we keep it</h2>
 <ul>
-<li>Zoom sign-in tokens: until you press サインアウト (Sign out) in backhaul, remove backhaul from your Zoom account, or your licence ends. Signing out also revokes the tokens at Zoom.</li>
+<li>Zoom sign-in tokens: until you press サインアウト (Sign out) in backhaul (this also revokes them at Zoom), until you remove backhaul from your Zoom account (the server discards them the next time they would be used), or until we stop your licence. Tokens left with an expired licence are deleted together with its records.</li>
 <li>Licence and PC records: while the licence is valid and up to 12 months after, for support and accounting. Records we must keep by law (for example invoices) are kept as long as the law requires.</li>
 </ul>
 

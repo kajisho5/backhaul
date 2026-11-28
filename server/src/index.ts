@@ -355,7 +355,11 @@ export function createApp(outside: Outside) {
   admin.post("/licences/:id/:action{revoke|restore}", async (c) => {
     const id = Number(c.req.param("id"));
     if (!Number.isInteger(id)) return c.json({ error: "bad_request" }, 400);
-    const found = await new Store(c.env.DB).setRevoked(id, c.req.param("action") === "revoke");
+    const store = new Store(c.env.DB);
+    const stopping = c.req.param("action") === "revoke";
+    const found = await store.setRevoked(id, stopping);
+    // A stopped licence keeps no Zoom sign-in: restoring it later means signing in again.
+    if (found && stopping) await store.removeSignin(id);
     return found ? c.json({ ok: true }) : c.json({ error: "unknown_licence" }, 404);
   });
 
