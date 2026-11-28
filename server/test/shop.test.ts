@@ -2,7 +2,9 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../src/index";
 import type { Env } from "../src/index";
 import { keyMail, looksLikeEmail, trialIdentity } from "../src/mail";
-import { dayText, escapeHtml, keyMailHtml } from "../src/mail_html";
+import { dateText, dayText, keyMailContent, moneyText } from "../src/mail_content";
+import type { KeyMailView } from "../src/mail_content";
+import { escapeHtml, keyMailHtml } from "../src/mail_html";
 import { GRACE_SECONDS, expiryOf } from "../src/shop";
 import { STRIPE_VERSION, readSubscription, verifyWebhook } from "../src/stripe";
 import { memoryD1 } from "./d1";
@@ -24,6 +26,9 @@ interface FakeSub {
   periodEnd: number;
   email: string | null;
   lang?: string;
+  interval?: string;
+  invoice?: Record<string, unknown> | null;
+  card?: { brand: string; last4: string } | null;
 }
 let subs: Record<string, FakeSub>;
 let sessions: Record<string, { status: string; payment_status: string; subscription: string | null; email: string }>;
@@ -46,10 +51,12 @@ function subJson(id: string, s: FakeSub) {
           quantity: s.quantity,
           current_period_start: s.periodStart,
           current_period_end: s.periodEnd,
-          price: { id: "price_Sample", metadata: s.seats === null ? {} : { seats: s.seats } },
+          price: { id: "price_Sample", recurring: { interval: s.interval ?? "month" }, metadata: s.seats === null ? {} : { seats: s.seats } },
         },
       ],
     },
+    latest_invoice: s.invoice ?? null,
+    default_payment_method: s.card ? { id: "pm_Sample", card: s.card } : null,
   };
 }
 
@@ -205,7 +212,11 @@ describe("messages from Stripe", () => {
 
 describe("a paid subscription", () => {
   it("becomes one licence with the plan's PCs, and the key goes out by mail once", async () => {
-    subs.sub_SampleA1 = paid({ lang: "ja" });
+    subs.sub_SampleA1 = paid({
+      lang: "ja",
+      invoice: { id: "in_Sample", number: "SAMPLE-0001", created: now, currency: "jpy", subtotal: 9800, total: 10780, hosted_invoice_url: "https://invoice.example.invalid/i/sample" },
+      card: { brand: "jcb", last4: "0505" },
+    });
     // Stripe sends several messages about one purchase, in no fixed order.
     expect((await tell("customer.subscription.created", { id: "sub_SampleA1" })).status).toBe(200);
     expect((await tell("checkout.session.completed", { id: "cs_test_x", subscription: "sub_SampleA1" })).status).toBe(200);
@@ -215,16 +226,24 @@ describe("a paid subscription", () => {
     expect(list).toHaveLength(1);
     expect(at(list, 0)).toMatchObject({ seats: 5, expiresAt: now + 30 * DAY + GRACE_SECONDS, note: "Stripe sub_SampleA1", problem: null });
     expect(mails).toHaveLength(1);
-    expect(at(mails, 0)).toMatchObject({ to: ["buyer@otter.example"], from: "backhaul <licence@otter.example>", reply_to: "info@seventh-well.com", subject: "backhaul のライセンスキー" });
+    expect(at(mails, 0)).toMatchObject({ to: ["buyer@otter.example"], from: "backhaul <licence@otter.example>", reply_to: "backhaul@seventh-well.com", subject: "backhaul のライセンスキー" });
     expect(at(mails, 0).text).toContain("https://billing.example.invalid/p/login/sample");
     expect(at(mails, 0).text).toContain(`${SITE}/ja/start/`);
+    // The order, as Stripe's invoice has it, in both forms of the mail.
+    for (const form of [at(mails, 0).text, at(mails, 0).html]) {
+      expect(form).toContain("SAMPLE-0001");
+      expect(form).toContain("backhaul 5台・月額");
+      expect(form).toContain("¥10,780");
+      expect(form).toContain("JCB（末尾 0505）");
+      expect(form).toContain("https://invoice.example.invalid/i/sample");
+    }
     expect((await activate(keyIn(at(mails, 0).text), "sample-device-aaaaaaaa", "SAMPLE-PC-01")).status).toBe(200);
   });
 
   it("asks Stripe with the secret key and a fixed API version", async () => {
     subs.sub_SampleA1 = paid();
     await tell("customer.subscription.created", { id: "sub_SampleA1" });
-    expect(at(stripeCalls, 0).url).toBe("https://api.stripe.com/v1/subscriptions/sub_SampleA1?expand%5B0%5D=customer");
+    expect(at(stripeCalls, 0).url).toBe("https://api.stripe.com/v1/subscriptions/sub_SampleA1?expand%5B0%5D=customer&expand%5B1%5D=latest_invoice&expand%5B2%5D=default_payment_method");
     expect(at(stripeCalls, 0).headers.get("authorization")).toBe("Bearer sk_test_sample_otter");
     expect(at(stripeCalls, 0).headers.get("stripe-version")).toBe(STRIPE_VERSION);
   });
@@ -486,9 +505,10 @@ describe("the free trial", () => {
     expect(answer).not.toContain("BH-");
     expect(JSON.parse(answer)).toEqual({ ok: true, seats: 3, days: 14 });
     expect(at(mails, 0)).toMatchObject({ to: ["Crew@Otter.example"], subject: "Your backhaul trial key" });
-    expect(at(mails, 0).text).toContain("Trial ends: 2027-01-29");
+    expect(at(mails, 0).text).toContain("Ends: Jan 29, 2027");
     expect(at(mails, 0).html).toContain(keyIn(at(mails, 0).text));
-    expect(at(mails, 0).html).toContain("Jan 29");
+    expect(at(mails, 0).html).toContain("Jan 29, 2027");
+    expect(at(mails, 0).html).toContain('href="http://localhost/privacy"');
     expect(at(mails, 0).text).not.toContain("billing.example.invalid");
     const list = await licences();
     expect(at(list, 0)).toMatchObject({ seats: 3, expiresAt: now + 14 * DAY, note: "Trial" });
@@ -543,7 +563,7 @@ describe("when selling is not set up", () => {
 
 describe("the small rules", () => {
   it("the end date follows the subscription's state", () => {
-    const base = { id: "sub_x", seats: 5, periodStart: 1000, periodEnd: 5000, email: null, lang: "en" as const };
+    const base = { id: "sub_x", seats: 5, periodStart: 1000, periodEnd: 5000, email: null, lang: "en" as const, interval: null, order: null };
     expect(expiryOf({ ...base, status: "active" }, 2000, null)).toBe(5000 + GRACE_SECONDS);
     expect(expiryOf({ ...base, status: "trialing" }, 2000, null)).toBe(5000 + GRACE_SECONDS);
     expect(expiryOf({ ...base, status: "past_due" }, 2000, 9999)).toBe(1000 + GRACE_SECONDS);
@@ -553,7 +573,7 @@ describe("the small rules", () => {
 
   it("a subscription is read from where Stripe keeps things now (periods on the item)", () => {
     const read = readSubscription(subJson("sub_SampleA1", paid({ seats: "10", quantity: 2, lang: "ja" })) as unknown as Record<string, unknown>);
-    expect(read).toEqual({ id: "sub_SampleA1", status: "active", seats: 20, periodStart: now, periodEnd: now + 30 * DAY, email: "buyer@otter.example", lang: "ja" });
+    expect(read).toEqual({ id: "sub_SampleA1", status: "active", seats: 20, periodStart: now, periodEnd: now + 30 * DAY, email: "buyer@otter.example", lang: "ja", interval: "month", order: null });
     expect(readSubscription({ id: "sub_SampleA1", status: "active", customer: "cus_x" }).seats).toBeNull();
   });
 
@@ -565,53 +585,147 @@ describe("the small rules", () => {
     expect(trialIdentity("+crew@otter.example")).toBe("+crew@otter.example");
   });
 
-  it("the mail names the PCs and where to start, in the buyer's language", () => {
-    const m = keyMail("buyer@otter.example", { lang: "en", key: "BH-AAAAA-BBBBB-CCCCC-DDDDD", seats: 10, trialUntil: null, siteUrl: SITE, billingUrl: "", contact: "info@seventh-well.com" });
-    expect(m.subject).toBe("Your backhaul licence key");
-    expect(m.text).toContain("Licence key: BH-AAAAA-BBBBB-CCCCC-DDDDD");
-    expect(m.text).toContain("PCs: up to 10");
-    expect(m.text).toContain(`${SITE}/start/`);
-    expect(m.text).not.toContain("Change plan");
+  const view = (over: Partial<KeyMailView>): KeyMailView => ({
+    lang: "en",
+    key: "BH-AAAAA-BBBBB-CCCCC-DDDDD",
+    seats: 3,
+    trialUntil: null,
+    order: null,
+    interval: null,
+    nextBillingAt: 0,
+    siteUrl: SITE,
+    billingUrl: "",
+    privacyUrl: "https://gate.otter.example/privacy",
+    contact: "backhaul@seventh-well.com",
+    sellerTaxId: "",
+    ...over,
+  });
+  // 2026-11-28 03:00 UTC, which is the same day in Japan.
+  const yenOrder = { number: "SAMPLE-0001", created: 1795834800, currency: "jpy", subtotal: 9800, total: 10780, receiptUrl: "https://invoice.example.invalid/i/sample?a=1&b=2", card: { brand: "visa", last4: "4242" } };
+
+  it("a trial mail: dark, the key, the end day, and that nothing is charged", () => {
+    const ja = keyMail("crew@otter.example", view({ lang: "ja", trialUntil: "2026-12-12" }));
+    expect(ja.subject).toBe("backhaul 無料体験のライセンスキー");
+    expect(ja.html).toContain('<html lang="ja">');
+    expect(ja.html).toContain('content="dark"');
+    expect(ja.html).toContain(`src="${SITE}/mail-icon.png"`);
+    expect(ja.html).toContain(`href="${SITE}/ja/start/"`);
+    expect(ja.html).toContain(`href="${SITE}/ja/legal/"`);
+    for (const form of [ja.html, ja.text]) {
+      expect(form).toContain("BH-AAAAA-BBBBB-CCCCC-DDDDD");
+      expect(form).toContain("3台まで");
+      expect(form).toContain("2026年12月12日まで");
+      expect(form).toContain("自動で課金されることはありません");
+      expect(form).not.toContain("領収書");
+      expect(form).not.toContain("登録番号");
+    }
+    const en = keyMail("crew@otter.example", view({ lang: "en", trialUntil: "2026-12-12" }));
+    expect(en.subject).toBe("Your backhaul trial key");
+    for (const form of [en.html, en.text]) {
+      expect(form).toContain("Up to 3");
+      expect(form).toContain("Dec 12, 2026");
+      expect(form).toContain("nothing is charged");
+      expect(form).toContain(`${SITE}/start/`);
+      expect(form).not.toMatch(/[ぁ-んァ-ン一-龥]/); // no Japanese in an English mail
+    }
   });
 
-  it("the designed form of the mail says the same as the text form", () => {
-    const base = { key: "BH-AAAAA-BBBBB-CCCCC-DDDDD", seats: 3, siteUrl: SITE, contact: "info@seventh-well.com" };
-    const trialJa = keyMail("crew@otter.example", { ...base, lang: "ja", trialUntil: "2026-12-12", billingUrl: "" }).html;
-    expect(trialJa).toContain("BH-AAAAA-BBBBB-CCCCC-DDDDD");
-    expect(trialJa).toContain("3台");
-    expect(trialJa).toContain("12月12日");
-    expect(trialJa).toContain(`href="${SITE}/ja/start/"`);
-    expect(trialJa).toContain(`src="${SITE}/mail-icon.png"`);
-    expect(trialJa).toContain('<html lang="ja">');
+  it("a mail for a bought key: light, with the order as on Stripe's invoice", () => {
+    const ja = keyMail("buyer@otter.example", view({ lang: "ja", seats: 5, order: yenOrder, interval: "month", nextBillingAt: 1795834800 + 30 * DAY, billingUrl: "https://billing.example.invalid/p/login/sample", sellerTaxId: "T0000000000000" }));
+    expect(ja.subject).toBe("backhaul のライセンスキー");
+    expect(ja.html).toContain('content="light"');
+    expect(ja.html).toContain('href="https://invoice.example.invalid/i/sample?a=1&amp;b=2"');
+    expect(ja.html).toContain('href="https://billing.example.invalid/p/login/sample"');
+    for (const form of [ja.html, ja.text]) {
+      expect(form).toContain("ご購入ありがとうございます");
+      expect(form).toContain("SAMPLE-0001");
+      expect(form).toContain("2026年11月28日");
+      expect(form).toContain("backhaul 5台・月額");
+      expect(form).toContain("¥9,800");
+      expect(form).toContain("¥980");
+      expect(form).toContain("¥10,780");
+      expect(form).toContain("Visa（末尾 4242）");
+      expect(form).toContain("2026年12月28日");
+      expect(form).toContain("領収書を表示");
+      expect(form).toContain("登録番号 T0000000000000");
+    }
+    expect(ja.text).toContain("https://invoice.example.invalid/i/sample?a=1&b=2");
 
-    const trialEn = keyMail("crew@otter.example", { ...base, lang: "en", trialUntil: "2026-12-12", billingUrl: "" }).html;
-    expect(trialEn).toContain("Up to 3");
-    expect(trialEn).toContain("Dec 12");
-    expect(trialEn).toContain(`href="${SITE}/start/"`);
-    expect(trialEn).not.toContain("台");
+    // Dollars: no Japanese tax, so no tax lines; a yearly plan.
+    const en = keyMail("buyer@otter.example", view({ seats: 10, interval: "year", order: { ...yenOrder, currency: "usd", subtotal: 119000, total: 119000 }, sellerTaxId: "T0000000000000" }));
+    expect(en.subject).toBe("Your backhaul licence key");
+    for (const form of [en.html, en.text]) {
+      expect(form).toContain("backhaul, 10 PCs, yearly");
+      expect(form).toContain("$1,190.00");
+      expect(form).toContain("Nov 28, 2026");
+      expect(form).toContain("Visa ending in 4242");
+      expect(form).not.toContain("Subtotal");
+      expect(form).not.toContain("Consumption tax");
+      expect(form).not.toContain("T0000000000000");
+      expect(form).not.toMatch(/[ぁ-んァ-ン一-龥]/);
+    }
+    // Without a subscriber page the mail says whom to write to instead.
+    expect(en.text).toContain("To change your plan or card, or to cancel, write to backhaul@seventh-well.com.");
+  });
 
-    // A bought key: no end day, and the way to the subscriber's own page.
-    const paid = keyMail("buyer@otter.example", { ...base, lang: "en", seats: 10, trialUntil: null, billingUrl: "https://billing.example.invalid/p/login/sample?a=1&b=2" }).html;
-    expect(paid).toContain("Up to 10");
-    expect(paid).not.toContain("Ends");
-    expect(paid).toContain('href="https://billing.example.invalid/p/login/sample?a=1&amp;b=2"');
-    const paidWithoutPage = keyMail("buyer@otter.example", { ...base, lang: "en", trialUntil: null, billingUrl: "" }).html;
-    expect(paidWithoutPage).not.toContain("Change plan");
+  it("what Stripe did not tell is left out, never invented", () => {
+    const bare = keyMail("buyer@otter.example", view({ seats: 5 }));
+    for (const form of [bare.html, bare.text]) {
+      expect(form).toContain("backhaul, 5 PCs");
+      expect(form).not.toContain("Order number");
+      expect(form).not.toContain("Amount paid");
+      expect(form).not.toContain("View receipt");
+      expect(form).not.toContain("Next payment");
+    }
+    const partial = keyMail("buyer@otter.example", view({ order: { ...yenOrder, number: null, receiptUrl: null, card: null } }));
+    expect(partial.text).toContain("Amount paid: ¥10,780");
+    expect(partial.text).not.toContain("Order number");
+    expect(partial.text).not.toContain("Paid with");
+    expect(partial.text).not.toContain("View receipt");
+  });
+
+  it("an invoice is read only when it is one", () => {
+    const sub = (invoice: unknown, card: unknown) => readSubscription({ id: "sub_x", status: "active", latest_invoice: invoice, default_payment_method: card }).order;
+    expect(sub("in_Sample", null)).toBeNull(); // not expanded: only its id
+    expect(sub({ created: 1, currency: "jpy", subtotal: 100 }, null)).toBeNull(); // no total
+    expect(sub({ number: "", created: 1, currency: "jpy", subtotal: 100, total: 110, hosted_invoice_url: "javascript:alert(1)" }, { card: { brand: "visa", last4: "42424" } })).toEqual({
+      number: null,
+      created: 1,
+      currency: "jpy",
+      subtotal: 100,
+      total: 110,
+      receiptUrl: null,
+      card: null,
+    });
   });
 
   it("nothing from outside can become markup in the mail", () => {
-    const html = keyMailHtml({ lang: "en", key: '<img src=x onerror="a">', seats: 3, trialUntil: "<b>soon</b>", guideUrl: 'https://otter.example/"><script>', iconUrl: "https://otter.example/i.png", billingUrl: "" });
+    const html = keyMailHtml(
+      keyMailContent(view({ key: '<img src=x onerror="a">', trialUntil: "<b>soon</b>", contact: "<i>x</i>", privacyUrl: 'https://otter.example/"><script>' })),
+      'https://otter.example/i.png"><script>',
+    );
     expect(html).not.toContain("<img src=x");
     expect(html).not.toContain("<b>soon</b>");
+    expect(html).not.toContain("<i>x</i>");
     expect(html).not.toContain("<script>");
     expect(html).toContain("&lt;img src=x onerror=&quot;a&quot;&gt;");
+    const paid = keyMailHtml(keyMailContent(view({ order: { ...yenOrder, number: "<u>n</u>", card: { brand: "<s>b</s>", last4: "4242" } } })), "https://otter.example/i.png");
+    expect(paid).not.toContain("<u>n</u>");
+    expect(paid).not.toContain("<s>b</s>");
     expect(escapeHtml(`&<>"'`)).toBe("&amp;&lt;&gt;&quot;&#39;");
   });
 
-  it("days are written the way people write them", () => {
-    expect(dayText("2026-12-12", "ja")).toBe("12月12日");
-    expect(dayText("2027-01-05", "en")).toBe("Jan 5");
+  it("days and amounts are written the way people write them", () => {
+    expect(dayText("2026-12-12", "ja")).toBe("2026年12月12日");
+    expect(dayText("2027-01-05", "en")).toBe("Jan 5, 2027");
     expect(dayText("2026-13-01", "en")).toBe("2026-13-01");
     expect(dayText("soon", "ja")).toBe("soon");
+    // 2026-11-28 16:00 UTC is already the 29th in Japan.
+    expect(dateText(1795881600, "en")).toBe("Nov 28, 2026");
+    expect(dateText(1795881600, "ja")).toBe("2026年11月29日");
+    expect(moneyText(10780, "jpy")).toBe("¥10,780");
+    expect(moneyText(6900, "usd")).toBe("$69.00");
+    expect(moneyText(119005, "USD")).toBe("$1,190.05");
+    expect(moneyText(1234567, "chf")).toBe("12,345.67 CHF");
   });
 });

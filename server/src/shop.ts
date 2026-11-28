@@ -26,7 +26,7 @@ export const TRIAL_DAYS = 14;
 /** After the paid time ends (a card that failed, a renewal that is late) the licence still works this long. */
 export const GRACE_SECONDS = 3 * 86400;
 const MAX_SEATS = 100;
-const CONTACT = "info@seventh-well.com";
+const CONTACT = "backhaul@seventh-well.com";
 
 interface Shop {
   stripe: Stripe;
@@ -36,6 +36,7 @@ interface Shop {
   mailFrom: string;
   siteUrl: string;
   billingUrl: string;
+  sellerTaxId: string;
 }
 
 /** Null until everything selling needs is set: the three secrets, the sealing key, the site and the sender. */
@@ -52,6 +53,7 @@ export async function openShop(env: Env, outside: Outside): Promise<Shop | null>
     mailFrom: env.MAIL_FROM,
     siteUrl: env.SITE_URL.replace(/\/+$/, ""),
     billingUrl: env.BILLING_URL ?? "",
+    sellerTaxId: env.SELLER_TAX_ID ?? "",
   };
 }
 
@@ -95,14 +97,27 @@ async function settle(shop: Shop, store: Store, sub: Subscription, now: number):
 }
 
 /** Sends the key by e-mail if that has not happened yet. Throws MailError when it could not be sent. */
-async function deliver(shop: Shop, outside: Outside, store: Store, sale: Sale, sub: Subscription, now: number) {
+async function deliver(shop: Shop, outside: Outside, store: Store, sale: Sale, sub: Subscription, privacyUrl: string, now: number) {
   if (sale.keyCipher === null || !(await store.claimKeyMail(sub.id, now))) return;
   try {
     const key = await shop.vault.unseal(sale.keyCipher);
     const licence = await store.licenceById(sale.licenceId);
     if (key === null || licence === null) throw new MailError("the key can no longer be read");
     if (sub.email === null) throw new MailError("Stripe has no e-mail address for this customer");
-    const mail = keyMail(sub.email, { lang: sub.lang, key, seats: licence.seats, trialUntil: null, siteUrl: shop.siteUrl, billingUrl: shop.billingUrl, contact: CONTACT });
+    const mail = keyMail(sub.email, {
+      lang: sub.lang,
+      key,
+      seats: licence.seats,
+      trialUntil: null,
+      order: sub.order,
+      interval: sub.interval,
+      nextBillingAt: paying(sub.status) ? sub.periodEnd : 0,
+      siteUrl: shop.siteUrl,
+      billingUrl: shop.billingUrl,
+      privacyUrl,
+      contact: CONTACT,
+      sellerTaxId: shop.sellerTaxId,
+    });
     await sendMail(outside.fetcher, shop.mailKey, shop.mailFrom, CONTACT, mail, `key-${sub.id}`);
   } catch (error) {
     await store.releaseKeyMail(sub.id);
@@ -117,6 +132,11 @@ async function readJson(c: Context): Promise<Record<string, unknown> | null> {
 
 async function callerOf(c: Context): Promise<string> {
   return sha256Hex(c.req.header("cf-connecting-ip") ?? "unknown");
+}
+
+/** This server's own privacy page (the mails link to it). */
+function privacyOf(c: Context): string {
+  return `${new URL(c.req.url).origin}/privacy`;
 }
 
 function maskEmail(email: string): string {
@@ -153,7 +173,7 @@ export function shopRoutes(outside: Outside) {
     const sub = await open.stripe.subscription(subscriptionId);
     const sale = await settle(open, store, sub, now);
     // A mail that cannot be sent makes this request fail, so that Stripe sends the message again later.
-    if (sale !== null) await deliver(open, outside, store, sale, sub, now);
+    if (sale !== null) await deliver(open, outside, store, sale, sub, privacyOf(c), now);
     await store.forgetDeliveredKeys(now);
     return c.json({ ok: true });
   });
@@ -220,7 +240,7 @@ export function shopRoutes(outside: Outside) {
       if (sale === null) return c.json({ pending: true }, 202);
       let mailed = true;
       try {
-        await deliver(open, outside, store, sale, sub, now);
+        await deliver(open, outside, store, sale, sub, privacyOf(c), now);
       } catch (error) {
         if (!(error instanceof MailError)) throw error;
         console.error(error);
@@ -269,9 +289,14 @@ export function shopRoutes(outside: Outside) {
       key,
       seats: TRIAL_SEATS,
       trialUntil: new Date(expiresAt * 1000).toISOString().slice(0, 10),
+      order: null,
+      interval: null,
+      nextBillingAt: 0,
       siteUrl: open.siteUrl,
       billingUrl: "",
+      privacyUrl: privacyOf(c),
       contact: CONTACT,
+      sellerTaxId: "",
     });
     try {
       // The key goes out by mail only: that is the proof that the address belongs to the person asking.
