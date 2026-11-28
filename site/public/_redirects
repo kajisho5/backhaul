@@ -1,0 +1,5 @@
+# Where the program looks for a newer version. The files themselves are made by the
+# packaging build and kept as release files; these addresses stay the same wherever
+# the files are kept (they are built into every copy of the program).
+/updates/latest.json https://github.com/kajisho5/backhaul-sdk/releases/download/updates/latest.json 302
+/updates/appcast.xml https://github.com/kajisho5/backhaul-sdk/releases/download/updates/appcast.xml 302

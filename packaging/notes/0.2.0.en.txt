@@ -1,0 +1,2 @@
+backhaul can now update itself: it tells you when a newer version is available and installs it when you press Update now. It never updates by itself and never during a meeting.
+backhaul is now installed with an installer (no administrator rights needed).

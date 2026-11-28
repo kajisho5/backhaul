@@ -426,6 +426,7 @@ QJsonObject AppState::settingsJson() const {
   root[QStringLiteral("standbyText")] = standbyText_;
   if (!pluginSettings_.isEmpty()) root[QStringLiteral("plugins")] = pluginSettings_;
   root[QStringLiteral("language")] = language_;
+  if (!checksUpdates_) root[QStringLiteral("checksUpdates")] = false;
   root[QStringLiteral("role")] = role();
   root[QStringLiteral("roleScreen")] = roleScreen_;
   QJsonObject twoShot;
@@ -583,6 +584,13 @@ bool AppState::applySettings(const QJsonObject& settings) {
     language = languageValue.toString();
     if (language != QStringLiteral("en") && language != QStringLiteral("ja")) return false;
   }
+  // Looking for updates: absent in files written before there was an updater, and then on.
+  bool checksUpdates = true;
+  const QJsonValue checksValue = settings.value(QStringLiteral("checksUpdates"));
+  if (!checksValue.isUndefined()) {
+    if (!checksValue.isBool()) return false;
+    checksUpdates = checksValue.toBool();
+  }
   bool returnAsShare = false;
   bool returnInAll = false;
   const QJsonValue returnValue = settings.value(QStringLiteral("return"));
@@ -627,6 +635,7 @@ bool AppState::applySettings(const QJsonObject& settings) {
   videoDeviceName_ = videoDevice;
   returnAsShare_ = returnAsShare;
   returnInAll_ = returnInAll;
+  checksUpdates_ = checksUpdates;
   if (language != language_) {
     language_ = language;
     emit languageChanged();
@@ -837,6 +846,13 @@ void AppState::setLanguage(const QString& language) {
   if (language == language_ || (language != QStringLiteral("en") && language != QStringLiteral("ja"))) return;
   language_ = language;
   emit languageChanged();
+  emit changed();
+  emit settingsEdited();
+}
+
+void AppState::setChecksUpdates(bool on) {
+  if (on == checksUpdates_) return;
+  checksUpdates_ = on;
   emit changed();
   emit settingsEdited();
 }

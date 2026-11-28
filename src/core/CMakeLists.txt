@@ -13,6 +13,7 @@ add_library(backhaul_core STATIC
   sha256.cpp
   slot_output.cpp
   test_tone.cpp
+  update_policy.cpp
   yuv.cpp
 )
 target_include_directories(backhaul_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)

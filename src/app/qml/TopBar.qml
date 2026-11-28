@@ -72,6 +72,19 @@ Rectangle {
             first: !app.gridMode
             onChosen: (first) => app.gridMode = !first
         }
-        PlainButton { text: qsTr("設定"); onClicked: bar.settingsRequested() }
+        PlainButton {
+            text: qsTr("設定")
+            Accessible.name: updateDot.visible ? qsTr("設定（新しいバージョンがあります）") : text
+            onClicked: bar.settingsRequested()
+            // A newer version is waiting on the "Software" page of the settings.
+            Rectangle {
+                id: updateDot
+                visible: updates.status === "available" && !meeting.busy
+                anchors.right: parent.right; anchors.top: parent.top
+                anchors.rightMargin: -3; anchors.topMargin: -3
+                width: 8; height: 8
+                color: Theme.ok
+            }
+        }
     }
 }

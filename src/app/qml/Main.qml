@@ -97,6 +97,14 @@ Window {
 
         TopBar { Layout.fillWidth: true; onSettingsRequested: settingsOpen = true; onRoleRequested: roleOpen = true }
 
+        // A newer version is available (never shown during a meeting).
+        UpdateStrip {
+            visible: updates.noticeVisible
+            Layout.fillWidth: true
+            Layout.preferredHeight: visible ? implicitHeight : 0
+            onNotesRequested: { settingsTab = "software"; settingsOpen = true }
+        }
+
         // A test signal is sounding: said on every screen, with the way to stop it.
         Rectangle {
             visible: audio.testing
