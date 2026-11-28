@@ -8,7 +8,7 @@ interface Props { t: Texts }
 const { t } = Astro.props;
 const x = t.start;
 ---
-<Base t={t} title={x.title} otherHref={`${t.other.href}start/`}>
+<Base t={t} title={x.title} otherHref={`${t.other.href}start/`} description={t.descriptions.start} pair>
   <div class="sheet">
     <h1>{x.heading}</h1>
     <p class="lead">{x.lead}</p>
@@ -17,7 +17,7 @@ const x = t.start;
         <li>
           <h2>{step.title}</h2>
           <p>{step.text}</p>
-          {i === 0 && (DOWNLOAD_URL ? <a class="btn solid" href={DOWNLOAD_URL}>{x.download}</a> : <p class="note">{x.noDownload}</p>)}
+          {i === 0 && (DOWNLOAD_URL ? <><a class="btn solid" href={DOWNLOAD_URL}>{x.download}</a><p class="note">{x.downloadNote}</p></> : <p class="note">{x.noDownload}</p>)}
         </li>
       ))}
     </ol>

@@ -71,7 +71,7 @@ h1 {
   box-shadow: 0 60px 140px -40px rgba(93, 240, 160, 0.35);
 }
 .stage img { display: block; width: 100%; height: auto; border-radius: 17px; }
-.tally { position: absolute; left: 28px; top: -15px; display: flex; align-items: center; gap: 8px; background: var(--red); color: #fff; font-weight: 700; font-size: 13px; padding: 5px 12px; border-radius: 999px; }
+.tally { position: absolute; left: 28px; top: -15px; display: flex; align-items: center; gap: 8px; background: #d0213a; color: #fff; font-weight: 700; font-size: 13px; padding: 5px 12px; border-radius: 999px; }
 .tally i { width: 7px; height: 7px; border-radius: 50%; background: #fff; }
 
 h2 { font: 700 clamp(32px, 4.4vw, 56px) / 1.02 var(--text); letter-spacing: -0.035em; margin: 0 0 14px; text-wrap: balance; }
@@ -186,3 +186,14 @@ footer p { margin: 0 0 6px; }
   html { scroll-behavior: auto; }
   .btn { transition: none; }
 }
+
+/* Questions: one line each, opened by the reader. */
+.faq { border-top: 1px solid var(--line); max-width: 820px; }
+.faq details { border-bottom: 1px solid var(--line); }
+.faq summary { cursor: pointer; list-style: none; display: flex; justify-content: space-between; align-items: baseline; gap: 20px; padding: 20px 0; font-weight: 600; font-size: 18px; }
+.faq summary::-webkit-details-marker { display: none; }
+.faq summary::after { content: "+"; flex: none; color: var(--mint); font-weight: 400; font-size: 22px; line-height: 1; }
+.faq details[open] summary::after { content: "−"; }
+.faq summary:focus-visible { outline: 2px solid var(--mint); outline-offset: 4px; border-radius: 4px; }
+.faq details p { color: var(--mute); margin: 0 0 22px; max-width: 680px; font-size: 16px; }
+.preview p { margin: 0; }

@@ -8,6 +8,7 @@ interface Props { t: Texts }
 const { t } = Astro.props;
 const x = t.thanks;
 const words = {
+  title: x.title,
   heading: x.heading,
   headingShown: x.headingShown,
   seats: x.seats(0).replace("0", "{n}"),
@@ -64,7 +65,7 @@ const words = {
         return;
       }
       if (answer.status !== 200) {
-        heading.hidden = true;
+        heading.textContent = words.title ?? "";
         tell(words.errors[answer.error] ?? words.errors.network ?? "");
         return;
       }
@@ -95,7 +96,7 @@ const words = {
 
     if (/^cs_[A-Za-z0-9_]{10,250}$/.test(sessionId)) void look(0);
     else {
-      heading.hidden = true;
+      heading.textContent = words.title ?? "";
       tell(words.missing ?? "");
     }
   }

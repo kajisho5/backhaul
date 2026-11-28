@@ -162,7 +162,7 @@ export function keyMailContent(m: KeyMailView): MailContent {
     steps: ja
       ? ["backhaul を会場のPCにインストールします。", "設定の「Zoom接続」にある「ライセンスキー」に、上のキーを入力します。", "Zoom にサインインし、会議に参加します。"]
       : ["Install backhaul on the PC at the venue.", "Enter the key above under Settings > Zoom connection > Licence key.", "Sign in to Zoom and join the meeting."],
-    guide: { label: ja ? "使い始め方を見る" : "Read the guide", url: `${home}/start/` },
+    guide: { label: ja ? "はじめかたを見る" : "Read the guide", url: `${home}/start/` },
     contactTitle: ja ? "お問い合わせ" : "Questions",
     contactText: ja ? `ご不明な点は、このメールにご返信いただくか、${m.contact} までご連絡ください。` : `Reply to this mail, or write to ${m.contact}.`,
     whyTitle: ja ? "このメールが届いた理由" : "Why you received this mail",

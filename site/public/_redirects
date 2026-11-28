@@ -3,3 +3,5 @@
 # the files are kept (they are built into every copy of the program).
 /updates/latest.json https://github.com/kajisho5/backhaul-sdk/releases/download/updates/latest.json 302
 /updates/appcast.xml https://github.com/kajisho5/backhaul-sdk/releases/download/updates/appcast.xml 302
+# The newest installer. The packaging build keeps a copy under this fixed name.
+/download https://github.com/kajisho5/backhaul-sdk/releases/download/updates/backhaul-setup.exe 302
